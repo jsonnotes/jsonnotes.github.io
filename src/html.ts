@@ -1,6 +1,6 @@
 import { Stored, Writable } from "./store"
 
-export type htmlKey = 'innerText'|'onclick' | 'oninput' | 'onkeydown' |'children'|'class'|'id'|'href'|'contentEditable'|'eventListeners'|'color'|'background' | 'style' | 'placeholder' | 'tabIndex' | 'colSpan'
+export type htmlKey = 'innerText'|'onclick' | 'oninput' | 'onkeydown' |'children'|'class'|'id'|'href'|'data-nav'|'contentEditable'|'eventListeners'|'color'|'background' | 'style' | 'placeholder' | 'tabIndex' | 'colSpan'
 
 export const htmlElement = (tag:string, text:string, cls:string = "", args?:Partial<Record<htmlKey, any>>):HTMLElement =>{
 
@@ -26,6 +26,8 @@ export const htmlElement = (tag:string, text:string, cls:string = "", args?:Part
       })
     }else if (key === 'class'){
       _element.classList.add(...(value as string).split('.').filter(x=>x))
+    }else if (key.startsWith('data-')){
+      _element.setAttribute(key, value)
     }else{
       _element[(key as 'innerText' | 'onclick' | 'oninput' | 'id' | 'href' | 'contentEditable')] = value
     }
@@ -527,7 +529,6 @@ export const plot = (x:number[]) => {
   }
   console.log(plt)
 }
-
 
 
 
