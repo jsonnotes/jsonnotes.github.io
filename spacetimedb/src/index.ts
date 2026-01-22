@@ -1,48 +1,50 @@
-import { schema, table, t, SenderError} from 'spacetimedb/server';
-import {Ajv} from 'ajv';
+import { schema, table, t, SenderError } from 'spacetimedb/server';
+import { Ajv } from 'ajv';
 
-
-const LLM_Results = table(
+const JsonNotes = table(
   {
-    name: 'llm_result',
-    public: true
+    name: 'json_note',
+    public: true,
   },
   {
-    id: t.u128().autoInc().primaryKey(),
-    prompt: t.string(),
-    schema: t.string(),
-    response: t.string(),
-    provider: t.string(),
-    model: t.string(),
+    id: t.u128().primaryKey().autoInc(),
+    schemaId: t.u128(),
+    data: t.string(),
   }
-)
+);
+
+export const spacetimedb = schema(JsonNotes);
+
+const ajv = new Ajv();
 
 
-export const spacetimedb = schema(LLM_Results)
+spacetimedb.init((ctx) => {
+  if (!ctx.db.jsonNote.id.find(0n)) {
+    ctx.db.jsonNote.insert({ id: 1n, schemaId: 1n, data: '{}' });
+  }
+});
 
 
-spacetimedb.reducer('add_call', {
-  prompt: t.string(),
-  schema: t.string(),
-  response: t.string(),
-  provider: t.string(),
-  model: t.string(),
-}, (ctx, { prompt, schema, response, provider, model }) => {
 
-  try{
 
-    const ajv = new Ajv();
-    const validate = ajv.compile(JSON.parse(schema));
-    const valid = validate(JSON.parse(response));
-    if (!valid) {
-      console.error("ERROR posting to database: ", validate.errors);  
-      throw new SenderError(validate.errors ? validate.errors.map(e=>e.message).join(', ') : 'Invalid response');
-    }
-  }catch(e: any){
-    throw new SenderError(e.message || 'JSON parsing error');
+spacetimedb.reducer('add_note', {
+  schemaId: t.u128(),
+  data: t.string(),
+}, (ctx, { schemaId, data }) => {
+  const schemaRow = ctx.db.jsonNote.id.find(schemaId);
+  if (!schemaRow) throw new SenderError('Schema not found');
+
+  try {
+    const validate = ajv.compile(JSON.parse(schemaRow.data));
+    const value = JSON.parse(data);
+    if (!validate(value)) throw new SenderError(validate.errors?.map((e) => e.message).join(', ') || 'Invalid data');
+  } catch (err: any) {
+    if (err instanceof SenderError) throw err;
+    throw new SenderError(err.message || 'Invalid JSON');
   }
 
-  ctx.db.llmResult.insert({id: 0n, prompt, schema, response, provider, model });
-
-
+  for (const row of ctx.db.jsonNote.iter()) {
+    if (row.schemaId === schemaId && row.data === data) return;
+  }
+  ctx.db.jsonNote.insert({ id: 0n, schemaId, data });
 });

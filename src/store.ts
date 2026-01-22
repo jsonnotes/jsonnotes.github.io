@@ -151,29 +151,3 @@ export class CachedStore {
   
 
 }
-
-
-// export function sIf <T> (cond:Writable<boolean>, then:Readable<T>, otherwise?:Readable<T>) : Readable<T | null> {
-
-//   let res = new Writable<T | null>(null)
-//   cond.subscribe(c=>{
-//     if (c) res.set(then.get())
-//     else if (otherwise) res.set(otherwise.get())
-//     else res.set(null)
-//   })
-//   then.subscribe(v=>{
-//     if (cond.get()) res.set(v)
-//     else if (otherwise) res.set(otherwise.get())
-//     else res.set(null)
-//   })
-//   return res
-// }
-
-// export function sMap <T,U> (source:Readable<T>, mapper:(value:T)=>U) : Writable<U> {
-
-//   let res = new Writable<U>(mapper(source.get()))
-//   source.subscribe(v=>{
-//     res.set(mapper(v))
-//   })
-//   return res
-// }

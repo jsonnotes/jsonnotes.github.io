@@ -1,11 +1,11 @@
 
-import { button, div, h2, input, p, padding, popup, style, table, td, textarea, th, tr } from "./html"
-import { Ajv } from "ajv";
+import { button, div, h2, input, p, popup, style, table, td, textarea, th, tr } from "./html"
 
-const db_url = "https://maincloud.spacetimedb.com"
+// const db_url = "https://maincloud.spacetimedb.com"
+const db_url = "http://localhost:3000"
 const body = document.body;
 
-const DBNAME = "lexxtract"
+const DBNAME = "jsonview"
 
 let access_token = null;
 
@@ -31,25 +31,30 @@ function setup(){
 
 setup()
 
-function add_data(prompt: string, schema: string, response: string, provider: string, model: string){
-  const ajv = new Ajv();
-  const validate = ajv.compile(JSON.parse(schema));
-  const valid = validate(JSON.parse(response));
-  if (!valid) {
-    console.error("ERROR posting to database: ", validate.errors);  
-    throw new Error(validate.errors ? validate.errors.map(e=>e.message).join(', ') : 'Invalid response');
-  }
-
-  server_request(`/v1/database/${DBNAME}/call/add_call`, 'POST', JSON.stringify({prompt, schema, response, provider, model}))
-
-  .then(() => popup(h2("SUCESS"), p("data added")))
+function add_note(schemaId: string, data: string){
+  const schemaIdValue = Number(schemaId || 1);
+  server_request(`/v1/database/${DBNAME}/call/add_note`, 'POST', JSON.stringify({ schemaId: schemaIdValue, data }))
+  .then(async (res) => {
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || `Request failed (${res.status})`);
+    }
+    popup(h2("SUCESS"), p("data added"));
+  })
   .catch(e=>{popup(h2("ERROR"), p(e.message))})
-
 }
 
 function query_data(sql: string){
   return server_request(`/v1/database/${DBNAME}/sql`, 'POST', sql)
-  .then(res=>{console.log(res); return res.json()}).then(data=>{
+  .then(async res=>{
+    console.log(res)
+    const text = await res.text()
+    try {
+      return JSON.parse(text)
+    } catch {
+      throw new Error(text || "Invalid response")
+    }
+  }).then(data=>{
     if (data.length > 1) console.warn("multiple rows returned, TODO: handle this")
     let {schema, rows} = data[0]
     return {names: schema.elements.map(e=>e.name.some),rows}
@@ -73,7 +78,7 @@ body.appendChild(h2( "LEXXTRACT DATABASE DASHBOARD"))
 {
   let userinput = textarea(
     style({fontFamily: "monospace", padding: ".5em"}),
-    "select * from llm_result limit 100"
+    "select * from json_note limit 100"
   )
 
   userinput.rows = 2;
@@ -133,58 +138,31 @@ body.appendChild(h2( "LEXXTRACT DATABASE DASHBOARD"))
 
 {
 
-  let schemafield = textarea(
-
-`{
-  "type": "object",
-  "properties": {
-    "id": { "type": "string" }
-  },
-  "required": ["id"],
-  "additionalProperties": false
-}`
-  )
-
-  let responsefield = textarea(
+  let datafield = textarea(
 `{"id": "some text"}`
   )
 
 
-  schemafield.rows = 10;
-  responsefield.rows = 10;
+  let schemaIdField = input("1", { placeholder: "schema id (seed is 1)" })
 
-  schemafield.cols = 100;
-  responsefield.cols = 100; 
+  datafield.rows = 10;
 
-  schemafield.oninput = ()=>{
-    console.log(schemafield.value)
+  datafield.cols = 100; 
+
+  datafield.oninput = ()=>{
+    console.log(datafield.value)
   }
-
-  responsefield.oninput = ()=>{
-    console.log(responsefield.value)
-  }
-
-  let inputs = [
-    input("generate text", { placeholder: "prompt"}),
-
-    schemafield,
-    responsefield,
-
-  ]
 
   document.body.appendChild(div(
     bubble,
-    p("add call data:"),
+    p("add note data:"),
 
     table(
-      tr(td("prompt"), td(inputs[0])),
-      tr(td("schema"), td(inputs[1])),
-      tr(td("response"), td(inputs[2])),
-      tr(td("provider"), "dashboard_test"),
-      tr(td("model"), "dashboard_test"),
+      tr(td("schema id"), td(schemaIdField)),
+      tr(td("data"), td(datafield)),
     ),
     button("push", {onclick: ()=>{
-      add_data(inputs[0].value, inputs[1].value, inputs[2].value, "dashboard_test", "dashboard_test")
+      add_note(schemaIdField.value.trim() || "1", datafield.value)
     }}),
   ))
 }

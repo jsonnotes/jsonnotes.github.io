@@ -3,6 +3,9 @@
 
 # lexxtract database
 
+
+view and edit Formatted JSON online.
+
 # database
 
 this is a spacetimedb database which uses postgres as a backend.
