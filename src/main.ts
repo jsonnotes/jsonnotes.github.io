@@ -1,5 +1,6 @@
 
-import { button, div, h2, input, p, popup, style, table, td, textarea, th, tr } from "./html"
+import { a, button, div, h2, input, p, popup, style, table, td, textarea, th, tr } from "./html"
+import { openNoteView, Note } from "./note_view"
 
 // const db_url = "https://maincloud.spacetimedb.com"
 const db_url = "http://localhost:3000"
@@ -9,6 +10,11 @@ const DBNAME = "jsonview"
 
 let access_token = null;
 let runQuery = () => {};
+let noteOverlay: HTMLElement | null = null;
+let listSection: HTMLElement | null = null;
+let editSection: HTMLElement | null = null;
+let schemaIdField: HTMLInputElement | null = null;
+let datafield: HTMLTextAreaElement | null = null;
 
 
 function server_request(path: string, method: string, body: string = null){
@@ -45,6 +51,73 @@ function add_note(schemaId: string, data: string){
   .catch(e=>{popup(h2("ERROR"), p(e.message))})
 }
 
+const rowToNote = (names: string[], row: any[]): Note => {
+  const note: any = {};
+  names.forEach((name, index) => {
+    note[name] = row[index];
+  });
+  return note as Note;
+};
+
+const showNote = (note: Note) => {
+  if (noteOverlay) noteOverlay.remove();
+  history.pushState({}, "", `/${note.id}`);
+  noteOverlay = openNoteView(note, () => {
+    if (noteOverlay) noteOverlay.remove();
+    noteOverlay = null;
+    history.pushState({}, "", "/");
+  }, (schemaId) => {
+    showNoteById(schemaId);
+  });
+};
+
+const fillEditFromNote = (note: Note) => {
+  if (!schemaIdField || !datafield) return;
+  schemaIdField.value = String(note.schemaId);
+  datafield.value = String(note.data);
+  datafield.dispatchEvent(new Event("input"));
+};
+
+const showNoteById = (id: number) => {
+  query_data(`select * from json_note where id = ${id} limit 1`)
+    .then((data) => {
+      if (!data.rows.length) throw new Error("note not found");
+      showNote(rowToNote(data.names, data.rows[0]));
+    })
+    .catch((e) => popup(h2("ERROR"), p(e.message)));
+};
+
+const handleRoute = () => {
+  const path = window.location.pathname.replace(/^\/+/, "");
+  if (path === "edit") {
+    if (noteOverlay) noteOverlay.remove();
+    noteOverlay = null;
+    if (listSection) listSection.style.display = "none";
+    if (editSection) editSection.style.display = "block";
+    const params = new URLSearchParams(window.location.search);
+    const idParam = params.get("id");
+    const id = idParam ? Number(idParam) : NaN;
+    if (Number.isFinite(id)) {
+      query_data(`select * from json_note where id = ${id} limit 1`)
+        .then((data) => {
+          if (!data.rows.length) throw new Error("note not found");
+          fillEditFromNote(rowToNote(data.names, data.rows[0]));
+        })
+        .catch((e) => popup(h2("ERROR"), p(e.message)));
+    }
+    return;
+  }
+  if (!path) {
+    if (noteOverlay) noteOverlay.remove();
+    noteOverlay = null;
+    if (listSection) listSection.style.display = "block";
+    if (editSection) editSection.style.display = "none";
+    return;
+  }
+  const id = Number(path);
+  if (Number.isFinite(id)) showNoteById(id);
+};
+
 function query_data(sql: string){
   return server_request(`/v1/database/${DBNAME}/sql`, 'POST', sql)
   .then(async res=>{
@@ -74,7 +147,13 @@ let bubble = style({
   border: "1px solid #ccc",
 })
 
-body.appendChild(h2( "LEXXTRACT DATABASE DASHBOARD"))
+body.appendChild(
+  a(
+    style({ textDecoration: "none", color: "inherit" }),
+    { href: "/" },
+    h2("LEXXTRACT DATABASE DASHBOARD")
+  )
+)
 
 {
   let userinput = textarea(
@@ -91,42 +170,38 @@ body.appendChild(h2( "LEXXTRACT DATABASE DASHBOARD"))
     result.append(p("running..."))
     query_data(userinput.value).then(data=>{
       result.innerHTML = ""
-      result.append(table(
-        bubble,
-        tr(data.names.map(name=>th(style({border: "1px solid #ccc", padding: ".5em"}), name))),
-        ...data.rows.map(row=>tr(
-          style({cursor: "pointer"}),
-          {onclick: ()=>{
-            popup(
-              table(
-                data.names.map((name, index)=>
-                  tr(
-                    td(name, style({border: "1px solid #ccc", padding: ".5em"})),
-                    td(row[index], style({border: "1px solid #ccc", padding: ".5em"})),
-                  )
-                ),
-                style({borderCollapse: "collapse"})
-              )
-            )
-          }},
-          ...row.map((cell:string)=>{
+          result.append(table(
+            bubble,
+            tr(data.names.map(name=>th(style({border: "1px solid #ccc", padding: ".5em"}), name))),
+            ...data.rows.map(row=>{
+              const note = rowToNote(data.names, row);
+              const href = `/${note.id}`;
+              const link = (content: string) => a(
+                style({color: "inherit", textDecoration: "none", display: "block"}),
+                { href },
+                content
+              );
+              return tr(
+              style({cursor: "pointer"}),
+              ...row.map((cell:string)=>{
 
 
-            // cell = cell.replace(/[\n\r]/g, ''),
-            cell = String(cell).replace(/[\n\r]/g, '');
+                // cell = cell.replace(/[\n\r]/g, ''),
+                cell = String(cell).replace(/[\n\r]/g, '');
 
-            console.log(JSON.stringify(cell))
-            return td(style({border: "1px solid #ccc", padding: ".5em"}), cell.length > 20 ? cell.substring(0, 20) + "..." : cell)
-          })
-        )),
+                console.log(JSON.stringify(cell))
+                const text = cell.length > 20 ? cell.substring(0, 20) + "..." : cell;
+                return td(style({border: "1px solid #ccc", padding: ".5em"}), link(text))
+              })
+            )}),
         style({borderCollapse: "collapse"})
       ))
     })
   }
-  body.append(
-    div(
+  listSection = div(
 
       bubble,
+      a(style({textDecoration: "none", color: "inherit", fontWeight: "bold"}), { href: "/edit" }, "EDIT"),
       p("SQL console:"),
       userinput,
 
@@ -134,21 +209,24 @@ body.appendChild(h2( "LEXXTRACT DATABASE DASHBOARD"))
 
       result
     )
-  )
+  body.append(listSection)
 
   runQuery()
+  handleRoute()
 }
+
+window.addEventListener("popstate", handleRoute);
 
 
 {
 
-  let datafield = textarea(
+  datafield = textarea(
     style({fontFamily: "monospace", minHeight: "12em", resize: "vertical"}),
 `{"id": "some text"}`
   )
 
 
-  let schemaIdField = input("1", { placeholder: "schema id (seed is 1)" })
+  schemaIdField = input("1", { placeholder: "schema id (seed is 1)" })
 
   let jsonStatus = p("valid json")
   jsonStatus.style.color = "#2f6f2f";
@@ -199,7 +277,7 @@ body.appendChild(h2( "LEXXTRACT DATABASE DASHBOARD"))
 
   resizeTextarea();
 
-  document.body.appendChild(div(
+  editSection = div(
     bubble,
     p("add note data:"),
 
@@ -227,5 +305,8 @@ body.appendChild(h2( "LEXXTRACT DATABASE DASHBOARD"))
         .then(()=>runQuery())
         .catch(()=>{})
     }}),
-  ))
+  )
+  editSection.style.display = "none";
+  document.body.appendChild(editSection)
+  handleRoute()
 }

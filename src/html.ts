@@ -1,6 +1,6 @@
 import { Stored, Writable } from "./store"
 
-export type htmlKey = 'innerText'|'onclick' | 'oninput' | 'onkeydown' |'children'|'class'|'id'|'contentEditable'|'eventListeners'|'color'|'background' | 'style' | 'placeholder' | 'tabIndex' | 'colSpan'
+export type htmlKey = 'innerText'|'onclick' | 'oninput' | 'onkeydown' |'children'|'class'|'id'|'href'|'contentEditable'|'eventListeners'|'color'|'background' | 'style' | 'placeholder' | 'tabIndex' | 'colSpan'
 
 export const htmlElement = (tag:string, text:string, cls:string = "", args?:Partial<Record<htmlKey, any>>):HTMLElement =>{
 
@@ -27,7 +27,7 @@ export const htmlElement = (tag:string, text:string, cls:string = "", args?:Part
     }else if (key === 'class'){
       _element.classList.add(...(value as string).split('.').filter(x=>x))
     }else{
-      _element[(key as 'innerText' | 'onclick' | 'oninput' | 'id' | 'contentEditable')] = value
+      _element[(key as 'innerText' | 'onclick' | 'oninput' | 'id' | 'href' | 'contentEditable')] = value
     }
   })
   return _element
@@ -87,6 +87,7 @@ export const h4:HTMLGenerator<HTMLHeadingElement> = newHtmlGenerator("h4")
 
 export const div:HTMLGenerator<HTMLDivElement> = newHtmlGenerator("div")
 export const button:HTMLGenerator<HTMLButtonElement> = newHtmlGenerator("button")
+export const a:HTMLGenerator<HTMLAnchorElement> = newHtmlGenerator("a")
 export const span:HTMLGenerator<HTMLSpanElement> = newHtmlGenerator("span")
 
 export const table:HTMLGenerator<HTMLTableElement> = newHtmlGenerator("table")
@@ -526,7 +527,6 @@ export const plot = (x:number[]) => {
   }
   console.log(plt)
 }
-
 
 
 
