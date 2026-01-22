@@ -76,8 +76,6 @@ const query_data = (sql: string) => {
     });
 };
 
-const sqlString = (value: string) => `'${value.replace(/'/g, "''")}'`;
-
 const rowToNote = (names: string[], row: any[]): Note => {
   const note: any = {};
   names.forEach((name, index) => {
@@ -168,7 +166,7 @@ body.appendChild(
           navigate("/");
         },
       },
-      h2("Lexxtract JSON Flow")
+      h2("Json View")
     ),
     a(
       style({ textDecoration: "none", color: "inherit", fontWeight: "bold" }),
@@ -201,8 +199,7 @@ const dashboard = createDashboardView({ query: query_data, navigate });
 const editView = createEditView({
   submit: (schemaId, data) =>
     add_note(schemaId, data).then(() => {
-      const schemaIdValue = Number(schemaId || 1);
-      const sql = `select id from json_note where schemaId = ${schemaIdValue} and data = ${sqlString(data)} order by id desc limit 1`;
+      const sql = "select max(id) as id from json_note";
       return query_data(sql).then((result) => {
         const id = Number(result.rows[0]?.[0]);
         if (Number.isFinite(id)) navigate(`/${id}`);
