@@ -1,0 +1,16 @@
+{
+  "name": "lexxtract",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "build": "spacetime build",
+    "publish": "spacetime publish"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "spacetimedb": "^1.11.4",
+    "ajv": "^8.17.1"
+  }
+}
