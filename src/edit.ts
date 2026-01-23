@@ -26,6 +26,28 @@ export const createEditView = ({ submit, validate, onDirty, loadDraft }: EditDep
   };
 
   datafield.onkeydown = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      formatButton.click();
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const start = datafield.selectionStart || 0;
+      const end = datafield.selectionEnd || 0;
+      const before = datafield.value.slice(0, start);
+      const after = datafield.value.slice(end);
+      const lineStart = before.lastIndexOf("\n") + 1;
+      const line = before.slice(lineStart);
+      const indent = line.match(/^\s*/)?.[0] || "";
+      const extra = /[\{\[]\s*$/.test(line) ? "  " : "";
+      const insert = `\n${indent}${extra}`;
+      datafield.value = `${before}${insert}${after}`;
+      const cursor = start + insert.length;
+      datafield.setSelectionRange(cursor, cursor);
+      datafield.dispatchEvent(new Event("input"));
+      return;
+    }
     const pairs: Record<string, string> = { "{": "}", "[": "]", "(": ")", "\"": "\"" };
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (!(e.key in pairs)) return;
@@ -79,7 +101,7 @@ export const createEditView = ({ submit, validate, onDirty, loadDraft }: EditDep
     updateStatus();
   };
 
-  const formatButton = button("format json", {
+  const formatButton = button("format json (cmd+s)", {
     onclick: () => {
       try {
         const parsed = JSON.parse(datafield.value);

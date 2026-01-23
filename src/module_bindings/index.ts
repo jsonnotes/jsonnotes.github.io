@@ -32,6 +32,10 @@ import {
 } from "spacetimedb";
 
 // Import and reexport all reducer arg types
+import WorldReducer from "./world_reducer";
+export { WorldReducer };
+import HelloReducer from "./hello_reducer";
+export { HelloReducer };
 import AddNoteReducer from "./add_note_reducer";
 export { AddNoteReducer };
 
@@ -44,16 +48,21 @@ export { JsonNoteRow };
 // Import and reexport all types
 import AddNote from "./add_note_type";
 export { AddNote };
-import Init from "./init_type";
-export { Init };
+import Hello from "./hello_type";
+export { Hello };
 import JsonNote from "./json_note_type";
 export { JsonNote };
+import World from "./world_type";
+export { World };
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema(
   __table({
     name: 'json_note',
     indexes: [
+      { name: 'hash', algorithm: 'btree', columns: [
+        'hash',
+      ] },
       { name: 'id', algorithm: 'btree', columns: [
         'id',
       ] },
@@ -66,6 +75,8 @@ const tablesSchema = __schema(
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("world", WorldReducer),
+  __reducerSchema("hello", HelloReducer),
   __reducerSchema("add_note", AddNoteReducer),
 );
 

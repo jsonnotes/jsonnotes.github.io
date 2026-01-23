@@ -7,10 +7,10 @@ const JsonNotes = table(
     public: true,
   },
   {
-    id: t.u128().primaryKey().autoInc(),
+    id: t.u128().primaryKey(),
     schemaId: t.u128(),
     data: t.string(),
-    hash: t.u128(),
+    hash: t.u128().unique(),
   }
 );
 
@@ -40,59 +40,36 @@ const hash128 = (schemaData: string, data: string): bigint => {
 
 
 
-// spacetimedb.init((ctx) => {
-
-//   try{
-//     add_note(0n, '{}')
-//   }catch(e){
-//     console.log(e)
-//   }
-// });
 
 
-
-
-const world = spacetimedb.reducer('world', (ctx) => {
-  //  clearAllTables(ctx);
-  console.log('hello world');
-   // ...
-});
-
-
-spacetimedb.reducer('hello', (ctx) => {
-   try {
-      world(ctx, {})
-   } catch (e) {
-      // otherChanges(ctx);
-      console.error('error hello world',e);
-
-   }
-});
-
-
-
-spacetimedb.reducer('add_note', {
-  schemaId: t.u128(),
+const add_note = spacetimedb.reducer('add_note', {
+  schemaId: t.i128(),
   data: t.string(),
 }, (ctx, { schemaId, data }) => {
-  const schemaRow = ctx.db.jsonNote.id.find(schemaId);
-  if (!schemaRow) throw new SenderError('Schema not found');
 
-  try {
-    const validate = ajv.compile(JSON.parse(schemaRow.data));
-    const value = JSON.parse(data);
-    if (!validate(value)) throw new SenderError(validate.errors?.map((e) => e.message).join(', ') || 'Invalid data');
-  } catch (err: any) {
-    if (err instanceof SenderError) throw err;
-    throw new SenderError(err.message || 'Invalid JSON');
+  if (schemaId != 0n){
+
+    const schemaRow = ctx.db.jsonNote.id.find(schemaId);
+    if (!schemaRow) throw new SenderError('Schema not found');
+
+    try {
+      const validate = ajv.compile(JSON.parse(schemaRow.data));
+      const value = JSON.parse(data);
+      if (!validate(value)) throw new SenderError(validate.errors?.map((e) => e.message).join(', ') || 'Invalid data');
+    } catch (err: any) {
+      if (err instanceof SenderError) throw err;
+      throw new SenderError(err.message || 'Invalid JSON');
+    }
   }
 
-  const hash = hash128(schemaRow.data, data);
-  for (const row of ctx.db.jsonNote.iter()) {
-    if (row.hash === hash) return;
-  }
-  ctx.db.jsonNote.insert({ id: 0n, schemaId, data, hash });
+
+  const hash = hash128(String(schemaId), data);
+  if (ctx.db.jsonNote.hash.find(hash)) return;
+  let id = ctx.db.jsonNote.count();
+  ctx.db.jsonNote.insert({ id, schemaId, data, hash });
 });
 
 
-
+spacetimedb.init((ctx)=>{
+  add_note(ctx, {schemaId: 0n, data: '{}'});
+})

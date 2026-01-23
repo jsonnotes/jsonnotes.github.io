@@ -269,6 +269,22 @@ const editView = createEditView({
           return e.message || "Invalid JSON";
         }
       }),
+  onDirty: (schemaId, data) => {
+    localStorage.setItem("edit_draft", JSON.stringify({ schemaId, data }));
+    if (window.location.pathname !== "/edit" || window.location.search) {
+      navigate("/edit");
+    }
+  },
+  loadDraft: () => {
+    const raw = localStorage.getItem("edit_draft");
+    if (!raw) return null;
+    try {
+      const draft = JSON.parse(raw);
+      return { schemaId: String(draft.schemaId || "1"), data: String(draft.data || "") };
+    } catch {
+      return null;
+    }
+  },
 });
 editFill = editView.fill;
 
