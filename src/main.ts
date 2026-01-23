@@ -30,10 +30,7 @@ const server_request = (path: string, method: string, body: string | null = null
 const setup = () => {
   return server_request("/v1/identity", "POST")
     .then((res) => res.json())
-    .then((text) => {
-      console.log(text.token);
-      access_token = text.token;
-    });
+    .then((text) => {access_token = text.token;});
 };
 
 setup();
@@ -181,6 +178,7 @@ body.appendChild(
         href: "/",
         "data-nav": "dashboard",
         onclick: (e) => {
+          if (e.metaKey) return
           e.preventDefault();
           navigate("/");
         },
