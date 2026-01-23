@@ -2,17 +2,20 @@ import { button, div, input, p, style, table, td, textarea, tr } from "./html";
 
 type EditDeps = {
   submit: (schemaId: string, data: string) => Promise<void>;
+  validate: (schemaId: string, data: string) => Promise<string | null>;
+  onDirty: (schemaId: string, data: string) => void;
+  loadDraft: () => { schemaId: string; data: string } | null;
 };
 
-export const createEditView = ({ submit }: EditDeps) => {
+export const createEditView = ({ submit, validate, onDirty, loadDraft }: EditDeps) => {
   const datafield = textarea(
     style({ fontFamily: "monospace", minHeight: "12em", resize: "vertical" }),
     `{"id": "some text"}`
   );
 
-  const schemaIdField = input("1", { placeholder: "schema id (seed is 1)" });
-  const jsonStatus = p("valid json");
-  jsonStatus.style.color = "#2f6f2f";
+  const schemaIdField = input("1", { placeholder: "default: 1" });
+  const jsonStatus = p("validating...");
+  jsonStatus.style.color = "#666";
 
   datafield.rows = 10;
   datafield.cols = 100;
@@ -45,16 +48,35 @@ export const createEditView = ({ submit }: EditDeps) => {
     datafield.dispatchEvent(new Event("input"));
   };
 
-  datafield.oninput = () => {
-    try {
-      JSON.parse(datafield.value);
-      jsonStatus.innerText = "valid json";
-      jsonStatus.style.color = "#2f6f2f";
-    } catch (e: any) {
-      jsonStatus.innerText = e.message || "invalid json";
-      jsonStatus.style.color = "#a33";
-    }
+  let isDirty = false;
+
+  const updateStatus = () => {
+    jsonStatus.innerText = "validating...";
+    jsonStatus.style.color = "#666";
+    validate(schemaIdField.value.trim() || "1", datafield.value).then((error) => {
+      if (error) {
+        jsonStatus.innerText = error;
+        jsonStatus.style.color = "#a33";
+      } else {
+        jsonStatus.innerText = "valid json + schema";
+        jsonStatus.style.color = "#2f6f2f";
+      }
+    });
     resizeTextarea();
+  };
+
+  const markDirty = () => {
+    if (!isDirty) isDirty = true;
+    onDirty(schemaIdField.value.trim() || "1", datafield.value);
+  };
+
+  datafield.oninput = () => {
+    markDirty();
+    updateStatus();
+  };
+  schemaIdField.oninput = () => {
+    markDirty();
+    updateStatus();
   };
 
   const formatButton = button("format json", {
@@ -62,7 +84,7 @@ export const createEditView = ({ submit }: EditDeps) => {
       try {
         const parsed = JSON.parse(datafield.value);
         datafield.value = JSON.stringify(parsed, null, 2);
-        datafield.dispatchEvent(new Event("input"));
+        updateStatus();
       } catch (e: any) {
         jsonStatus.innerText = e.message || "invalid json";
         jsonStatus.style.color = "#a33";
@@ -89,10 +111,18 @@ export const createEditView = ({ submit }: EditDeps) => {
   );
 
   const fill = (schemaId: string, data: string) => {
+    isDirty = false;
     schemaIdField.value = schemaId;
     datafield.value = data;
     datafield.dispatchEvent(new Event("input"));
   };
+
+  const draft = loadDraft();
+  if (draft) {
+    schemaIdField.value = draft.schemaId;
+    datafield.value = draft.data;
+    updateStatus();
+  }
 
   resizeTextarea();
 

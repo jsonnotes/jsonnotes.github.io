@@ -26,7 +26,7 @@ export const openNoteView = (
   );
 
   const schemaButton = a(
-    style({ textDecoration: "none", color: "inherit", fontWeight: "bold" }),
+    style({ textDecoration: "underline", color: "inherit" }),
     {
       href: `/${note.schemaId}`,
       onclick: (e) => {
@@ -34,24 +34,26 @@ export const openNoteView = (
         navigate(`/${note.schemaId}`);
       },
     },
-    `schema id: ${note.schemaId}`
+    `schema: ${note.schemaId}`
+  );
+
+  const editLink = a(
+    style({ textDecoration: "underline", color: "inherit" }),
+    {
+      href: `/edit?id=${note.id}`,
+      onclick: (e) => {
+        e.preventDefault();
+        navigate(`/edit?id=${note.id}`);
+      },
+    },
+    "edit"
   );
 
   overlay.append(
-    h2(`note ${note.id}`),
-    a(
-      style({ textDecoration: "none", color: "inherit", fontWeight: "bold" }),
-      {
-        href: `/edit?id=${note.id}`,
-        onclick: (e) => {
-          e.preventDefault();
-          navigate(`/edit?id=${note.id}`);
-        },
-      },
-      "EDIT"
-    ),
+    h2(`document ${note.id}`),
     schemaButton,
-    dataView
+    dataView,
+    editLink
   );
 
   return overlay;

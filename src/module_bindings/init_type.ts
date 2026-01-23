@@ -10,12 +10,6 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default __t.object("AddCall", {
-  prompt: __t.string(),
-  schema: __t.string(),
-  response: __t.string(),
-  provider: __t.string(),
-  model: __t.string(),
-});
+export default __t.object("Init", {});
 
 

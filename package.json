@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "@clockworklabs/spacetimedb-sdk": "^1.1.0",
+    "ajv": "^8.17.1",
     "typescript": "^4.5.4",
     "vite": "^3.0.7"
   }

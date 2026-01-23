@@ -8,23 +8,45 @@ type DashboardDeps = {
 };
 
 export const createDashboardView = ({ query, navigate }: DashboardDeps) => {
+  const cacheKey = "dashboard_sql";
+  const cachedSql = localStorage.getItem(cacheKey);
   const userinput = textarea(
     style({ fontFamily: "monospace", padding: ".5em" }),
-    "select * from json_note limit 100"
+    cachedSql || "select id, data from json_note limit 50"
   );
 
   userinput.rows = 2;
   userinput.cols = 100;
+  userinput.onkeydown = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      runQuery();
+    }
+  };
+  userinput.oninput = () => {
+    localStorage.setItem(cacheKey, userinput.value);
+  };
 
   const result = div();
+
+  const formatCell = (cell: any) => {
+    if (typeof cell === "bigint") return cell.toString();
+    if (typeof cell === "number") {
+      const text = String(cell);
+      if (text.includes("e") || text.includes("E")) {
+        return cell.toLocaleString("fullwide", { useGrouping: false });
+      }
+      return text;
+    }
+    return String(cell);
+  };
 
   const runQuery = () => {
     result.innerHTML = "";
     result.append(p("running..."));
     query(userinput.value).then((data) => {
       result.innerHTML = "";
-      result.append(
-        table(
+      const tableEl = table(
           style({ borderCollapse: "collapse" }),
           tr(data.names.map((name) => th(style({ border: "1px solid #ccc", padding: ".5em" }), name))),
           ...data.rows.map((row) => {
@@ -49,16 +71,25 @@ export const createDashboardView = ({ query, navigate }: DashboardDeps) => {
             return tr(
               style({ cursor: "pointer" }),
               ...row.map((cell: string) => {
-                cell = String(cell).replace(/[\n\r]/g, "");
-                const text = cell.length > 20 ? cell.substring(0, 20) + "..." : cell;
-                return td(style({ border: "1px solid #ccc", padding: ".5em" }), link(text));
+                let text = formatCell(cell).replace(/[\n\r]/g, "");
+                text = text.length > 20 ? text.substring(0, 20) + "..." : text;
+                return td(
+                  style({ border: "1px solid #ccc", padding: ".5em" }),
+                  link(text)
+                );
               })
             );
           })
-        )
-      );
+        );
+      result.append(tableEl);
     });
   };
+
+  const sqlHeader = div(
+    style({ display: "flex", alignItems: "center", gap: "0.5em" }),
+    p(style({ opacity: "0.6", margin: "0" }), "SQL console:"),
+    button("run", { onclick: runQuery, style: { fontSize: "0.85em", padding: "0.2em 0.5em" } })
+  );
 
   const root = div(
     style({ display: "flex", flexDirection: "column", gap: "0.75em" }),
@@ -71,12 +102,11 @@ export const createDashboardView = ({ query, navigate }: DashboardDeps) => {
           navigate("/edit");
         },
       },
-      "EDIT"
+      "Add Note"
     ),
-    p("SQL console:"),
-    userinput,
-    button("run", { onclick: runQuery }),
-    result
+    result,
+    sqlHeader,
+    userinput
   );
 
   return { root, runQuery };

@@ -10,13 +10,9 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default __t.object("LlmResult", {
-  id: __t.u128(),
-  prompt: __t.string(),
-  schema: __t.string(),
-  response: __t.string(),
-  provider: __t.string(),
-  model: __t.string(),
+export default __t.row({
+  id: __t.u128().primaryKey(),
+  schemaId: __t.u128(),
+  data: __t.string(),
+  hash: __t.u128(),
 });
-
-

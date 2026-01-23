@@ -10,10 +10,11 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default {
-  prompt: __t.string(),
-  schema: __t.string(),
-  response: __t.string(),
-  provider: __t.string(),
-  model: __t.string(),
-};
+export default __t.object("JsonNote", {
+  id: __t.u128(),
+  schemaId: __t.u128(),
+  data: __t.string(),
+  hash: __t.u128(),
+});
+
+

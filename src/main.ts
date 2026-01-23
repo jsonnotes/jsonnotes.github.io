@@ -2,11 +2,13 @@ import { a, div, h2, p, popup, style } from "./html";
 import { openNoteView, Note } from "./note_view";
 import { createDashboardView } from "./dashboard";
 import { createEditView } from "./edit";
+import { Ajv } from "ajv";
 
 // const db_url = "https://maincloud.spacetimedb.com"
 const db_url = "http://localhost:3000";
 const body = document.body;
-const DBNAME = "jsonview";
+// const DBNAME = "jsonviewtest";
+const DBNAME = "jsonview"
 
 let access_token: string | null = null;
 let runQuery = () => {};
@@ -25,7 +27,7 @@ const server_request = (path: string, method: string, body: string | null = null
 };
 
 const setup = () => {
-  server_request("/v1/identity", "POST")
+  return server_request("/v1/identity", "POST")
     .then((res) => res.json())
     .then((text) => {
       console.log(text.token);
@@ -33,7 +35,29 @@ const setup = () => {
     });
 };
 
-setup();
+const exampleSchema = `{
+  "type": "object",
+  "properties": {
+    "title": { "type": "string" },
+    "body": { "type": "string" },
+    "tags": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["title"],
+  "additionalProperties": false
+}`;
+
+const add_note_silent = (schemaId: string, data: string) => {
+  const schemaIdValue = Number(schemaId || 1);
+  return server_request(
+    `/v1/database/${DBNAME}/call/add_note`,
+    "POST",
+    JSON.stringify({ schemaId: schemaIdValue, data })
+  ).catch(() => {});
+};
+
+setup().then(() => {
+  add_note_silent("1", exampleSchema);
+});
 
 const add_note = (schemaId: string, data: string) => {
   const schemaIdValue = Number(schemaId || 1);
@@ -74,6 +98,27 @@ const query_data = (sql: string) => {
       popup(p(e.message));
       return { names: ["error"], rows: [e.message] };
     });
+};
+
+const FNV_OFFSET_1 = 0xcbf29ce484222325n;
+const FNV_OFFSET_2 = 0x84222325cbf29ce4n;
+const FNV_PRIME = 0x100000001b3n;
+const MASK_64 = (1n << 64n) - 1n;
+
+const hash64 = (value: string, offset: bigint): bigint => {
+  let hash = offset;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= BigInt(value.charCodeAt(i));
+    hash = (hash * FNV_PRIME) & MASK_64;
+  }
+  return hash;
+};
+
+const hash128 = (schemaData: string, data: string): bigint => {
+  const input = `${schemaData}\n${data}`;
+  const high = hash64(input, FNV_OFFSET_1);
+  const low = hash64(input, FNV_OFFSET_2);
+  return (high << 64n) | low;
 };
 
 const rowToNote = (names: string[], row: any[]): Note => {
@@ -156,7 +201,7 @@ const bubble = style({
 
 body.appendChild(
   div(
-    style({ display: "flex", alignItems: "center", gap: "0.75em" }),
+    style({ display: "flex", alignItems: "center", gap: "0.75em", padding: "1em" }),
     a(
       style({ textDecoration: "none", color: "inherit" }),
       {
@@ -198,14 +243,32 @@ body.appendChild(
 const dashboard = createDashboardView({ query: query_data, navigate });
 const editView = createEditView({
   submit: (schemaId, data) =>
-    add_note(schemaId, data).then(() => {
-      const sql = "select max(id) as id from json_note";
-      return query_data(sql).then((result) => {
+    query_data(`select data from json_note where id = ${Number(schemaId || 1)}`)
+      .then((result) => {
+        const schemaData = String(result.rows[0]?.[0] ?? "");
+        const hash = hash128(schemaData, data).toString();
+        return add_note(schemaId, data).then(() =>
+          query_data(`select id from json_note where hash = ${hash}`)
+        );
+      })
+      .then((result) => {
         const id = Number(result.rows[0]?.[0]);
         if (Number.isFinite(id)) navigate(`/${id}`);
         if (window.location.pathname === "/") runQuery();
-      });
-    }),
+      }),
+  validate: (schemaId, data) =>
+    query_data(`select data from json_note where id = ${Number(schemaId || 1)}`)
+      .then((result) => {
+        const schemaData = String(result.rows[0]?.[0] ?? "");
+        try {
+          const ajv = new Ajv();
+          const validate = ajv.compile(JSON.parse(schemaData));
+          const value = JSON.parse(data);
+          return validate(value) ? null : (validate.errors?.map((e: any) => e.message).join(", ") || "Invalid data");
+        } catch (e: any) {
+          return e.message || "Invalid JSON";
+        }
+      }),
 });
 editFill = editView.fill;
 
