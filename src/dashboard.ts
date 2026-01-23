@@ -12,7 +12,7 @@ export const createDashboardView = ({ query, navigate }: DashboardDeps) => {
   const cachedSql = localStorage.getItem(cacheKey);
   const userinput = textarea(
     style({ fontFamily: "monospace", padding: ".5em" }),
-    cachedSql || "select id, data from json_note limit 50"
+    cachedSql || "select id, data from note limit 50"
   );
 
   userinput.rows = 2;
@@ -94,7 +94,7 @@ export const createDashboardView = ({ query, navigate }: DashboardDeps) => {
   const root = div(
     style({ display: "flex", flexDirection: "column", gap: "0.75em" }),
     a(
-      style({ textDecoration: "none", color: "inherit", fontWeight: "bold" }),
+      style({ textDecoration: "none", color: "inherit", fontWeight: "bold", border: "1px solid #ccc", borderRadius: "0.25em", padding: "0.25em 0.5em"}),
       {
         href: "/edit",
         onclick: (e) => {
@@ -102,7 +102,7 @@ export const createDashboardView = ({ query, navigate }: DashboardDeps) => {
           navigate("/edit");
         },
       },
-      "Add Note"
+      "+ Add Note"
     ),
     result,
     sqlHeader,

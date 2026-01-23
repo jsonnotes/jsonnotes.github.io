@@ -3,6 +3,7 @@ import { openNoteView, Note } from "./note_view";
 import { createDashboardView } from "./dashboard";
 import { createEditView } from "./edit";
 import { Ajv } from "ajv";
+import { hash128 } from "../spacetimedb/src/hash";
 
 // const db_url = "https://maincloud.spacetimedb.com"
 const db_url = "http://localhost:3000";
@@ -35,29 +36,7 @@ const setup = () => {
     });
 };
 
-const exampleSchema = `{
-  "type": "object",
-  "properties": {
-    "title": { "type": "string" },
-    "body": { "type": "string" },
-    "tags": { "type": "array", "items": { "type": "string" } }
-  },
-  "required": ["title"],
-  "additionalProperties": false
-}`;
-
-const add_note_silent = (schemaId: string, data: string) => {
-  const schemaIdValue = Number(schemaId || 1);
-  return server_request(
-    `/v1/database/${DBNAME}/call/add_note`,
-    "POST",
-    JSON.stringify({ schemaId: schemaIdValue, data })
-  ).catch(() => {});
-};
-
-setup().then(() => {
-  add_note_silent("1", exampleSchema);
-});
+setup();
 
 const add_note = (schemaId: string, data: string) => {
   const schemaIdValue = Number(schemaId || 1);
@@ -100,27 +79,6 @@ const query_data = (sql: string) => {
     });
 };
 
-const FNV_OFFSET_1 = 0xcbf29ce484222325n;
-const FNV_OFFSET_2 = 0x84222325cbf29ce4n;
-const FNV_PRIME = 0x100000001b3n;
-const MASK_64 = (1n << 64n) - 1n;
-
-const hash64 = (value: string, offset: bigint): bigint => {
-  let hash = offset;
-  for (let i = 0; i < value.length; i += 1) {
-    hash ^= BigInt(value.charCodeAt(i));
-    hash = (hash * FNV_PRIME) & MASK_64;
-  }
-  return hash;
-};
-
-const hash128 = (schemaData: string, data: string): bigint => {
-  const input = `${schemaData}\n${data}`;
-  const high = hash64(input, FNV_OFFSET_1);
-  const low = hash64(input, FNV_OFFSET_2);
-  return (high << 64n) | low;
-};
-
 const rowToNote = (names: string[], row: any[]): Note => {
   const note: any = {};
   names.forEach((name, index) => {
@@ -141,7 +99,7 @@ const navigate = (path: string) => {
 };
 
 const showNoteById = (id: number) => {
-  query_data(`select * from json_note where id = ${id} limit 1`)
+  query_data(`select * from note where id = ${id} limit 1`)
     .then((data) => {
       if (!data.rows.length) throw new Error("note not found");
       const note = rowToNote(data.names, data.rows[0]);
@@ -168,7 +126,7 @@ const handleRoute = () => {
     const idParam = params.get("id");
     const id = idParam ? Number(idParam) : NaN;
     if (Number.isFinite(id) && editFill) {
-      query_data(`select * from json_note where id = ${id} limit 1`)
+      query_data(`select * from note where id = ${id} limit 1`)
         .then((data) => {
           if (!data.rows.length) throw new Error("note not found");
           const note = rowToNote(data.names, data.rows[0]);
@@ -199,23 +157,27 @@ const bubble = style({
   border: "1px solid #ccc",
 });
 
+
 body.appendChild(
+
   div(
-    style({ display: "flex", alignItems: "center", gap: "0.75em", padding: "1em" }),
+    style({
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "left",
+      gap: "0.75em", padding: "1em" }),
     a(
-      style({ textDecoration: "none", color: "inherit" }),
+      style({textDecoration: "none", color: "inherit"}),
+      h2("Json View"), {href: "/", onclick: (e) => {
+      e.preventDefault();
+      navigate("/");
+    }}),
+    div (
+      style({ display: "flex", gap: "1em" }),
+      a(
       {
-        href: "/",
-        onclick: (e) => {
-          e.preventDefault();
-          navigate("/");
-        },
-      },
-      h2("Json View")
-    ),
-    a(
-      style({ textDecoration: "none", color: "inherit", fontWeight: "bold" }),
-      {
+        style: { textDecoration: "none", color: "inherit", fontWeight: "bold" },
+
         href: "/",
         "data-nav": "dashboard",
         onclick: (e) => {
@@ -236,28 +198,31 @@ body.appendChild(
         },
       },
       "Edit"
-    )
+    ))
   )
 );
 
 const dashboard = createDashboardView({ query: query_data, navigate });
 const editView = createEditView({
   submit: (schemaId, data) =>
-    query_data(`select data from json_note where id = ${Number(schemaId || 1)}`)
+    query_data(`select data from note where id = ${Number(schemaId || 1)}`)
       .then((result) => {
-        const schemaData = String(result.rows[0]?.[0] ?? "");
-        const hash = hash128(schemaData, data).toString();
+        const hash = hash128(String(schemaId), data).toString();
+        console.log(hash);
         return add_note(schemaId, data).then(() =>
-          query_data(`select id from json_note where hash = ${hash}`)
+          query_data(`select id from note where hash = '${hash}'`)
+            .then(r=> {console.log(r); return r})
+            .then((rows) => rows.rows[0]?.[0] ?? null)
         );
       })
-      .then((result) => {
-        const id = Number(result.rows[0]?.[0]);
-        if (Number.isFinite(id)) navigate(`/${id}`);
+      .then((id) => {
+        if (id === null || id === undefined) return;
+        const nextId = Number(id);
+        if (Number.isFinite(nextId)) navigate(`/${nextId}`);
         if (window.location.pathname === "/") runQuery();
       }),
   validate: (schemaId, data) =>
-    query_data(`select data from json_note where id = ${Number(schemaId || 1)}`)
+    query_data(`select data from note where id = ${Number(schemaId || 1)}`)
       .then((result) => {
         const schemaData = String(result.rows[0]?.[0] ?? "");
         try {

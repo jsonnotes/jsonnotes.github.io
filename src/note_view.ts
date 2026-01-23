@@ -1,4 +1,4 @@
-import { a, button, div, h2, style } from "./html";
+import { a, button, div, h2, h3, style } from "./html";
 
 export type Note = {
   id: number | string | bigint;
@@ -50,7 +50,7 @@ export const openNoteView = (
   );
 
   overlay.append(
-    h2(`document ${note.id}`),
+    h3(`documentID: ${note.id}`),
     schemaButton,
     dataView,
     editLink

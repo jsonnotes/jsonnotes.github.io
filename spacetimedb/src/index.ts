@@ -1,9 +1,11 @@
 import { schema, table, t, SenderError } from 'spacetimedb/server';
 import { Ajv } from 'ajv';
+import { schemas } from './schemas';
+import { hash128 } from './hash';
 
 const JsonNotes = table(
   {
-    name: 'json_note',
+    name: 'note',
     public: true,
   },
   {
@@ -17,41 +19,20 @@ const JsonNotes = table(
 export const spacetimedb = schema(JsonNotes);
 
 const ajv = new Ajv();
-const FNV_OFFSET_1 = 0xcbf29ce484222325n;
-const FNV_OFFSET_2 = 0x84222325cbf29ce4n;
-const FNV_PRIME = 0x100000001b3n;
-const MASK_64 = (1n << 64n) - 1n;
-
-const hash64 = (value: string, offset: bigint): bigint => {
-  let hash = offset;
-  for (let i = 0; i < value.length; i += 1) {
-    hash ^= BigInt(value.charCodeAt(i));
-    hash = (hash * FNV_PRIME) & MASK_64;
-  }
-  return hash;
-};
-
-const hash128 = (schemaData: string, data: string): bigint => {
-  const input = `${schemaData}\n${data}`;
-  const high = hash64(input, FNV_OFFSET_1);
-  const low = hash64(input, FNV_OFFSET_2);
-  return (high << 64n) | low;
-};
-
-
-
 
 
 const add_note = spacetimedb.reducer('add_note', {
-  schemaId: t.i128(),
+  schemaId: t.u128(),
   data: t.string(),
 }, (ctx, { schemaId, data }) => {
 
-  if (schemaId != 0n){
 
-    const schemaRow = ctx.db.jsonNote.id.find(schemaId);
+  const hash = hash128(String(schemaId), data);
+  if (ctx.db.note.hash.find(hash)) return;
+
+  if (schemaId !== 0n) {
+    const schemaRow = ctx.db.note.id.find(schemaId);
     if (!schemaRow) throw new SenderError('Schema not found');
-
     try {
       const validate = ajv.compile(JSON.parse(schemaRow.data));
       const value = JSON.parse(data);
@@ -62,14 +43,13 @@ const add_note = spacetimedb.reducer('add_note', {
     }
   }
 
-
-  const hash = hash128(String(schemaId), data);
-  if (ctx.db.jsonNote.hash.find(hash)) return;
-  let id = ctx.db.jsonNote.count();
-  ctx.db.jsonNote.insert({ id, schemaId, data, hash });
+  let id = ctx.db.note.count();
+  ctx.db.note.insert({ id, schemaId, data, hash });
 });
 
 
 spacetimedb.init((ctx)=>{
-  add_note(ctx, {schemaId: 0n, data: '{}'});
+  for (const schema of schemas) {
+    add_note(ctx, {schemaId: 0n, data: JSON.stringify(schema, undefined, 2 )})
+  }
 })

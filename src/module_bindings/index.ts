@@ -58,7 +58,7 @@ export { World };
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema(
   __table({
-    name: 'json_note',
+    name: 'note',
     indexes: [
       { name: 'hash', algorithm: 'btree', columns: [
         'hash',
