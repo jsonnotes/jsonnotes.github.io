@@ -3,7 +3,7 @@ import { openNoteView, Note } from "./note_view";
 import { createDashboardView } from "./dashboard";
 import { createEditView } from "./edit";
 import { Ajv } from "ajv";
-import { hash128 } from "../spacetimedb/src/hash";
+import { hashData } from "../spacetimedb/src/schemas"
 
 // const db_url = "https://maincloud.spacetimedb.com"
 const db_url = "http://localhost:3000";
@@ -36,7 +36,7 @@ const setup = () => {
 setup();
 
 const add_note = (schemaId: string, data: string) => {
-  const schemaIdValue = Number(schemaId || 1);
+  const schemaIdValue = Number(schemaId || 0);
   return server_request(
     `/v1/database/${DBNAME}/call/add_note`,
     "POST",
@@ -54,26 +54,20 @@ const add_note = (schemaId: string, data: string) => {
     });
 };
 
-const query_data = (sql: string) => {
-  return server_request(`/v1/database/${DBNAME}/sql`, "POST", sql)
-    .then(async (res) => {
-      const text = await res.text();
-      try {
-        return JSON.parse(text);
-      } catch {
-        throw new Error(text || "Invalid response");
-      }
-    })
-    .then((data) => {
-      if (data.length > 1) console.warn("multiple rows returned, TODO: handle this");
-      const { schema, rows } = data[0];
-      return { names: schema.elements.map((e) => e.name.some), rows };
-    })
-    .catch((e) => {
-      console.error(e);
-      popup(p(e.message));
-      return { names: ["error"], rows: [e.message] };
-    });
+const query_data = async (sql: string) => {
+  try {
+    const res = await server_request(`/v1/database/${DBNAME}/sql`, "POST", sql);
+    const text = await res.text();
+    const data = JSON.parse(text);
+    if (data.length > 1) console.warn("multiple rows returned, TODO: handle this");
+    const { schema, rows } = data[0];
+    const names = schema.elements.map((e) => e.name.some);
+    return { names, rows };
+  } catch (e: any) {
+    console.error(e);
+    popup(p(e.message));
+    return { names: ["error"], rows: [e.message] };
+  }
 };
 
 const rowToNote = (names: string[], row: any[]): Note => {
@@ -203,15 +197,13 @@ body.appendChild(
 const dashboard = createDashboardView({ query: query_data, navigate });
 const editView = createEditView({
   submit: (schemaId, data) =>
-    query_data(`select data from note where id = ${Number(schemaId || 1)}`)
+    query_data(`select hash from note where id = ${Number(schemaId || 0)}`)
       .then((result) => {
-        const hash = hash128(String(schemaId), data).toString();
-        console.log(hash);
-        return add_note(schemaId, data).then(() =>
-          query_data(`select id from note where hash = '${hash}'`)
-            .then(r=> {console.log(r); return r})
-            .then((rows) => rows.rows[0]?.[0] ?? null)
-        );
+        const schemaHash = String(result.rows[0]?.[0] ?? "").replace(/^"|"$/g, "");
+        const hash = hashData(data, schemaHash);
+        return add_note(schemaId, data)
+          .then(() => query_data(`select id from note where hash = '${hash}'`))
+          .then((rows) => rows.rows[0]?.[0] ?? null);
       })
       .then((id) => {
         if (id === null || id === undefined) return;
@@ -220,7 +212,7 @@ const editView = createEditView({
         if (window.location.pathname === "/") runQuery();
       }),
   validate: (schemaId, data) =>
-    query_data(`select data from note where id = ${Number(schemaId || 1)}`)
+    query_data(`select data from note where id = ${Number(schemaId || 0)}`)
       .then((result) => {
         const schemaData = String(result.rows[0]?.[0] ?? "");
         try {
@@ -243,7 +235,7 @@ const editView = createEditView({
     if (!raw) return null;
     try {
       const draft = JSON.parse(raw);
-      return { schemaId: String(draft.schemaId || "1"), data: String(draft.data || "") };
+      return { schemaId: String(draft.schemaId || "0"), data: String(draft.data || "") };
     } catch {
       return null;
     }

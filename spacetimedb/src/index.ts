@@ -9,17 +9,16 @@ const JsonNotes = table(
     public: true,
   },
   {
-    id: t.u128().primaryKey(),
-    schemaId: t.u128(),
+    id: t.u64().primaryKey(),
+    schemaId: t.u64(),
     data: t.string(),
-    hash: t.u128().unique(),
+    hash: t.string().unique(),
   }
 );
 
 export const spacetimedb = schema(JsonNotes);
 
 const ajv = new Ajv();
-
 
 const add_note = spacetimedb.reducer('add_note', {
   schemaId: t.u128(),
@@ -33,16 +32,21 @@ const add_note = spacetimedb.reducer('add_note', {
   if (!validate(JSON.parse(data))) throw new SenderError(validate.errors?.map((e) => e.message).join(', ') || 'Invalid data');
   let id = ctx.db.note.count();
 
-  const hash = hashData(data, schemaRow.hash);
+  const hash = hashData(data, String(schemaRow.hash));
+  if (ctx.db.note.hash.find(hash)) return;
   ctx.db.note.insert({ id, schemaId, data, hash})
 
 });
 
 
 const setup = spacetimedb.reducer('setup', {}, (ctx) => {
-  ctx.db.note.insert({id: 0n, schemaId: 0n, data: "{}", hash:  hashData("{}", 0n)})
-  for (const schema of schemas) {
-    add_note(ctx, {schemaId: 0n, data: JSON.stringify(schema, undefined, 2 )})
+  try{
+    ctx.db.note.insert({id: 0n, schemaId: 0n, data: "{}", hash:  hashData("{}", "0")})
+  }catch {}
+  for (const note of schemas) {
+    const schemaRow = ctx.db.note.hash.find(note.schemaHash)
+    if (!schemaRow) throw new Error("Schema not found")
+    add_note(ctx, {schemaId: schemaRow.id, data: note.data})
   }
 })
 

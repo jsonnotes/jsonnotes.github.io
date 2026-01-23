@@ -13,7 +13,7 @@ export const createEditView = ({ submit, validate, onDirty, loadDraft }: EditDep
     `{"id": "some text"}`
   );
 
-  const schemaIdField = input("1", { placeholder: "default: 1" });
+  const schemaIdField = input("0", { placeholder: "default: 0" });
   const jsonStatus = p("validating...");
   jsonStatus.style.color = "#666";
 
@@ -75,7 +75,7 @@ export const createEditView = ({ submit, validate, onDirty, loadDraft }: EditDep
   const updateStatus = () => {
     jsonStatus.innerText = "validating...";
     jsonStatus.style.color = "#666";
-    validate(schemaIdField.value.trim() || "1", datafield.value).then((error) => {
+    validate(schemaIdField.value.trim() || "0", datafield.value).then((error) => {
       if (error) {
         jsonStatus.innerText = error;
         jsonStatus.style.color = "#a33";
@@ -89,7 +89,7 @@ export const createEditView = ({ submit, validate, onDirty, loadDraft }: EditDep
 
   const markDirty = () => {
     if (!isDirty) isDirty = true;
-    onDirty(schemaIdField.value.trim() || "1", datafield.value);
+    onDirty(schemaIdField.value.trim() || "0", datafield.value);
   };
 
   datafield.oninput = () => {
@@ -127,7 +127,7 @@ export const createEditView = ({ submit, validate, onDirty, loadDraft }: EditDep
     ),
     button("push", {
       onclick: () => {
-        submit(schemaIdField.value.trim() || "1", datafield.value).catch(() => {});
+        submit(schemaIdField.value.trim() || "0", datafield.value).catch(() => {});
       },
     })
   );

@@ -14,10 +14,11 @@ const hash64 = (value: string, offset: bigint): bigint => {
   return hash;
 };
 
-export const hash128 = (...data:any): bigint => {
-  
+const toHex64 = (value: bigint) => value.toString(16).padStart(16, "0");
+
+export const hash128 = (...data:any): string => {
   const input = JSON.stringify(data);
   const high = hash64(input, FNV_OFFSET_1);
   const low = hash64(input, FNV_OFFSET_2);
-  return (high << 64n) | low;
+  return `${toHex64(high)}${toHex64(low)}`;
 };
