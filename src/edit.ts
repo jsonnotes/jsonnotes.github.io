@@ -3,14 +3,12 @@ import { button, div, input, p, style, table, td, textarea, tr } from "./html";
 type EditDeps = {
   submit: (schemaId: string, data: string) => Promise<void>;
   validate: (schemaId: string, data: string) => Promise<string | null>;
-  onDirty: (schemaId: string, data: string) => void;
-  loadDraft: () => { schemaId: string; data: string } | null;
+  onChange: (schemaId: string, data: string) => void;
 };
 
-export const createEditView = ({ submit, validate, onDirty, loadDraft }: EditDeps) => {
+export const createEditView = ({ submit, validate, onChange }: EditDeps) => {
   const datafield = textarea(
     style({ fontFamily: "monospace", minHeight: "12em", resize: "vertical" }),
-    `{"id": "some text"}`
   );
 
   const schemaIdField = input("0", { placeholder: "default: 0" });
@@ -70,8 +68,6 @@ export const createEditView = ({ submit, validate, onDirty, loadDraft }: EditDep
     datafield.dispatchEvent(new Event("input"));
   };
 
-  let isDirty = false;
-
   const updateStatus = () => {
     jsonStatus.innerText = "validating...";
     jsonStatus.style.color = "#666";
@@ -87,17 +83,14 @@ export const createEditView = ({ submit, validate, onDirty, loadDraft }: EditDep
     resizeTextarea();
   };
 
-  const markDirty = () => {
-    if (!isDirty) isDirty = true;
-    onDirty(schemaIdField.value.trim() || "0", datafield.value);
-  };
+  const markChange = () => onChange(schemaIdField.value.trim() || "0", datafield.value);
 
   datafield.oninput = () => {
-    markDirty();
+    markChange();
     updateStatus();
   };
   schemaIdField.oninput = () => {
-    markDirty();
+    markChange();
     updateStatus();
   };
 
@@ -133,18 +126,10 @@ export const createEditView = ({ submit, validate, onDirty, loadDraft }: EditDep
   );
 
   const fill = (schemaId: string, data: string) => {
-    isDirty = false;
     schemaIdField.value = schemaId;
     datafield.value = data;
-    datafield.dispatchEvent(new Event("input"));
-  };
-
-  const draft = loadDraft();
-  if (draft) {
-    schemaIdField.value = draft.schemaId;
-    datafield.value = draft.data;
     updateStatus();
-  }
+  };
 
   resizeTextarea();
 
