@@ -1,11 +1,11 @@
-import { a, button, div, p, style, table, td, textarea, th, tr } from "./html";
+import { button, div, noteLink, p, routeLink, style, table, td, textarea, th, tr } from "./html";
 
 type QueryResult = { names: string[]; rows: any[][] };
 
 type DashboardDeps = {
   query: (sql: string) => Promise<QueryResult>;
   navigate: (path: string) => void;
-  onRow: (row: any) => void;
+  onRow?: (row: any) => void;
 };
 
 export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) => {
@@ -58,15 +58,9 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
             onRow(note);
             const href = `/${note.id}`;
             const link = (content: string) =>
-              a(
-                style({ color: "inherit", textDecoration: "none", display: "block" }),
-                {
-                  href,
-                  onclick: (e) => {
-                    e.preventDefault();
-                    navigate(href);
-                  },
-                },
+              noteLink(
+                note.id,
+                { style: { color: "inherit", textDecoration: "none", display: "block" } },
                 content
               );
 
@@ -95,15 +89,9 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
 
   const root = div(
     style({ display: "flex", flexDirection: "column", gap: "0.75em" }),
-    a(
-      style({ textDecoration: "none", color: "inherit", fontWeight: "bold", border: "1px solid #ccc", borderRadius: "0.25em", padding: "0.25em 0.5em"}),
-      {
-        href: "/edit",
-        onclick: (e) => {
-          e.preventDefault();
-          navigate("/edit");
-        },
-      },
+    routeLink(
+      "/edit",
+      { style: { textDecoration: "none", color: "inherit", fontWeight: "bold", border: "1px solid #ccc", borderRadius: "0.25em", padding: "0.25em 0.5em" } },
       "+ Add Note"
     ),
     result,

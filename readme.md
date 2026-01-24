@@ -1,27 +1,39 @@
+# Lexxtract Database
 
+View, validate, and edit JSON notes stored in SpacetimeDB. Notes are immutable and deduplicated by a content hash that includes the schema hash. Schemas live as notes too, referenced by id.
 
+## Project Layout
+- `src/` — Vite + TypeScript client (dashboard, editor, note view).
+- `spacetimedb/` — SpacetimeDB module (schema, reducers, validation).
+- `docs/` — GitHub Pages build output.
 
-# lexxtract database
+## Local Development
+Frontend:
+```bash
+npm install
+npm run dev
+```
 
+Backend (SpacetimeDB module):
+```bash
+cd spacetimedb
+npm install
+npm run build
+spacetime publish -c jsonview
+```
 
-view and edit Formatted JSON online.
+## URLs
+- Local API: `http://localhost:3000`
+- Live module: `https://spacetimedb.com/@DKormann/lexxtract`
+- Live dashboard: `https://lexxtract.github.io/dashboard`
 
-# database
+## How It Works
+- Notes are rows in a single `note` table with `id`, `schemaId`, `data`, and `hash`.
+- `hash` is a hex string derived from note data + schema hash; it drives deduplication.
+- The module seeds row `id=0` with `{}` and inserts default schemas at init.
 
-this is a spacetimedb database which uses postgres as a backend.
-
-database tables and api is defined in spacetimedb folder
-
-the database is currently hosted on https://spacetimedb.com/@DKormann/lexxtract
-
-# dashboard
-
-visit https://lexxtract.github.io/dashboard to see the dashboard.
-
-the dashboard is defined as a typescript project that can be seen as a template for using the database over http requests.
-
-currently no authentication is needed to view or add data.
-
+## Contributing
+See `AGENTS.md` for contributor guidelines and design goals (minimal logic + dependencies).
 
 
 

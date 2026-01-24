@@ -1,4 +1,4 @@
-import { a, button, div, h2, h3, style } from "./html";
+import { a, button, div, h2, h3, noteLink, style } from "./html";
 
 export type Note = {
   id: number | string | bigint;
@@ -26,32 +26,27 @@ export const openNoteView = (
     formatJson(note.data)
   );
 
-  const schemaButton = a(
-    style({ textDecoration: "underline", color: "inherit" }),
-    {
-      href: `/${note.schemaId}`,
-      onclick: (e) => {
-        e.preventDefault();
-        navigate(`/${note.schemaId}`);
-      },
-    },
+  const schemaButton = noteLink(
+    note.schemaId,
+    { style: { textDecoration: "underline", color: "inherit" } },
     `schema: ${note.schemaId}`
   );
 
   const editLink = a(
-    style({ textDecoration: "underline", color: "inherit" }),
-    {
-      href: `/edit?id=${note.id}`,
-      onclick: (e) => {
-        e.preventDefault();
-        navigate(`/edit?id=${note.id}`);
-      },
-    },
+    { style: { textDecoration: "underline", color: "inherit" }, href: `/edit?id=${note.id}` },
     "edit"
   );
 
+  let noteLabel = String(note.id);
+  try {
+    const parsed = JSON.parse(note.data);
+    if (parsed && typeof parsed.title === "string" && parsed.title.trim()) {
+      noteLabel = parsed.title.trim();
+    }
+  } catch {}
+
   overlay.append(
-    h3(`documentID: ${note.id}`),
+    h3(`Note ${noteLabel}`),
     schemaButton,
     dataView,
     editLink

@@ -4,6 +4,7 @@ import { createDashboardView } from "./dashboard";
 import { createEditView } from "./edit";
 import { Ajv } from "ajv";
 import { hashData } from "../spacetimedb/src/schemas"
+import { hash128 } from "./hash";
 
 // const db_url = "https://maincloud.spacetimedb.com"
 const db_url = "http://localhost:3000";
@@ -13,9 +14,10 @@ const DBNAME = "jsonview"
 
 let access_token: string | null = null;
 let runQuery = () => {};
-let editFill: ((schemaId: string, data: string) => void) | null = null;
+let editFill: ((schemaHash: string, data: string) => void) | null = null;
 let contentRoot: HTMLElement | null = null;
 let lastDraftRaw: string | null = null;
+let handleRoute = () => {};
 const noteCachePrefix = "note:";
 const noteHashPrefix = "note_hash:";
 
@@ -46,41 +48,47 @@ const add_note = (schemaId: string, data: string) =>
     .catch((e) => popup(h2("ERROR"), p(e.message)));
 
 const noteFrom = (names: string[], row: any[]): Note => Object.fromEntries(names.map((n, i) => [n, row[i]])) as Note;
-const cacheNote = (note: Note) => {
-  try {
-    localStorage.setItem(`${noteCachePrefix}${note.id}`, JSON.stringify(note));
-    if (note.hash !== undefined) localStorage.setItem(`${noteHashPrefix}${note.hash}`, String(note.id));
-  } catch {}
-};
-const getCachedNoteById = (id: number) => {
-  try {
-    const raw = localStorage.getItem(`${noteCachePrefix}${id}`);
-    return raw ? (JSON.parse(raw) as Note) : null;
-  } catch {
-    return null;
+
+const FunCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
+  const HotCache = new Map<string,Y>();
+  const fkey = hash128(fn.toString() + ":cached")
+  return async (x:X) => {
+    const lkey = fkey + JSON.stringify(x)
+    if (HotCache.has(lkey)) return HotCache.get(lkey)!
+    const raw = localStorage.getItem(lkey)
+    if (raw) {
+      const res = JSON.parse(raw)
+      HotCache.set(lkey, res)
+      return res
+    }
+    const res = await fn(x)
+    localStorage.setItem(lkey, JSON.stringify(res))
+    HotCache.set(lkey, res)
+    return res 
   }
-};
-const getCachedNoteByHash = (hash: string) => {
-  try {
-    const id = localStorage.getItem(`${noteHashPrefix}${hash}`);
-    return id ? getCachedNoteById(Number(id)) : null;
-  } catch {
-    return null;
-  }
-};
+}
+
+const getNote = FunCache(async (hash: string) =>
+  query_data(`select * from note where hash = '${hash}'`)
+  .then(({ names, rows }) => {
+    if (!rows[0]) throw new Error("note not found")
+    return noteFrom(names, rows[0])
+  })
+)
+
+const getHashFromId = FunCache(async (id: number) =>
+  query_data(`select hash from note where id = ${id}`)
+  .then(({ rows }) => {
+    if (!rows[0]) throw new Error("note not found")
+    return String(rows[0][0])
+  })
+)
+
+const getNoteById = (id: number) => getHashFromId(id).then(getNote)
 const render = (view: HTMLElement) => contentRoot && (contentRoot.innerHTML = "", contentRoot.appendChild(view));
 const navigate = (path: string) => (history.pushState({}, "", path), handleRoute());
-const getNote = (id: number) => {
-  const cached = getCachedNoteById(id);
-  if (cached) return Promise.resolve(cached);
-  return query_data(`select * from note where id = ${id} limit 1`).then((data) => {
-    if (!data.rows.length) throw new Error("note not found");
-    const note = noteFrom(data.names, data.rows[0]);
-    cacheNote(note);
-    return note;
-  });
-};
-const showNoteById = (id: number) => getNote(id).then((note) => render(openNoteView(note, navigate))).catch((e) => popup(h2("ERROR"), p(e.message)));
+
+const showNoteById = (id: number) => getNoteById(id).then((note) => render(openNoteView(note, navigate))).catch((e) => popup(h2("ERROR"), p(e.message)));
 
 req("/v1/identity", "POST").then((res) => res.json()).then((text) => { access_token = text.token; });
 
@@ -91,7 +99,7 @@ const setActive = () =>
     (el as HTMLElement).style.opacity = target === path ? "1" : "0.5";
   });
 
-const handleRoute = () => {
+handleRoute = () => {
   const path = window.location.pathname.replace(/^\/+/, "");
   if (path === "edit") {
     render(editView.root);
@@ -102,11 +110,23 @@ const handleRoute = () => {
         lastDraftRaw = raw;
         try {
           const draft = JSON.parse(raw);
-          editFill(String(draft.schemaId || "0"), String(draft.data || ""));
+          if (draft.schemaHash) {
+            editFill(String(draft.schemaHash), String(draft.data || ""));
+          } else if (draft.schemaId) {
+            getNoteById(Number(draft.schemaId))
+              .then((schemaNote) => editFill(String(schemaNote.hash), String(draft.data || "")))
+              .catch((e) => popup(h2("ERROR"), p(e.message)));
+          }
         } catch {}
+      } else {
+        getNoteById(0).then((schemaNote) => editFill(String(schemaNote.hash), "{}")).catch(() => {});
       }
     }else{
-      getNote(Number(searchid)).then((note) => editFill(String(note.schemaId), String(note.data))).catch((e) => popup(h2("ERROR"), p(e.message))); 
+      getNoteById(Number(searchid))
+        .then((note) => getNoteById(Number(note.schemaId)).then((schemaNote) =>
+          editFill(String(schemaNote.hash), String(note.data))
+        ))
+        .catch((e) => popup(h2("ERROR"), p(e.message))); 
     }
   } else if (!path) {
     render(dashboard.root);
@@ -137,45 +157,48 @@ body.appendChild(div(
   )
 ));
 
-const dashboard = createDashboardView({ query: query_data, navigate, onRow: cacheNote });
+const dashboard = createDashboardView({ query: query_data, navigate});
 const editView = createEditView({
-  submit: (schemaId, data) =>
-    query_data(`select hash from note where id = ${Number(schemaId || 0)}`)
-      .then((r) => String(r.rows[0]?.[0] ?? "").replace(/^"|"$/g, ""))
-      .then((schemaHash) => {
-        const hash = hashData(data, schemaHash);
-        const cached = getCachedNoteByHash(hash);
-        if (cached) return cached.id;
-        return add_note(schemaId, data).then(() => query_data(`select id from note where hash = '${hash}'`)).then((r) => r.rows[0]?.[0]);
-      })
-      .then((id) => {
-        if (id === null || id === undefined) return;
-        const nextId = Number(id);
-        if (Number.isFinite(nextId)) navigate(`/${nextId}`);
-        if (window.location.pathname === "/") runQuery();
-      }),
-  validate: (schemaId, data) => {
-    const cached = getCachedNoteById(Number(schemaId || 0));
-    const schemaData = cached ? String(cached.data) : null;
-    const loadSchema = schemaData
-      ? Promise.resolve(schemaData)
-      : query_data(`select data from note where id = ${Number(schemaId || 0)}`).then((r) => String(r.rows[0]?.[0] ?? ""));
-    return loadSchema.then((schemaText) => {
-      try {
-        const validate = new Ajv().compile(JSON.parse(schemaText));
-        return validate(JSON.parse(data)) ? null : (validate.errors?.map((e: any) => e.message).join(", ") || "Invalid data");
-      } catch (e: any) {
-        return e.message || "Invalid JSON";
-      }
-    });
+  submit: async (schemaHash, data) => {
+    const schemaNote = await getNote(schemaHash);
+    const hash = hashData(data, schemaHash);
+    await add_note(String(schemaNote.id), data);
+    const note = await getNote(hash);
+    navigate(`/${note.id}`);
+    if (window.location.pathname === "/") runQuery();
   },
-  onChange: (schemaId, data) => {
-    localStorage.setItem("edit_draft", JSON.stringify({ schemaId, data }));
+  validate: (schemaHash, data) =>
+    getNote(schemaHash)
+      .then((schemaNote) => {
+        try {
+          const validate = new Ajv().compile(JSON.parse(String(schemaNote.data)));
+          return validate(JSON.parse(data)) ? null : (validate.errors?.map((e: any) => e.message).join(", ") || "Invalid data");
+        } catch (e: any) {
+          return e.message || "Invalid JSON";
+        }
+      })
+      .catch((e) => e.message || "Schema not found"),
+  onChange: (schemaHash, data) => {
+    localStorage.setItem("edit_draft", JSON.stringify({ schemaHash, data }));
     if (window.location.pathname !== "/edit" || window.location.search) {
       history.replaceState({}, "", "/edit");
       setActive();
     }
   },
+  fetchSchema: (schemaHash) =>
+    getNote(schemaHash).then((note) => ({ id: String(note.id), data: String(note.data) })),
+  fetchSchemaList: () =>
+    query_data("select id, data, hash from note where schemaId = 0")
+      .then((r) => r.rows.map((row) => {
+        const id = String(row[0]);
+        let title = "";
+        try {
+          const parsed = JSON.parse(String(row[1] ?? ""));
+          title = parsed?.title ? String(parsed.title) : "";
+        } catch {}
+        const hash = String(row[2] ?? "").replace(/^"|"$/g, "");
+        return { id, title, hash };
+      })),
 });
 editFill = editView.fill;
 

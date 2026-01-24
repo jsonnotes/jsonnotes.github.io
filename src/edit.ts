@@ -1,19 +1,83 @@
-import { button, div, input, p, style, table, td, textarea, tr } from "./html";
+import { a, button, div, input, p, popup, style, table, td, textarea, tr } from "./html";
 
 type EditDeps = {
-  submit: (schemaId: string, data: string) => Promise<void>;
-  validate: (schemaId: string, data: string) => Promise<string | null>;
-  onChange: (schemaId: string, data: string) => void;
+  submit: (schemaHash: string, data: string) => Promise<void>;
+  validate: (schemaHash: string, data: string) => Promise<string | null>;
+  onChange: (schemaHash: string, data: string) => void;
+  fetchSchema: (schemaHash: string) => Promise<{ id: string; data: string }>;
+  fetchSchemaList: () => Promise<Array<{ id: string; title: string; hash: string }>>;
 };
 
-export const createEditView = ({ submit, validate, onChange }: EditDeps) => {
+export const createEditView = ({ submit, validate, onChange, fetchSchema, fetchSchemaList }: EditDeps) => {
   const datafield = textarea(
     style({ fontFamily: "monospace", minHeight: "12em", resize: "vertical" }),
   );
 
-  const schemaIdField = input("0", { placeholder: "default: 0" });
   const jsonStatus = p("validating...");
   jsonStatus.style.color = "#666";
+  const schemaTitle = p("");
+  const schemaLink = a(
+    { href: "/0", style: { textDecoration: "underline", color: "inherit" } },
+    "view"
+  );
+  schemaLink.onclick = (e) => {
+    if (e.metaKey || e.ctrlKey) return;
+    e.preventDefault();
+    const href = schemaLink.getAttribute("href") || "/";
+    history.pushState({}, "", href);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+  const schemaPicker = button("change schema", {
+    onclick: () => {
+      const search = input("", { placeholder: "search id, title, hash" });
+      const list = div(p("loading..."));
+      const container = div(
+        style({ display: "flex", flexDirection: "column", gap: "0.5em" }),
+        search,
+        list
+      );
+      const pop = popup(container);
+      fetchSchemaList()
+        .then((schemas) => {
+          const renderList = (items: typeof schemas) => {
+            list.innerHTML = "";
+            const col = div(style({ display: "flex", flexDirection: "column", gap: "0.5em" }));
+            items.slice(0, 10).forEach((s) => {
+              col.appendChild(
+                button(`schema ${s.id}${s.title ? ` : ${s.title}` : ""}`, {
+                  onclick: () => {
+                    currentSchemaHash = s.hash;
+                    updateSchemaPreview();
+                    updateStatus();
+                    markChange();
+                    pop.remove();
+                  },
+                })
+              );
+            });
+            list.appendChild(col);
+          };
+          renderList(schemas);
+          search.oninput = () => {
+            const q = search.value.trim().toLowerCase();
+            if (!q) return renderList(schemas);
+            const byId = schemas.filter((s) => s.id.toLowerCase().includes(q));
+            if (byId.length) return renderList(byId);
+            const byTitle = schemas.filter((s) => s.title.toLowerCase().includes(q));
+            if (byTitle.length) return renderList(byTitle);
+            const byHash = schemas.filter((s) => s.hash.toLowerCase().includes(q));
+            return renderList(byHash);
+          };
+        })
+        .catch((e) => {
+          list.innerHTML = "";
+          list.appendChild(p(e.message || "failed to load schemas"));
+        });
+    },
+  });
+  const schemaList = div();
+  let currentSchemaHash = "";
+  let lastSchemaHash = "";
 
   datafield.rows = 10;
   datafield.cols = 100;
@@ -71,7 +135,12 @@ export const createEditView = ({ submit, validate, onChange }: EditDeps) => {
   const updateStatus = () => {
     jsonStatus.innerText = "validating...";
     jsonStatus.style.color = "#666";
-    validate(schemaIdField.value.trim() || "0", datafield.value).then((error) => {
+    if (!currentSchemaHash) {
+      jsonStatus.innerText = "select schema";
+      jsonStatus.style.color = "#666";
+      return;
+    }
+    validate(currentSchemaHash, datafield.value).then((error) => {
       if (error) {
         jsonStatus.innerText = error;
         jsonStatus.style.color = "#a33";
@@ -83,13 +152,41 @@ export const createEditView = ({ submit, validate, onChange }: EditDeps) => {
     resizeTextarea();
   };
 
-  const markChange = () => onChange(schemaIdField.value.trim() || "0", datafield.value);
+  const updateSchemaPreview = () => {
+    const schemaHash = currentSchemaHash;
+    if (!schemaHash) return;
+    if (schemaHash === lastSchemaHash) return;
+    lastSchemaHash = schemaHash;
+    fetchSchema(schemaHash).then((schemaNote) => {
+      schemaList.innerHTML = "";
+      try {
+        const parsed = JSON.parse(schemaNote.data);
+        const title = parsed?.title ? String(parsed.title) : "";
+        schemaTitle.innerText = `schema: ${schemaNote.id}${title ? ` : ${title}` : ""}`;
+        schemaLink.setAttribute("href", `/${schemaNote.id}`);
+        const props = parsed?.properties || {};
+        const entries = Object.entries(props);
+        if (!entries.length) {
+          schemaList.appendChild(p("no fields"));
+          return;
+        }
+        entries.forEach(([key, def]: any) => {
+          const typ = def?.type ? String(def.type) : "any";
+          schemaList.appendChild(p(`${key}: ${typ}`));
+        });
+      } catch (e: any) {
+        schemaTitle.innerText = `schema: ${schemaNote.id}`;
+        schemaList.appendChild(p(e.message || "invalid schema json"));
+      }
+    }).catch((e) => {
+      schemaList.innerHTML = "";
+      schemaList.appendChild(p(e.message || "schema not found"));
+    });
+  };
+
+  const markChange = () => currentSchemaHash && onChange(currentSchemaHash, datafield.value);
 
   datafield.oninput = () => {
-    markChange();
-    updateStatus();
-  };
-  schemaIdField.oninput = () => {
     markChange();
     updateStatus();
   };
@@ -108,11 +205,7 @@ export const createEditView = ({ submit, validate, onChange }: EditDeps) => {
   });
 
   const root = div(
-    p("add note data:"),
-    table(
-      tr(td("schema id"), td(schemaIdField)),
-      tr(td("data"), td(datafield))
-    ),
+    datafield,
     div(
       style({ display: "flex", gap: "0.5em", alignItems: "center" }),
       formatButton,
@@ -120,17 +213,39 @@ export const createEditView = ({ submit, validate, onChange }: EditDeps) => {
     ),
     button("push", {
       onclick: () => {
-        submit(schemaIdField.value.trim() || "0", datafield.value).catch(() => {});
+        if (!currentSchemaHash) return;
+        submit(currentSchemaHash, datafield.value).catch(() => {});
       },
-    })
+    }),
+    div(
+      style({
+        padding: "1em",
+        marginTop: "0.5em",
+        borderRadius: "1em",
+        border: "1px solid #ccc",
+        background: "var(--background-color)",
+      }),
+      div(
+        style({ display: "flex", alignItems: "center", gap: "0.75em", flexWrap: "wrap" }),
+        schemaTitle,
+        schemaLink,
+        schemaPicker
+      ),
+      div(
+        style({ display: "flex", gap: "1em", alignItems: "flex-start" }),
+        div(schemaList)
+      )
+    )
   );
 
-  const fill = (schemaId: string, data: string) => {
-    schemaIdField.value = schemaId;
+  const fill = (schemaHash: string, data: string) => {
+    currentSchemaHash = schemaHash;
     datafield.value = data;
     updateStatus();
+    updateSchemaPreview();
   };
 
+  updateSchemaPreview();
   resizeTextarea();
 
   return { root, fill };

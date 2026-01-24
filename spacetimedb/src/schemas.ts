@@ -25,6 +25,8 @@ function NoteData(schema: NoteData, data: any): NoteData{
 
 export const top: NoteData = {schemaHash:"0", data: "{}"}
 
+
+
 const script_schema = NoteData(top, object({
   title: string,
   code: string,
@@ -33,6 +35,9 @@ const script_schema = NoteData(top, object({
 }))
 
 export const schemas : NoteData[] = [
-  script_schema
+  script_schema,
+  NoteData(top, {title: "string", ...string}),
+  NoteData(top, {title: "number", ...number}),
+  NoteData(top, {title: "titled", ...object({title: string})}),
 ]
 

@@ -90,6 +90,17 @@ export const h4:HTMLGenerator<HTMLHeadingElement> = newHtmlGenerator("h4")
 export const div:HTMLGenerator<HTMLDivElement> = newHtmlGenerator("div")
 export const button:HTMLGenerator<HTMLButtonElement> = newHtmlGenerator("button")
 export const a:HTMLGenerator<HTMLAnchorElement> = newHtmlGenerator("a")
+export const routeLink = (href: string, ...cs: HTMLArg[]) =>
+  a(
+    { href, onclick: (e) => {
+      if (e.metaKey || e.ctrlKey) return;
+      e.preventDefault();
+      history.pushState({}, "", href);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }},
+    ...cs
+  );
+export const noteLink = (id: string | number | bigint, ...cs: HTMLArg[]) => routeLink(`/${id}`, ...cs);
 export const span:HTMLGenerator<HTMLSpanElement> = newHtmlGenerator("span")
 
 export const table:HTMLGenerator<HTMLTableElement> = newHtmlGenerator("table")
@@ -529,6 +540,5 @@ export const plot = (x:number[]) => {
   }
   console.log(plt)
 }
-
 
 
