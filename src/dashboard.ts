@@ -5,9 +5,10 @@ type QueryResult = { names: string[]; rows: any[][] };
 type DashboardDeps = {
   query: (sql: string) => Promise<QueryResult>;
   navigate: (path: string) => void;
+  onRow: (row: any) => void;
 };
 
-export const createDashboardView = ({ query, navigate }: DashboardDeps) => {
+export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) => {
   const cacheKey = "dashboard_sql";
   const cachedSql = localStorage.getItem(cacheKey);
   const userinput = textarea(
@@ -54,6 +55,7 @@ export const createDashboardView = ({ query, navigate }: DashboardDeps) => {
             data.names.forEach((name, index) => {
               note[name] = row[index];
             });
+            onRow(note);
             const href = `/${note.id}`;
             const link = (content: string) =>
               a(

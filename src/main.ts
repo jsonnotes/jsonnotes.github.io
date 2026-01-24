@@ -16,6 +16,8 @@ let runQuery = () => {};
 let editFill: ((schemaId: string, data: string) => void) | null = null;
 let contentRoot: HTMLElement | null = null;
 let lastDraftRaw: string | null = null;
+const noteCachePrefix = "note:";
+const noteHashPrefix = "note_hash:";
 
 const req = (path: string, method: string, body: string | null = null) =>
   fetch(`${db_url}${path}`, {
@@ -44,13 +46,40 @@ const add_note = (schemaId: string, data: string) =>
     .catch((e) => popup(h2("ERROR"), p(e.message)));
 
 const noteFrom = (names: string[], row: any[]): Note => Object.fromEntries(names.map((n, i) => [n, row[i]])) as Note;
+const cacheNote = (note: Note) => {
+  try {
+    localStorage.setItem(`${noteCachePrefix}${note.id}`, JSON.stringify(note));
+    if (note.hash !== undefined) localStorage.setItem(`${noteHashPrefix}${note.hash}`, String(note.id));
+  } catch {}
+};
+const getCachedNoteById = (id: number) => {
+  try {
+    const raw = localStorage.getItem(`${noteCachePrefix}${id}`);
+    return raw ? (JSON.parse(raw) as Note) : null;
+  } catch {
+    return null;
+  }
+};
+const getCachedNoteByHash = (hash: string) => {
+  try {
+    const id = localStorage.getItem(`${noteHashPrefix}${hash}`);
+    return id ? getCachedNoteById(Number(id)) : null;
+  } catch {
+    return null;
+  }
+};
 const render = (view: HTMLElement) => contentRoot && (contentRoot.innerHTML = "", contentRoot.appendChild(view));
 const navigate = (path: string) => (history.pushState({}, "", path), handleRoute());
-const getNote = (id: number) =>
-  query_data(`select * from note where id = ${id} limit 1`).then((data) => {
+const getNote = (id: number) => {
+  const cached = getCachedNoteById(id);
+  if (cached) return Promise.resolve(cached);
+  return query_data(`select * from note where id = ${id} limit 1`).then((data) => {
     if (!data.rows.length) throw new Error("note not found");
-    return noteFrom(data.names, data.rows[0]);
+    const note = noteFrom(data.names, data.rows[0]);
+    cacheNote(note);
+    return note;
   });
+};
 const showNoteById = (id: number) => getNote(id).then((note) => render(openNoteView(note, navigate))).catch((e) => popup(h2("ERROR"), p(e.message)));
 
 req("/v1/identity", "POST").then((res) => res.json()).then((text) => { access_token = text.token; });
@@ -108,30 +137,38 @@ body.appendChild(div(
   )
 ));
 
-const dashboard = createDashboardView({ query: query_data, navigate });
+const dashboard = createDashboardView({ query: query_data, navigate, onRow: cacheNote });
 const editView = createEditView({
   submit: (schemaId, data) =>
     query_data(`select hash from note where id = ${Number(schemaId || 0)}`)
       .then((r) => String(r.rows[0]?.[0] ?? "").replace(/^"|"$/g, ""))
-      .then((schemaHash) => add_note(schemaId, data).then(() => query_data(`select id from note where hash = '${hashData(data, schemaHash)}'`)))
-      .then((r) => r.rows[0]?.[0])
+      .then((schemaHash) => {
+        const hash = hashData(data, schemaHash);
+        const cached = getCachedNoteByHash(hash);
+        if (cached) return cached.id;
+        return add_note(schemaId, data).then(() => query_data(`select id from note where hash = '${hash}'`)).then((r) => r.rows[0]?.[0]);
+      })
       .then((id) => {
         if (id === null || id === undefined) return;
         const nextId = Number(id);
         if (Number.isFinite(nextId)) navigate(`/${nextId}`);
         if (window.location.pathname === "/") runQuery();
       }),
-  validate: (schemaId, data) =>
-    query_data(`select data from note where id = ${Number(schemaId || 0)}`)
-      .then((r) => String(r.rows[0]?.[0] ?? ""))
-      .then((schemaData) => {
-        try {
-          const validate = new Ajv().compile(JSON.parse(schemaData));
-          return validate(JSON.parse(data)) ? null : (validate.errors?.map((e: any) => e.message).join(", ") || "Invalid data");
-        } catch (e: any) {
-          return e.message || "Invalid JSON";
-        }
-      }),
+  validate: (schemaId, data) => {
+    const cached = getCachedNoteById(Number(schemaId || 0));
+    const schemaData = cached ? String(cached.data) : null;
+    const loadSchema = schemaData
+      ? Promise.resolve(schemaData)
+      : query_data(`select data from note where id = ${Number(schemaId || 0)}`).then((r) => String(r.rows[0]?.[0] ?? ""));
+    return loadSchema.then((schemaText) => {
+      try {
+        const validate = new Ajv().compile(JSON.parse(schemaText));
+        return validate(JSON.parse(data)) ? null : (validate.errors?.map((e: any) => e.message).join(", ") || "Invalid data");
+      } catch (e: any) {
+        return e.message || "Invalid JSON";
+      }
+    });
+  },
   onChange: (schemaId, data) => {
     localStorage.setItem("edit_draft", JSON.stringify({ schemaId, data }));
     if (window.location.pathname !== "/edit" || window.location.search) {

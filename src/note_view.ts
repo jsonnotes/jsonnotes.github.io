@@ -2,6 +2,7 @@ import { a, button, div, h2, h3, style } from "./html";
 
 export type Note = {
   id: number | string | bigint;
+  hash: string;
   schemaId: number | string | bigint;
   data: string;
 };
