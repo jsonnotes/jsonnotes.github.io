@@ -55,7 +55,7 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
             data.names.forEach((name, index) => {
               note[name] = row[index];
             });
-            onRow(note);
+            onRow && onRow(note);
             const href = `/${note.id}`;
             const link = (content: string) =>
               noteLink(

@@ -1,20 +1,46 @@
-import { a, button, div, input, p, popup, style, table, td, textarea, tr } from "./html";
+import Ajv from "ajv";
+import { Hash, hashData, NoteData, top } from "../spacetimedb/src/schemas";
+import { a, button, div, input, p, popup, style, textarea } from "./html";
+import { getNote, query_data } from "./conn";
 
 type EditDeps = {
-  submit: (schemaHash: string, data: string) => Promise<void>;
-  validate: (schemaHash: string, data: string) => Promise<string | null>;
-  onChange: (schemaHash: string, data: string) => void;
-  fetchSchema: (schemaHash: string) => Promise<{ id: string; data: string }>;
-  fetchSchemaList: () => Promise<Array<{ id: string; title: string; hash: string }>>;
+  submit: (data: NoteData) => Promise<void>;
+  onChange: (data: NoteData) => void;
 };
 
-export const createEditView = ({ submit, validate, onChange, fetchSchema, fetchSchemaList }: EditDeps) => {
+export const createEditView = ({ submit, onChange }: EditDeps) => {
   const datafield = textarea(
     style({ fontFamily: "monospace", minHeight: "12em", resize: "vertical" }),
   );
 
-  const jsonStatus = p("validating...");
-  jsonStatus.style.color = "#666";
+  let draftNote : NoteData = {
+    schemaHash: hashData(top),
+    data: datafield.value
+  }
+
+  const setData = (data: string) => {
+    if (datafield.value !== data) datafield.value = data;
+    if (draftNote.data === data) return;
+    draftNote.data = data
+    updateSchemaPreview();
+    updateStatus();
+    onChange(draftNote);
+  }
+
+  const setSchemaHash = (hash: Hash) => {
+    draftNote.schemaHash = hash
+    updateSchemaPreview();
+    updateStatus();
+    onChange(draftNote);
+  }
+
+  const jsonStatus = p();
+  const setJsonStatus = (text: string, color: string) => {
+    jsonStatus.textContent = text;
+    jsonStatus.style.color = color;
+  }
+  setJsonStatus("valid", "green");
+
   const schemaTitle = p("");
   const schemaLink = a(
     { href: "/0", style: { textDecoration: "underline", color: "inherit" } },
@@ -37,7 +63,16 @@ export const createEditView = ({ submit, validate, onChange, fetchSchema, fetchS
         list
       );
       const pop = popup(container);
-      fetchSchemaList()
+      query_data("select id, data, hash from note where schemaId = 0")
+        .then((r) => r.rows.map((row) => {
+
+          let title = "";
+          try {
+            const parsed = JSON.parse(String(row[1] ?? ""));
+            title = parsed?.title ? String(parsed.title) : "";
+          } catch {}
+          return { id: String(row[0]), title, hash:String(row[2] ?? "").replace(/^"|"$/g, "") };
+        }))
         .then((schemas) => {
           const renderList = (items: typeof schemas) => {
             list.innerHTML = "";
@@ -46,10 +81,7 @@ export const createEditView = ({ submit, validate, onChange, fetchSchema, fetchS
               col.appendChild(
                 button(`schema ${s.id}${s.title ? ` : ${s.title}` : ""}`, {
                   onclick: () => {
-                    currentSchemaHash = s.hash;
-                    updateSchemaPreview();
-                    updateStatus();
-                    markChange();
+                    setSchemaHash(s.hash as Hash)
                     pop.remove();
                   },
                 })
@@ -76,7 +108,7 @@ export const createEditView = ({ submit, validate, onChange, fetchSchema, fetchS
     },
   });
   const schemaList = div();
-  let currentSchemaHash = "";
+
   let lastSchemaHash = "";
 
   datafield.rows = 10;
@@ -88,6 +120,7 @@ export const createEditView = ({ submit, validate, onChange, fetchSchema, fetchS
   };
 
   datafield.onkeydown = (e) => {
+    datafield.dispatchEvent(new Event("input"));
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
       e.preventDefault();
       formatButton.click();
@@ -104,60 +137,50 @@ export const createEditView = ({ submit, validate, onChange, fetchSchema, fetchS
       const indent = line.match(/^\s*/)?.[0] || "";
       const extra = /[\{\[]\s*$/.test(line) ? "  " : "";
       const insert = `\n${indent}${extra}`;
-      datafield.value = `${before}${insert}${after}`;
+      datafield.value =(`${before}${insert}${after}`);
       const cursor = start + insert.length;
       datafield.setSelectionRange(cursor, cursor);
-      datafield.dispatchEvent(new Event("input"));
-      return;
-    }
-    const pairs: Record<string, string> = { "{": "}", "[": "]", "(": ")", "\"": "\"" };
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (!(e.key in pairs)) return;
-    const start = datafield.selectionStart || 0;
-    const end = datafield.selectionEnd || 0;
-    if (start === end && datafield.value[start] === pairs[e.key]) {
+    }else{
+      const pairs: Record<string, string> = { "{": "}", "[": "]", "(": ")", "\"": "\"" };
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!(e.key in pairs)) return;
+      const start = datafield.selectionStart || 0;
+      const end = datafield.selectionEnd || 0;
+      if (start === end && datafield.value[start] === pairs[e.key]) {
+        e.preventDefault();
+        datafield.setSelectionRange(start + 1, start + 1);
+        return;
+      }
+      if (e.key === "\"" && start === end && datafield.value[start - 1] === "\\") return;
       e.preventDefault();
-      datafield.setSelectionRange(start + 1, start + 1);
-      return;
+      const before = datafield.value.slice(0, start);
+      const after = datafield.value.slice(end);
+      const close = pairs[e.key];
+      const selection = datafield.value.slice(start, end);
+      datafield.value = (`${before}${e.key}${selection}${close}${after}`)
+      const cursor = start + 1 + selection.length;
+      datafield.setSelectionRange(cursor, cursor);
     }
-    if (e.key === "\"" && start === end && datafield.value[start - 1] === "\\") return;
-    e.preventDefault();
-    const before = datafield.value.slice(0, start);
-    const after = datafield.value.slice(end);
-    const close = pairs[e.key];
-    const selection = datafield.value.slice(start, end);
-    datafield.value = `${before}${e.key}${selection}${close}${after}`;
-    const cursor = start + 1 + selection.length;
-    datafield.setSelectionRange(cursor, cursor);
-    datafield.dispatchEvent(new Event("input"));
   };
+
+  datafield.oninput = () => setData(datafield.value);
 
   const updateStatus = () => {
     jsonStatus.innerText = "validating...";
     jsonStatus.style.color = "#666";
-    if (!currentSchemaHash) {
-      jsonStatus.innerText = "select schema";
-      jsonStatus.style.color = "#666";
-      return;
-    }
-    validate(currentSchemaHash, datafield.value).then((error) => {
-      if (error) {
-        jsonStatus.innerText = error;
-        jsonStatus.style.color = "#a33";
-      } else {
-        jsonStatus.innerText = "valid json + schema";
-        jsonStatus.style.color = "#2f6f2f";
-      }
-    });
-    resizeTextarea();
+    getNote(draftNote.schemaHash).then((schemaNote) => {
+      const validate = new Ajv().compile(JSON.parse(String(schemaNote.data)));
+      if (validate(JSON.parse(draftNote.data))) setJsonStatus("valid", "#2a3");
+      else throw new Error(validate.errors?.map((e: any) => e.message).join(", ") || "Invalid data");
+    })
+    .catch((e: any) => {setJsonStatus(e.message || "invalid json", "#f66")});
   };
 
+
   const updateSchemaPreview = () => {
-    const schemaHash = currentSchemaHash;
-    if (!schemaHash) return;
-    if (schemaHash === lastSchemaHash) return;
-    lastSchemaHash = schemaHash;
-    fetchSchema(schemaHash).then((schemaNote) => {
+    if (draftNote.schemaHash === lastSchemaHash) return;
+    lastSchemaHash = draftNote.schemaHash;
+    getNote(draftNote.schemaHash).then((schemaNote) => {
       schemaList.innerHTML = "";
       try {
         const parsed = JSON.parse(schemaNote.data);
@@ -184,25 +207,7 @@ export const createEditView = ({ submit, validate, onChange, fetchSchema, fetchS
     });
   };
 
-  const markChange = () => currentSchemaHash && onChange(currentSchemaHash, datafield.value);
-
-  datafield.oninput = () => {
-    markChange();
-    updateStatus();
-  };
-
-  const formatButton = button("format json (cmd+s)", {
-    onclick: () => {
-      try {
-        const parsed = JSON.parse(datafield.value);
-        datafield.value = JSON.stringify(parsed, null, 2);
-        updateStatus();
-      } catch (e: any) {
-        jsonStatus.innerText = e.message || "invalid json";
-        jsonStatus.style.color = "#a33";
-      }
-    },
-  });
+  const formatButton = button("format json (cmd+s)", {onclick: () => setData(JSON.stringify(JSON.parse(draftNote.data), null, 2))});
 
   const root = div(
     datafield,
@@ -213,8 +218,7 @@ export const createEditView = ({ submit, validate, onChange, fetchSchema, fetchS
     ),
     button("push", {
       onclick: () => {
-        if (!currentSchemaHash) return;
-        submit(currentSchemaHash, datafield.value).catch(() => {});
+        submit(draftNote).catch(() => {});
       },
     }),
     div(
@@ -238,11 +242,9 @@ export const createEditView = ({ submit, validate, onChange, fetchSchema, fetchS
     )
   );
 
-  const fill = (schemaHash: string, data: string) => {
-    currentSchemaHash = schemaHash;
-    datafield.value = data;
-    updateStatus();
-    updateSchemaPreview();
+  const fill = (schemaHash: Hash, data: string) => {
+    setData(data);
+    setSchemaHash(schemaHash);
   };
 
   updateSchemaPreview();

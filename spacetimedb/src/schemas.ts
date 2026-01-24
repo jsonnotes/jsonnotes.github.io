@@ -8,26 +8,26 @@ const object = (properties: Record<string, any>, extra: any = {}) => ({
   ...extra,
 })
 
-type NoteData = { schemaHash: "0", data: "{}" } | { schemaHash: string, data: string }
+export type Hash = string & { length: 32 }
 
-export function hashData(data: string, schemaHash: string){
+export type NoteData = { schemaHash: Hash, data: string }
+
+export function hashData({schemaHash, data} : NoteData){
   if (schemaHash === "0" && data != "{}") throw new Error("schema hash is 0 but data is not empty")
   return hash128(String(schemaHash), data) 
 }
 
-function NoteData(schema: NoteData, data: any): NoteData{
+export function NoteData(schema: NoteData, data: any): NoteData{
 
   return {
-    schemaHash: hashData(schema.data, schema.schemaHash),
+    schemaHash: hashData(schema),
     data: JSON.stringify(data)
   }
 }
 
-export const top: NoteData = {schemaHash:"0", data: "{}"}
+export const top: NoteData = {schemaHash : "0" as Hash, data: "{}"}
 
-
-
-const script_schema = NoteData(top, object({
+export const script_schema = NoteData(top, object({
   title: string,
   code: string,
 }, {
