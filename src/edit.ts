@@ -1,7 +1,7 @@
 import Ajv from "ajv";
 import { Hash, hashData, NoteData, top } from "../spacetimedb/src/schemas";
-import { a, button, div, input, p, popup, style, textarea } from "./html";
-import { getNote, query_data } from "./conn";
+import { a, background, button, div, input, p, popup, style, textarea } from "./html";
+import { getNote, query_data, validateNote } from "./dbconn";
 
 type EditDeps = {
   submit: (data: NoteData) => Promise<void>;
@@ -10,7 +10,7 @@ type EditDeps = {
 
 export const createEditView = ({ submit, onChange }: EditDeps) => {
   const datafield = textarea(
-    style({ fontFamily: "monospace", minHeight: "12em", resize: "vertical" }),
+    style({ fontFamily: "monospace", minHeight: "12em", resize: "vertical", background:"inherit" , color: "inherit"}),
   );
 
   let draftNote : NoteData = {
@@ -168,12 +168,8 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
   const updateStatus = () => {
     jsonStatus.innerText = "validating...";
     jsonStatus.style.color = "#666";
-    getNote(draftNote.schemaHash).then((schemaNote) => {
-      const validate = new Ajv().compile(JSON.parse(String(schemaNote.data)));
-      if (validate(JSON.parse(draftNote.data))) setJsonStatus("valid", "#2a3");
-      else throw new Error(validate.errors?.map((e: any) => e.message).join(", ") || "Invalid data");
-    })
-    .catch((e: any) => {setJsonStatus(e.message || "invalid json", "#f66")});
+    validateNote(draftNote).then(() => setJsonStatus("valid", "#2a3"))
+    .catch((e: any) => {setJsonStatus(e.message || "invalid json", "#f66")})
   };
 
 
@@ -245,6 +241,7 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
   const fill = (schemaHash: Hash, data: string) => {
     setData(data);
     setSchemaHash(schemaHash);
+    datafield.focus();
   };
 
   updateSchemaPreview();

@@ -2,8 +2,8 @@ import { a, div, h2, p, popup, style } from "./html";
 import { openNoteView, Note } from "./note_view";
 import { createDashboardView } from "./dashboard";
 import { createEditView } from "./edit";
-import { hashData, NoteData } from "../spacetimedb/src/schemas"
-import { add_note, getNote, getNoteById, query_data } from "./conn";
+import { Hash, hashData, NoteData } from "../spacetimedb/src/schemas"
+import { add_note, getNote, getNoteById, query_data } from "./dbconn";
 
 let runQuery = () => {};
 let editFill: ((schemaHash: string, data: string) => void) | null = null;
@@ -15,10 +15,18 @@ const body = document.body;
 const render = (view: HTMLElement) => contentRoot && (contentRoot.innerHTML = "", contentRoot.appendChild(view));
 const navigate = (path: string) => (history.pushState({}, "", path), handleRoute());
 
-const showNoteById = (id: number) =>
-  getNoteById(id)
-    .then(async (note) => render(openNoteView(note)))
-    .catch((e) => popup(h2("ERROR"), p(e.message)));
+
+
+const submitNote = async (data:NoteData) => {
+  await add_note(data);
+  console.log("submitted note", data)
+  console.log("hash", hashData(data))
+  navigate(`/${(await getNote(hashData(data))).id}`);
+}
+
+
+const showNote = (hash: Hash) => render(openNoteView(hash, submitNote))
+
 
 const setActive = () =>
   document.querySelectorAll("[data-nav]").forEach((el) => {
@@ -59,9 +67,7 @@ handleRoute = () => {
   } else if (!path) {
     render(dashboard.root);
     runQuery();
-  } else if (Number.isFinite(Number(path))) {
-    showNoteById(Number(path));
-  }
+  } else if (Number.isFinite(Number(path))) getNoteById(Number(path)).then(note=>showNote(note.hash))
   setActive();
 };
 
@@ -87,11 +93,7 @@ body.appendChild(div(
 
 const dashboard = createDashboardView({ query: query_data, navigate});
 const editView = createEditView({
-  submit: async (data:NoteData) => {
-    await add_note(data);
-    navigate(`/${(await getNote(hashData(data))).id}`);
-    if (window.location.pathname === "/") runQuery();
-  },
+  submit: submitNote,
   onChange: (note) => {
     localStorage.setItem("edit_draft", JSON.stringify(note));
     if (window.location.pathname !== "/edit" || window.location.search) {

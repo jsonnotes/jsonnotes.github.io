@@ -1,4 +1,5 @@
-import { NoteData } from "../spacetimedb/src/schemas";
+import Ajv from "ajv";
+import { Hash, NoteData, validate } from "../spacetimedb/src/schemas";
 import { hash128 } from "./hash";
 import { h2, p, popup } from "./html";
 import { Note } from "./note_view";
@@ -36,11 +37,7 @@ export const query_data = async (sql: string) : Promise<{names:string[], rows:an
   }
 };
 
-export const add_note = (note:NoteData) =>
-  req(`/v1/database/${DBNAME}/call/add_note`, "POST", JSON.stringify(note))
-    .then((res) => res.ok ? popup(h2("SUCESS"), p("data added")) : res.text().then((t) => Promise.reject(new Error(t || `Request failed (${res.status})`))))
-    .catch((e) => popup(h2("ERROR"), p(e.message)));
-
+export const add_note = (note:NoteData) =>req(`/v1/database/${DBNAME}/call/add_note`, "POST", JSON.stringify(note)).catch((e) => popup(h2("ERROR"), p(e.message)));
 const noteFrom = (names: string[], row: any[]): Note => Object.fromEntries(names.map((n, i) => [n, row[i]])) as Note;
 
 const FunCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
@@ -65,7 +62,7 @@ const FunCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
 export const getNote = FunCache(async (hash: string) =>
   query_data(`select * from note where hash = '${hash}'`)
   .then(({ names, rows }) => {
-    if (!rows[0]) throw new Error("note not found")
+    if (!rows[0]) throw new Error("note hash not found:" + hash)
     return noteFrom(names, rows[0])
   })
 )
@@ -79,5 +76,6 @@ const getHashFromId = FunCache(async (id: number) =>
 )
 
 export const getNoteById = (id: number) => getHashFromId(id).then(getNote)
-
 if (access_token === null) req("/v1/identity", "POST").then((res) => res.json()).then((text) => {access_token = text.token; });
+export const validateNote = (note: NoteData) => getNote(note.schemaHash).then((schemaNote) => validate(note.data, schemaNote.data))
+

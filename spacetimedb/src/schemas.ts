@@ -1,3 +1,4 @@
+import Ajv from "ajv"
 import { hash128 } from "./hash"
 const string = { type : "string"}
 const number = { type : "number"}
@@ -8,6 +9,14 @@ const object = (properties: Record<string, any>, extra: any = {}) => ({
   ...extra,
 })
 
+
+
+export const validate = (data: string, schema: string) => {
+  const validate = new Ajv().compile(JSON.parse(schema));
+  if (validate(JSON.parse(data))) return true;
+  else throw new Error(validate.errors?.map((e: any) => e.message).join(", ") || "Invalid data");
+}
+
 export type Hash = string & { length: 32 }
 
 export type NoteData = { schemaHash: Hash, data: string }
@@ -17,7 +26,11 @@ export function hashData({schemaHash, data} : NoteData){
   return hash128(String(schemaHash), data) 
 }
 
+
+
 export function NoteData(schema: NoteData, data: any): NoteData{
+
+  validate(JSON.stringify(data), schema.data)
 
   return {
     schemaHash: hashData(schema),
@@ -34,8 +47,20 @@ export const script_schema = NoteData(top, object({
   title: "script_schema"
 }))
 
+
+export const script_result_schema = NoteData(top, object({
+  title: string,
+  scriptHash: string,
+  content: {},
+}, {
+  title: "script_result_schema"
+}))
+
+
+
 export const schemas : NoteData[] = [
   script_schema,
+  script_result_schema,
   NoteData(top, {title: "string", ...string}),
   NoteData(top, {title: "number", ...number}),
   NoteData(top, {title: "titled", ...object({title: string})}),
