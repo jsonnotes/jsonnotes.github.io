@@ -1,4 +1,4 @@
-import { button, div, noteLink, p, routeLink, style, table, td, textarea, th, tr } from "./html";
+import { button, div, p, routeLink, style, table, td, textarea, th, tr } from "./html";
 
 type QueryResult = { names: string[]; rows: any[][] };
 
@@ -56,13 +56,6 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
               note[name] = row[index];
             });
             onRow && onRow(note);
-            const href = `/${note.id}`;
-            const link = (content: string) =>
-              noteLink(
-                note.id,
-                { style: { color: "inherit", textDecoration: "none", display: "block" } },
-                content
-              );
 
             return tr(
               style({ cursor: "pointer" }),
@@ -71,7 +64,7 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
                 text = text.length > 20 ? text.substring(0, 20) + "..." : text;
                 return td(
                   style({ border: "1px solid #ccc", padding: ".5em" }),
-                  link(text)
+                  routeLink(`/${note.id}`, style({ textDecoration: "none", color : "inherit"}), text)
                 );
               })
             );

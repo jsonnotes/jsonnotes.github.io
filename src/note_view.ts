@@ -1,6 +1,14 @@
 import { hashData, script_schema } from "../spacetimedb/src/schemas";
 import { getNoteById } from "./conn";
-import { a, button, div, h2, h3, noteLink, p, popup, style } from "./html";
+import { a, background, button, div, h2, h3, p, padding, popup, routeLink, span, style } from "./html";
+
+
+const llmrequest = (prompt: string): string =>{
+
+  console.log("request LLM:", prompt)
+  return "<response>"
+
+}
 
 
 const runScriptFromNote = (note: Note) => {
@@ -22,12 +30,19 @@ const runScriptFromNote = (note: Note) => {
       reject(new Error("timeout"));
     }, 2000);
     worker.onmessage = (e) => {
+      const msg = e.data || {};
+      if (msg.type === "llm_request") {
+        Promise.resolve(llmrequest(String(msg.prompt || "")))
+          .then((result) => worker.postMessage({ type: "llm_response", id: msg.id, result }))
+          .catch((err) => worker.postMessage({ type: "llm_response", id: msg.id, error: String(err) }));
+        return;
+      }
+      if (msg.type !== "run_result") return;
       clearTimeout(timer);
       worker.terminate();
-      const { ok, result, error } = e.data || {};
-      ok ? resolve(result) : reject(new Error(error || "script error"));
+      msg.ok ? resolve(msg.result) : reject(new Error(msg.error || "script error"));
     };
-    worker.postMessage({ code, input: {}});
+    worker.postMessage({ type: "run", code, input: {}});
   }).then(
     (res) => popup(h2("RESULT"), p(typeof res === "string" ? res : JSON.stringify(res, null, 2))),
     (e: any) => popup(h2("ERROR"), p(e.message || "script error"))
@@ -41,35 +56,8 @@ export type Note = {
   data: string;
 };
 
-const formatJson = (value: string): string => {
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2);
-  } catch {
-    return value;
-  }
-};
-
 export const openNoteView = (note: Note,): HTMLElement => {
   const overlay = div(style({ display: "flex", flexDirection: "column", gap: "0.75em" }));
-
-  const dataView = div(
-    style({ fontFamily: "monospace", whiteSpace: "pre-wrap", marginTop: "1em" }),
-    formatJson(note.data)
-  );
-
-  const schemaButton = noteLink(
-    note.schemaId,
-    { style: { textDecoration: "underline", color: "inherit" } },
-    `schema: ${note.schemaId}`
-  );
-
-  const editLink = a(
-    { style: { textDecoration: "underline", color: "inherit" }, href: `/edit?id=${note.id}` },
-    "edit"
-  );
-
-
-
   let noteLabel = String(note.id);
   try {
     const parsed = JSON.parse(note.data);
@@ -80,9 +68,12 @@ export const openNoteView = (note: Note,): HTMLElement => {
 
   overlay.append(
     h3(`Note ${noteLabel}`),
-    schemaButton,
-    dataView,
-    editLink,
+    routeLink(`/${note.schemaId}`, "schema" ),
+    div(
+      style({ fontFamily: "monospace", whiteSpace: "pre-wrap", marginTop: "1em" }),
+      note.data
+    ),
+    routeLink(`/edit?id=${note.id}`, "edit" )
   );
 
   getNoteById(note.schemaId)

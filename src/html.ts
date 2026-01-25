@@ -97,10 +97,10 @@ export const routeLink = (href: string, ...cs: HTMLArg[]) =>
       e.preventDefault();
       history.pushState({}, "", href);
       window.dispatchEvent(new PopStateEvent("popstate"));
-    }},
+    }, style: { color: "inherit" }},
     ...cs
   );
-export const noteLink = (id: string | number | bigint, ...cs: HTMLArg[]) => routeLink(`/${id}`, ...cs);
+// export const noteLink = (id: string | number | bigint, ...cs: HTMLArg[]) => routeLink(`/${id}`, ...cs);
 export const span:HTMLGenerator<HTMLSpanElement> = newHtmlGenerator("span")
 
 export const table:HTMLGenerator<HTMLTableElement> = newHtmlGenerator("table")
