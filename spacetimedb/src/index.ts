@@ -47,3 +47,4 @@ const setup = spacetimedb.reducer('setup', {}, (ctx) => {
 })
 
 spacetimedb.init(setup)
+spacetimedb.procedure("eval", t.string(), (c)=>"ok" )

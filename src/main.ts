@@ -1,5 +1,5 @@
 import { a, div, h2, p, popup, style } from "./html";
-import { openNoteView } from "./note_view";
+import { openNoteView, Note } from "./note_view";
 import { createDashboardView } from "./dashboard";
 import { createEditView } from "./edit";
 import { hashData, NoteData } from "../spacetimedb/src/schemas"
@@ -14,7 +14,11 @@ const body = document.body;
 
 const render = (view: HTMLElement) => contentRoot && (contentRoot.innerHTML = "", contentRoot.appendChild(view));
 const navigate = (path: string) => (history.pushState({}, "", path), handleRoute());
-const showNoteById = (id: number) => getNoteById(id).then((note) => render(openNoteView(note, navigate))).catch((e) => popup(h2("ERROR"), p(e.message)));
+
+const showNoteById = (id: number) =>
+  getNoteById(id)
+    .then(async (note) => render(openNoteView(note)))
+    .catch((e) => popup(h2("ERROR"), p(e.message)));
 
 const setActive = () =>
   document.querySelectorAll("[data-nav]").forEach((el) => {
