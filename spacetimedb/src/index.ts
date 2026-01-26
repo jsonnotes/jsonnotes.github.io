@@ -1,5 +1,4 @@
 import { schema, table, t, SenderError } from 'spacetimedb/server';
-import { Ajv } from 'ajv';
 import { Hash, hashData, NoteData, schemas, top, validate } from './schemas';
 
 const JsonNotes = table(
@@ -17,14 +16,10 @@ const JsonNotes = table(
 
 export const spacetimedb = schema(JsonNotes);
 
-const ajv = new Ajv();
-
 const add_note = spacetimedb.reducer('add_note', {
   schemaHash: t.string(),
   data: t.string(),
 }, (ctx, { schemaHash, data } ) => {
-
-
   const schemaRow = ctx.db.note.hash.find(schemaHash);
   if (!schemaRow) throw new SenderError('Schema not found');
   validate(data, schemaRow.data)

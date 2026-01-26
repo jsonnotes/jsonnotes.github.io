@@ -3,7 +3,7 @@ import { openNoteView, Note } from "./note_view";
 import { createDashboardView } from "./dashboard";
 import { createEditView } from "./edit";
 import { Hash, hashData, NoteData } from "../spacetimedb/src/schemas"
-import { add_note, getNote, getNoteById, query_data } from "./dbconn";
+import { add_note, getNote, query_data } from "./dbconn";
 
 let runQuery = () => {};
 let editFill: ((schemaHash: string, data: string) => void) | null = null;
@@ -17,11 +17,14 @@ const navigate = (path: string) => (history.pushState({}, "", path), handleRoute
 
 
 
-const submitNote = async (data:NoteData) => {
-  await add_note(data);
-  console.log("submitted note", data)
-  console.log("hash", hashData(data))
-  navigate(`/${(await getNote(hashData(data))).id}`);
+const submitNote = async (data: NoteData) => {
+  try {
+    await add_note(data);
+    const hash = hashData(data);
+    navigate(`/${(await getNote(hash)).id}`);
+  } catch (e: any) {
+    popup(h2("ERROR"), p(e.message || "failed to add note"));
+  }
 }
 
 
@@ -49,17 +52,17 @@ handleRoute = () => {
           if (draft.schemaHash) {
             editFill(String(draft.schemaHash), String(draft.data || ""));
           } else if (draft.schemaId) {
-            getNoteById(Number(draft.schemaId))
+            getNote(Number(draft.schemaId))
               .then((schemaNote) => editFill(String(schemaNote.hash), String(draft.data || "")))
               .catch((e) => popup(h2("ERROR"), p(e.message)));
           }
         } catch {}
       } else {
-        getNoteById(0).then((schemaNote) => editFill(String(schemaNote.hash), "{}")).catch(() => {});
+        getNote(0).then((schemaNote) => editFill(String(schemaNote.hash), "{}")).catch(() => {});
       }
     }else{
-      getNoteById(Number(searchid))
-        .then((note) => getNoteById(Number(note.schemaId)).then((schemaNote) =>
+      getNote(Number(searchid))
+        .then((note) => getNote(Number(note.schemaId)).then((schemaNote) =>
           editFill(String(schemaNote.hash), String(note.data))
         ))
         .catch((e) => popup(h2("ERROR"), p(e.message))); 
@@ -67,7 +70,11 @@ handleRoute = () => {
   } else if (!path) {
     render(dashboard.root);
     runQuery();
-  } else if (Number.isFinite(Number(path))) getNoteById(Number(path)).then(note=>showNote(note.hash))
+  } else if (Number.isFinite(Number(path))) {
+    getNote(Number(path)).then(note=>showNote(note.hash))
+  } else {
+    showNote(path as Hash);
+  }
   setActive();
 };
 

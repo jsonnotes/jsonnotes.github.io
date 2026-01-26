@@ -1,17 +1,12 @@
-import Ajv from "ajv";
 import { Hash, NoteData, validate } from "../spacetimedb/src/schemas";
-import { hash128 } from "./hash";
-import { h2, p, popup } from "./html";
+import { h2, p, popup, routeLink, span } from "./html";
 import { Note } from "./note_view";
+import { hash128 } from "../spacetimedb/src/hash";
 
 // const db_url = "https://maincloud.spacetimedb.com"
 const db_url = "http://localhost:3000";
 // const DBNAME = "jsonviewtest";
 const DBNAME = "jsonview"
-
-
-const noteCachePrefix = "note:";
-const noteHashPrefix = "note_hash:";
 
 
 let access_token: string | null = localStorage.getItem("access_token");
@@ -37,7 +32,14 @@ export const query_data = async (sql: string) : Promise<{names:string[], rows:an
   }
 };
 
-export const add_note = (note:NoteData) =>req(`/v1/database/${DBNAME}/call/add_note`, "POST", JSON.stringify(note)).catch((e) => popup(h2("ERROR"), p(e.message)));
+export const add_note = async (note: NoteData) => {
+  const res = await req(`/v1/database/${DBNAME}/call/add_note`, "POST", JSON.stringify(note));
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Request failed (${res.status})`);
+  }
+  return res;
+};
 const noteFrom = (names: string[], row: any[]): Note => Object.fromEntries(names.map((n, i) => [n, row[i]])) as Note;
 
 const FunCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
@@ -59,23 +61,40 @@ const FunCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
   }
 }
 
-export const getNote = FunCache(async (hash: string) =>
-  query_data(`select * from note where hash = '${hash}'`)
+/*** represents a note id or hash ***/
+export type Ref = Hash | number
+
+export const getNote = FunCache(async (ref: Ref) =>{
+  console.log("getNote", ref)
+  let hash: Hash = (typeof ref === "string" ? ref as Hash : await getHashFromId(ref))
+  return query_data(`select * from note where hash = '${hash}'`)
   .then(({ names, rows }) => {
     if (!rows[0]) throw new Error("note hash not found:" + hash)
     return noteFrom(names, rows[0])
   })
-)
+})
 
 const getHashFromId = FunCache(async (id: number) =>
   query_data(`select hash from note where id = ${id}`)
   .then(({ rows }) => {
     if (!rows[0]) throw new Error("note not found")
-    return String(rows[0][0])
+    return String(rows[0][0]) as Hash
   })
 )
 
-export const getNoteById = (id: number) => getHashFromId(id).then(getNote)
+
 if (access_token === null) req("/v1/identity", "POST").then((res) => res.json()).then((text) => {access_token = text.token; });
 export const validateNote = (note: NoteData) => getNote(note.schemaHash).then((schemaNote) => validate(note.data, schemaNote.data))
+
+
+export const noteLink = (ref: Ref, style = {}) => {
+
+  let el = span(`#${ref}`)
+  getNote(ref).then(note=>{
+    let data = JSON.parse(note.data)
+    el.innerHTML = `#${note.id}` + (data.title ? `:${data.title}` : "")
+  })
+  return routeLink(`/${ref}`, el, {style})
+
+}
 

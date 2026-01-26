@@ -1,6 +1,6 @@
 import { Hash, hashData, NoteData, script_result_schema, script_schema, top } from "../spacetimedb/src/schemas";
-import { add_note, getNoteById, getNote} from "./dbconn";
-import { a, background, button, display, div, h2, h3, p, padding, popup, routeLink, span, style } from "./html";
+import { getNote, noteLink, Ref } from "./dbconn";
+import { a, button, div, h2, h3, p, padding, popup, routeLink, span, style } from "./html";
 
 
 const llmrequest = (prompt: string): string =>{
@@ -15,6 +15,22 @@ export type Note = {
   hash: Hash;
   schemaId: number;
   data: string;
+};
+
+const linkify = (text: string) => {
+  const el = span();
+  const re = /#([A-Za-z0-9]+)/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text))) {
+    const start = match.index;
+    const token = match[1];
+    if (start > last) el.append(document.createTextNode(text.slice(last, start)));
+    el.append(noteLink(token as Ref, {border: "1px solid #ccc", textDecoration: "none", color: "inherit", padding: "0.1em", borderRadius: "0.25em"}))
+    last = start + match[0].length;
+  }
+  if (last < text.length) el.append(document.createTextNode(text.slice(last)));
+  return el;
 };
 
 export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => void): HTMLElement => {
@@ -32,7 +48,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => void): 
       routeLink(`/${note.schemaId}`, "schema" ),
       div(
         style({ fontFamily: "monospace", whiteSpace: "pre-wrap", marginTop: "1em" }),
-        JSON.stringify(JSON.parse(note.data), null, 2)
+        linkify(JSON.stringify(JSON.parse(note.data), null, 2))
       ),
       routeLink(`/edit?id=${note.id}`, "edit" )
     );
@@ -40,6 +56,14 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => void): 
     const runScriptFromNote = async (note: Note) => {
       let data = JSON.parse(note.data)
       let code = data.code
+
+      let resultSchema;
+      try {
+        resultSchema = await getNote(hashData(script_result_schema));
+      } catch (e: any) {
+        popup(h2("ERROR"), p(e.message || "missing script_result_schema (republish with -c)"));
+        return;
+      }
 
       const worker = new Worker(new URL("./script_worker.ts", import.meta.url), { type: "module" });
       const timer = setTimeout(() => {
@@ -58,14 +82,14 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => void): 
         clearTimeout(timer);
         worker.terminate();
         if (msg.ok) {
-          let result = NoteData(
-            script_result_schema,
-            {
+          let result = {
+            schemaHash: resultSchema.hash,
+            data: JSON.stringify({
               title: "result",
               scriptHash: `$${note.hash}`,
               content: msg.result
-            }
-          )
+            })
+          } as NoteData
           submitNote(result)
           
 
@@ -75,7 +99,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => void): 
 
     };
 
-    getNoteById(note.schemaId)
+    getNote(note.schemaId)
     .then(schema=>{
       if (schema.hash == hashData(script_schema)){
         title.innerHTML = `Script ${JSON.parse(note.data).title} `

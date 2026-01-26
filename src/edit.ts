@@ -1,4 +1,3 @@
-import Ajv from "ajv";
 import { Hash, hashData, NoteData, top } from "../spacetimedb/src/schemas";
 import { a, background, button, div, input, p, popup, style, textarea } from "./html";
 import { getNote, query_data, validateNote } from "./dbconn";
