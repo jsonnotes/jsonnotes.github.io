@@ -1,5 +1,5 @@
-import { Hash, hashData, NoteData, top } from "../spacetimedb/src/schemas";
-import { a, background, button, div, input, p, popup, style, textarea } from "./html";
+import { Hash, hashData, NoteData, script_schema, top } from "../spacetimedb/src/schemas";
+import { a, button, div, input, p, popup, style, textarea } from "./html";
 import { getNote, query_data, validateNote } from "./dbconn";
 import { JsonFmt } from "./helpers";
 
@@ -13,25 +13,53 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
     style({ fontFamily: "monospace", minHeight: "12em", resize: "vertical", background:"inherit" , color: "inherit"}),
   );
 
+  const scriptHash = hashData(script_schema);
+  let isScript = false;
   let draftNote : NoteData = {
     schemaHash: hashData(top),
     data: datafield.value
   }
 
-  const setData = (data: string) => {
-    if (datafield.value !== data) datafield.value = data;
-    if (draftNote.data === data) return;
-    draftNote.data = data
+  const titleField = input("", {
+    placeholder: "script title",
+    style: {
+      display: "none",
+      marginBottom: "0.5em",
+      fontSize: "1.1em",
+      padding: "0.4em 0.6em",
+      color: "inherit",
+      background: "inherit",
+      border: "none",
+      outline: "none",
+      width: "100%",
+    }
+  });
+
+  const updateDraft = () => {
+    if (isScript) {
+      draftNote.data = JSON.stringify({
+        title: titleField.value || "",
+        code: datafield.value || ""
+      });
+    } else {
+      draftNote.data = datafield.value;
+    }
     updateSchemaPreview();
     updateStatus();
     onChange(draftNote);
+  };
+
+  const setData = (data: string) => {
+    if (datafield.value !== data) datafield.value = data;
+    updateDraft();
   }
 
   const setSchemaHash = (hash: Hash) => {
     draftNote.schemaHash = hash
+    isScript = hash === scriptHash;
+    titleField.style.display = isScript ? "block" : "none";
     updateSchemaPreview();
-    updateStatus();
-    onChange(draftNote);
+    updateDraft();
   }
 
   const jsonStatus = p();
@@ -164,6 +192,7 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
   };
 
   datafield.oninput = () => setData(datafield.value);
+  titleField.oninput = () => updateDraft();
 
   const updateStatus = () => {
     jsonStatus.innerText = "validating...";
@@ -203,9 +232,15 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
     });
   };
 
-  const formatButton = button("format json (cmd+s)", {onclick: () => setData(JsonFmt(draftNote.data))});
+  const formatButton = button("format json (cmd+s)", {
+    onclick: () => {
+      if (isScript) return;
+      setData(JsonFmt(draftNote.data));
+    }
+  });
 
   const root = div(
+    titleField,
     datafield,
     div(
       style({ display: "flex", gap: "0.5em", alignItems: "center" }),
@@ -239,8 +274,20 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
   );
 
   const fill = (schemaHash: Hash, data: string) => {
-    setData(data);
     setSchemaHash(schemaHash);
+    if (schemaHash === scriptHash) {
+      try {
+        const parsed = JSON.parse(data);
+        titleField.value = String(parsed?.title || "");
+        datafield.value = String(parsed?.code || "");
+      } catch {
+        titleField.value = "";
+        datafield.value = "";
+      }
+      updateDraft();
+    } else {
+      setData(data);
+    }
     datafield.focus();
   };
 

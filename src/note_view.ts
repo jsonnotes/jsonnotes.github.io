@@ -5,15 +5,10 @@ import { a, button, div, h2, h3, p, padding, popup, routeLink, span, style } fro
 import { openrouter } from "./openrouter";
 
 
-
-
 const llmrequest = (prompt: string): string =>{
   console.log("request LLM:", prompt)
   return "<response>"
 }
-
-
-// console.log(await openrouter("hello", ({type:"object", properties: {response: {type: "string"}}})))
 
 
 export const buildins = {
@@ -76,7 +71,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
     const runScriptFromNote = (note: Note) =>  new Promise <NoteData>(async (rs, rj)=>{
 
       let data = JSON.parse(note.data)
-      let code = data.code
+      let code = String(data.code || "")
 
       let resultSchema;
       try {
@@ -85,14 +80,25 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         popup(h2("ERROR"), p(e.message || "missing script_result_schema (republish with -c)"));
         return;
       }
+      const refs = [...new Set((code.match(/#\d+/g) || []).map((m) => m.slice(1)))];
+      if (refs.length) {
+        const bindings: string[] = [];
+        for (const id of refs) {
+          const refNote = await getNote(Number(id));
+          bindings.push(`const $${id} = ${refNote.data};`);
+        }
+        code = `${bindings.join("\n")}\n${code.replace(/#(\d+)/g, (_, id) => `$${id}`)}`;
+        console.log(code)
+      }
+
       const worker = new Worker(new URL("./script_worker.ts", import.meta.url), { type: "module" });
 
       worker.onmessage = (e) => {
 
         const msg = e.data || {};
         if (msg.type === "call") {
-          Promise.resolve(buildins[msg.name](String(msg.args || "")))
-            .then((result) => {console.log("responding", result) ; worker.postMessage({ type: "response", id:msg.id, result: JSON.stringify(result) })})
+          Promise.resolve(buildins[msg.name](...JSON.parse(msg.args)))
+            .then((result) => {console.log("responding", result) ; worker.postMessage({ type: "response", id:msg.id, result: result })})
             .catch((err) => worker.postMessage({ type: "response", id:msg.id, error: String(err) }));
           return;
         }

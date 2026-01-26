@@ -65,7 +65,6 @@ const FunCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
 export type Ref = Hash | number
 
 export const getNote = FunCache(async (ref: Ref) =>{
-  console.log("getNote", ref)
   let hash: Hash = (typeof ref === "string" ? ref as Hash : await getHashFromId(ref))
   return query_data(`select * from note where hash = '${hash}'`)
   .then(({ names, rows }) => {

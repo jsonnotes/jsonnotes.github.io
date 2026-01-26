@@ -3,7 +3,7 @@
 const pending = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void }>();
 let nextId = 1;
 
-const funcall = (name: string) => (args: any) => new Promise((resolve, reject) => {
+const funcall = (name: string) => (...args: any) => new Promise((resolve, reject) => {
   const id = nextId++;
   pending.set(id, { resolve, reject });
   self.postMessage({ type: "call", id, name, args:JSON.stringify(args) });
