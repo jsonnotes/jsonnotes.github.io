@@ -87,7 +87,7 @@ if (access_token === null) req("/v1/identity", "POST").then((res) => res.json())
 export const validateNote = (note: NoteData) => getNote(note.schemaHash).then((schemaNote) => validate(note.data, schemaNote.data))
 
 
-export const noteLink = (ref: Ref, style = {}) => {
+export const noteLink = (ref: Ref, style : Record<string,string> = {color:"inherit", textDecoration:"none" , border: "1px solid #ccc", padding: "0.1em", borderRadius: "0.25em"}) => {
 
   let el = span(`#${ref}`)
   getNote(ref).then(note=>{

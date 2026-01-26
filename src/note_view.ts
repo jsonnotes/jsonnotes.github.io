@@ -2,6 +2,9 @@ import { Hash, hashData, NoteData, script_result_schema, script_schema, top } fr
 import { getNote, noteLink, Ref } from "./dbconn";
 import { JsonFmt } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, routeLink, span, style } from "./html";
+import { openrouter } from "./openrouter";
+
+
 
 
 const llmrequest = (prompt: string): string =>{
@@ -10,6 +13,10 @@ const llmrequest = (prompt: string): string =>{
 }
 
 
+export const buildins = {
+  openrouter,
+  llmrequest
+}
 
 export type Note = {
   id: number | string | bigint;
@@ -27,14 +34,14 @@ const linkify = (text: string) => {
     const start = match.index;
     const token = match[1];
     if (start > last) el.append(document.createTextNode(text.slice(last, start)));
-    el.append(noteLink(token as Ref, {border: "1px solid #ccc", textDecoration: "none", color: "inherit", padding: "0.1em", borderRadius: "0.25em"}))
+    el.append(noteLink(token as Ref)),
     last = start + match[0].length;
   }
   if (last < text.length) el.append(document.createTextNode(text.slice(last)));
   return el;
 };
 
-export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => void): HTMLElement => {
+export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise<void>): HTMLElement => {
 
   
   const overlay = div(style({display: "flex", flexDirection: "column", gap: "0.75em"}));
@@ -46,7 +53,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => void): 
 
     overlay.append(
       title,
-      routeLink(`/${note.schemaId}`, "schema" ),
+      p("schema: ", noteLink(note.schemaId)),
       div(
         style({ fontFamily: "monospace", whiteSpace: "pre-wrap", marginTop: "1em" }),
         linkify(JsonFmt(note.data))
@@ -63,7 +70,8 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => void): 
       )
     );
 
-    const runScriptFromNote = async (note: Note) => {
+    const runScriptFromNote = (note: Note) =>  new Promise <NoteData>(async (rs, rj)=>{
+
       let data = JSON.parse(note.data)
       let code = data.code
 
@@ -80,12 +88,15 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => void): 
         worker.terminate();
         popup(h2("ERROR"), p("timeout"))
       }, 2000);
+
+
       worker.onmessage = (e) => {
+
         const msg = e.data || {};
-        if (msg.type === "llm_request") {
-          Promise.resolve(llmrequest(String(msg.prompt || "")))
-            .then((result) => worker.postMessage({ type: "llm_response", id: msg.id, result }))
-            .catch((err) => worker.postMessage({ type: "llm_response", id: msg.id, error: String(err) }));
+        if (msg.type === "call") {
+          Promise.resolve(buildins[msg.name](String(msg.args || "")))
+            .then((result) => {console.log("responding", result) ; worker.postMessage({ type: "response", id:msg.id, result: JSON.stringify(result) })})
+            .catch((err) => worker.postMessage({ type: "response", id:msg.id, error: String(err) }));
           return;
         }
         if (msg.type !== "run_result") return;
@@ -100,22 +111,22 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => void): 
               content: msg.result
             }, null, 2)
           } as NoteData
-          submitNote(result)
-          
-
+          rs(result)
         }else popup(h2("ERROR"), p(msg.error || "script error"))
       };
       worker.postMessage({ type: "run", code, input: {}});
+    })
 
-    };
 
     getNote(note.schemaId)
     .then(schema=>{
       if (schema.hash == hashData(script_schema)){
         title.innerHTML = `Script ${JSON.parse(note.data).title} `
-        title.append(
-          button("run", {onclick: () => runScriptFromNote(note)})
-        )
+        let runner = button("run", {onclick: () =>{
+          runner.innerHTML = "running..."
+          runScriptFromNote(note).then(result=>submitNote(result))
+        }})
+        title.append(runner)
       }
     })
   });

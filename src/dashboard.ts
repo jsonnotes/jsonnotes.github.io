@@ -1,3 +1,4 @@
+
 import { button, div, p, routeLink, style, table, td, textarea, th, tr } from "./html";
 
 type QueryResult = { names: string[]; rows: any[][] };
@@ -57,6 +58,7 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
             });
             onRow && onRow(note);
 
+
             return tr(
               style({ cursor: "pointer" }),
               ...row.map((cell: string) => {
@@ -64,7 +66,7 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
                 text = text.length > 20 ? text.substring(0, 20) + "..." : text;
                 return td(
                   style({ border: "1px solid #ccc", padding: ".5em" }),
-                  routeLink(`/${note.id}`, style({ textDecoration: "none", color : "inherit"}), text)
+                  routeLink(`/${note.id}`, text, style({ textDecoration: "none", color : "inherit"}))
                 );
               })
             );

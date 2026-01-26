@@ -195,13 +195,9 @@ export const popup = (...cs:HTMLArg[])=>{
     popupbackground.remove();
   }
 
-
-
-
   dialogfield.onclick = (e) => {
     e.stopPropagation();
   }
-
   return popupbackground
 
 }
