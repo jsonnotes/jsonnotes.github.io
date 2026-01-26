@@ -1,6 +1,7 @@
 import { Hash, hashData, NoteData, top } from "../spacetimedb/src/schemas";
 import { a, background, button, div, input, p, popup, style, textarea } from "./html";
 import { getNote, query_data, validateNote } from "./dbconn";
+import { JsonFmt } from "./helpers";
 
 type EditDeps = {
   submit: (data: NoteData) => Promise<void>;
@@ -202,7 +203,7 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
     });
   };
 
-  const formatButton = button("format json (cmd+s)", {onclick: () => setData(JSON.stringify(JSON.parse(draftNote.data), null, 2))});
+  const formatButton = button("format json (cmd+s)", {onclick: () => setData(JsonFmt(draftNote.data))});
 
   const root = div(
     datafield,

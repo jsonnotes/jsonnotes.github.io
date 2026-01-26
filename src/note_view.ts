@@ -1,5 +1,6 @@
 import { Hash, hashData, NoteData, script_result_schema, script_schema, top } from "../spacetimedb/src/schemas";
 import { getNote, noteLink, Ref } from "./dbconn";
+import { JsonFmt } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, routeLink, span, style } from "./html";
 
 
@@ -48,9 +49,18 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => void): 
       routeLink(`/${note.schemaId}`, "schema" ),
       div(
         style({ fontFamily: "monospace", whiteSpace: "pre-wrap", marginTop: "1em" }),
-        linkify(JSON.stringify(JSON.parse(note.data), null, 2))
+        linkify(JsonFmt(note.data))
       ),
-      routeLink(`/edit?id=${note.id}`, "edit" )
+      div(
+        style({ display: "flex", gap: "0.75em", alignItems: "center" }),
+        routeLink(`/edit?id=${note.id}`, "edit" ),
+        button("copy", {
+          onclick: () =>
+            navigator.clipboard.writeText(JsonFmt(note.data))
+              .then(() => popup(h2("OK"), p("copied")))
+              .catch((e) => popup(h2("ERROR"), p(e.message || "copy failed")))
+        })
+      )
     );
 
     const runScriptFromNote = async (note: Note) => {
@@ -86,9 +96,9 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => void): 
             schemaHash: resultSchema.hash,
             data: JSON.stringify({
               title: "result",
-              scriptHash: `$${note.hash}`,
+              scriptHash: `#${note.hash}`,
               content: msg.result
-            })
+            }, null, 2)
           } as NoteData
           submitNote(result)
           
