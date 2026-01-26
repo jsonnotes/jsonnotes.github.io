@@ -13,8 +13,11 @@ const llmrequest = (prompt: string): string =>{
 }
 
 
+// console.log(await openrouter("hello", ({type:"object", properties: {response: {type: "string"}}})))
+
+
 export const buildins = {
-  openrouter,
+  openrouter, 
   llmrequest
 }
 
@@ -82,13 +85,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         popup(h2("ERROR"), p(e.message || "missing script_result_schema (republish with -c)"));
         return;
       }
-
       const worker = new Worker(new URL("./script_worker.ts", import.meta.url), { type: "module" });
-      const timer = setTimeout(() => {
-        worker.terminate();
-        popup(h2("ERROR"), p("timeout"))
-      }, 2000);
-
 
       worker.onmessage = (e) => {
 
@@ -100,14 +97,13 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
           return;
         }
         if (msg.type !== "run_result") return;
-        clearTimeout(timer);
         worker.terminate();
         if (msg.ok) {
           let result = {
             schemaHash: resultSchema.hash,
             data: JSON.stringify({
               title: "result",
-              scriptHash: `#${note.hash}`,
+              script: `#${note.hash}`,
               content: msg.result
             }, null, 2)
           } as NoteData

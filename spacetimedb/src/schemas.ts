@@ -50,7 +50,7 @@ export const script_schema = NoteData(top, object({
 
 export const script_result_schema = NoteData(top, object({
   title: string,
-  scriptHash: string,
+  script: string,
   content: {},
 }, {
   title: "script_result_schema"
