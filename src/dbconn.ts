@@ -115,7 +115,7 @@ export const noteLink = (ref: Ref, style : Record<string,string> = {color:"inher
   let el = span(`#${ref}`)
   getNote(ref).then(note=>{
     let data = JSON.parse(note.data)
-    el.innerHTML = `#${note.id}` + (data.title ? `:${data.title}` : "")
+    el.innerHTML = `#${note.id}` + (data.title ? `:${data.title}` : (typeof data == 'string' || typeof data == 'number') ? `:${note.data.slice(0,20)}`: "")
   })
   return routeLink(`/${ref}`, el, {style})
 
