@@ -9,7 +9,7 @@ const funcall = (name: string) => (...args: any) => new Promise((resolve, reject
   self.postMessage({ type: "call", id, name, args:JSON.stringify(args) });
 })
 
-const buildins = ["llmrequest", "openrouter"]
+export const buildins = ["openrouter", "getNote"]
 
 
 self.onmessage = async (e) => {

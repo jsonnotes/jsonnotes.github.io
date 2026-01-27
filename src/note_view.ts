@@ -4,17 +4,15 @@ import { JsonFmt } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, routeLink, span, style } from "./html";
 import { openrouter } from "./openrouter";
 
-
-const llmrequest = (prompt: string): string =>{
-  console.log("request LLM:", prompt)
-  return "<response>"
-}
+import { buildins as buildinlist } from "./script_worker";
 
 
 export const buildins = {
-  openrouter, 
-  llmrequest
+  openrouter, getNote
 }
+
+
+for (let exp of buildinlist) if (!Object.keys(buildins).includes(exp)) throw new Error("buildin missing but expected: "+ exp)
 
 export type Note = {
   id: number | string | bigint;
@@ -74,23 +72,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
       let data = JSON.parse(note.data)
       let code = String(data.code || "")
 
-      let resultSchema;
-      try {
-        resultSchema = await getNote(hashData(script_result_schema));
-      } catch (e: any) {
-        popup(h2("ERROR"), p(e.message || "missing script_result_schema (republish with -c)"));
-        return;
-      }
-      const refs = [...new Set((code.match(/#\d+/g) || []).map((m) => m.slice(1)))];
-      if (refs.length) {
-        const bindings: string[] = [];
-        for (const id of refs) {
-          const refNote = await getNote(Number(id));
-          bindings.push(`const $${id} = ${refNote.data};`);
-        }
-        code = `${bindings.join("\n")}\n${code.replace(/#(\d+)/g, (_, id) => `$${id}`)}`;
-        console.log(code)
-      }
+      console.log({code})
 
       const worker = new Worker(new URL("./script_worker.ts", import.meta.url), { type: "module" });
 
@@ -107,13 +89,14 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         worker.terminate();
         if (msg.ok) {
           let result = {
-            schemaHash: resultSchema.hash,
+            schemaHash: hashData(script_result_schema),
             data: JSON.stringify({
               title: "result",
               script: `#${note.hash}`,
               content: msg.result
             }, null, 2)
           } as NoteData
+          console.log(JsonFmt(result.data))
           rs(result)
         }else popup(h2("ERROR"), p(msg.error || "script error"))
       };

@@ -44,7 +44,7 @@ export const script_schema = NoteData("script_schema", top, object({
 
 export const script_result_schema = NoteData("script_result_schema", top, object({
   title: string,
-  script: string,
+  script: "#" + hashData(script_schema),
   content: {},
 }, {
   title: "script_result_schema"

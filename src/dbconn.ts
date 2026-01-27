@@ -63,9 +63,13 @@ const FunCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
 }
 
 /*** represents a note id or hash ***/
-export type Ref = Hash | number
+export type Ref = Hash | number | `#${number | Hash}`
 
 export const getNote = FunCache(async (ref: Ref) =>{
+  if (typeof(ref) == "string" && ref[0] == "#"){
+    ref = ref.slice(1) as Hash
+    if (ref.length < 32) ref = Number(ref)
+  }
   let hash: Hash = (typeof ref === "string" ? ref as Hash : await getHashFromId(ref))
   return query_data(`select * from note where hash = '${hash}'`)
   .then(async ({ names, rows }) => {
@@ -86,16 +90,23 @@ const getHashFromId = FunCache(async (id: number) =>
 if (access_token === null) req("/v1/identity", "POST").then((res) => res.json()).then((text) => {access_token = text.token; });
 export const validateNote = async (note: NoteData) => {
   let expanded: any;
+  let expandedSchema: any;
+  const resolve = async (ref: string) => {
+    const row = /^\d+$/.test(ref) ? await getNote(Number(ref)) : await getNote(ref as Hash);
+    return JSON.parse(row.data);
+  };
   try {
-    expanded = await expandLinks(JSON.parse(note.data), async (ref) => {
-      const row = /^\d+$/.test(ref) ? await getNote(Number(ref)) : await getNote(ref as Hash);
-      return JSON.parse(row.data);
-    });
+    expanded = await expandLinks(JSON.parse(note.data), resolve);
   } catch (e: any) {
     throw new Error(e.message || "Invalid JSON");
   }
   const schemaNote = await getNote(note.schemaHash);
-  return validate(JSON.stringify(expanded), schemaNote.data);
+  try {
+    expandedSchema = await expandLinks(JSON.parse(schemaNote.data), resolve);
+  } catch (e: any) {
+    throw new Error(e.message || "Invalid Schema");
+  }
+  return validate(JSON.stringify(expanded), JSON.stringify(expandedSchema));
 }
 
 

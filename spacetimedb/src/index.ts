@@ -24,19 +24,22 @@ const add_note = spacetimedb.reducer('add_note', {
   const schemaRow = ctx.db.note.hash.find(schemaHash);
   if (!schemaRow) throw new SenderError('Schema not found');
   let expandedJson: any;
+  let expandedSchema: any;
   try {
     const parsed = JSON.parse(data);
-    expandedJson = expandLinksSync(parsed, (ref) => {
+    const resolve = (ref: string) => {
       const row = /^\d+$/.test(ref)
         ? ctx.db.note.id.find(BigInt(ref))
         : ctx.db.note.hash.find(ref);
       if (!row) throw new SenderError(`ref not found: #${ref}`);
       return JSON.parse(row.data);
-    });
+    };
+    expandedJson = expandLinksSync(parsed, resolve);
+    expandedSchema = expandLinksSync(JSON.parse(schemaRow.data), resolve);
   } catch (e: any) {
     throw new SenderError(e.message || "Invalid JSON");
   }
-  validate(JSON.stringify(expandedJson), schemaRow.data)
+  validate(JSON.stringify(expandedJson), JSON.stringify(expandedSchema))
   let id = ctx.db.note.count();
 
   const hash = hashData({schemaHash: schemaHash as Hash, data})
