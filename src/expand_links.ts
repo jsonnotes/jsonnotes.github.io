@@ -1,4 +1,4 @@
-const isRef = (value: string) => /^#([A-Za-z0-9]+)$/.exec(value);
+export const isRef = (value: string) => /^#([A-Za-z0-9]+)$/.exec(value);
 
 export const expandLinks = async (
   value: any,

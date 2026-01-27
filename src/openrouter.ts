@@ -6,8 +6,6 @@ const OPENROUTER_API_KEY = new Stored("$$"+hash128("openrouter"), "")
 
 export const openrouter = async (prompt: string, schema: any) => {
 
-  console.log("openrouter schema:", schema)
-
   if (await OPENROUTER_API_KEY.get() === "") {
     popup(  
       p("Please enter your OpenRouter API key to use the LLM feature"),

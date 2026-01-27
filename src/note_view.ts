@@ -1,5 +1,6 @@
 import { Hash, hashData, NoteData, script_result_schema, script_schema, top } from "../spacetimedb/src/schemas";
 import { getNote, noteLink, Ref } from "./dbconn";
+import { isRef } from "./expand_links";
 import { JsonFmt } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, routeLink, span, style } from "./html";
 import { openrouter } from "./openrouter";
@@ -8,7 +9,14 @@ import { buildins as buildinlist } from "./script_worker";
 
 
 export const buildins = {
-  openrouter, getNote
+  openrouter: async (...data: [string, any]) => {
+    data = await  Promise.all(data.map(s=>{
+      if (isRef(s)) return getNote(s).then(n=>JSON.parse(n.data))
+      return s
+    })) as [string, any]
+    return openrouter(...data)
+  },
+  getNote
 }
 
 
@@ -46,26 +54,9 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
 
   getNote(hash).then(note => {
 
-    let title = h3(`Note ${note.id} ${JSON.parse(note.data).title ?? ""}`);
-
-    overlay.append(
-      title,
-      p("schema: ", noteLink(note.schemaId)),
-      div(
-        style({ fontFamily: "monospace", whiteSpace: "pre-wrap", marginTop: "1em" }),
-        linkify(JsonFmt(note.data))
-      ),
-      div(
-        style({ display: "flex", gap: "0.75em", alignItems: "center" }),
-        routeLink(`/edit?id=${note.id}`, "edit" ),
-        button("copy", {
-          onclick: () =>
-            navigator.clipboard.writeText(JsonFmt(note.data))
-              .then(() => popup(h2("OK"), p("copied")))
-              .catch((e) => popup(h2("ERROR"), p(e.message || "copy failed")))
-        })
-      )
-    );
+    const parsed = JSON.parse(note.data);
+    const titleText = parsed?.title ?? "";
+    const codeText = String(parsed?.code || "");
 
     const runScriptFromNote = (note: Note) =>  new Promise <NoteData>(async (rs, rj)=>{
 
@@ -104,17 +95,38 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
     })
 
 
-    getNote(note.schemaId)
-    .then(schema=>{
-      if (schema.hash == hashData(script_schema)){
-        title.innerHTML = `Script ${JSON.parse(note.data).title} `
-        let runner = button("run", {onclick: () =>{
+    const renderNote = (isScript: boolean) => {
+      overlay.innerHTML = "";
+      const title = h3(`${isScript ? "Script" : "Note"} ${note.id} ${titleText}`);
+      if (isScript) {
+        const runner = button("run", { onclick: () => {
           runner.innerHTML = "running..."
           runScriptFromNote(note).then(result=>submitNote(result))
-        }})
-        title.append(runner)
+        }});
+        title.append(runner);
       }
-    })
+      overlay.append(
+        title,
+        div(
+          style({ fontFamily: "monospace", whiteSpace: "pre-wrap", marginTop: "1em" }),
+          linkify(isScript ? codeText : JsonFmt(note.data))
+        ),
+        div(
+          style({ display: "flex", gap: "0.75em", alignItems: "center" }),
+          routeLink(`/edit?id=${note.id}`, "edit" ),
+          button("copy", {
+            onclick: () =>
+              navigator.clipboard.writeText(isScript ? codeText : JsonFmt(note.data))
+                .then(() => popup(h2("OK"), p("copied")))
+                .catch((e) => popup(h2("ERROR"), p(e.message || "copy failed")))
+          })
+        )
+      );
+    };
+
+    getNote(note.schemaId)
+      .then(schema => renderNote(schema.hash == hashData(script_schema)))
+      .catch(() => renderNote(false));
   });
 
   return overlay;
