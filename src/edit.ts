@@ -20,6 +20,8 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
     data: datafield.value
   }
 
+  let noteIndex: Array<{ id: string; title: string; hash: string }> | null = null;
+
   const titleField = input("", {
     placeholder: "script title",
     style: {
@@ -136,6 +138,13 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
     },
   });
   const schemaList = div();
+  const suggestionBox = div(style({
+    display: "none",
+    border: "1px solid #ccc",
+    padding: "0.5em",
+    borderRadius: "0.5em",
+    background: "var(--background-color)"
+  }));
 
   let lastSchemaHash = "";
 
@@ -191,7 +200,73 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
     }
   };
 
-  datafield.oninput = () => setData(datafield.value);
+  const loadNotes = () => {
+    if (noteIndex) return Promise.resolve(noteIndex);
+    return query_data("select id, data, hash from note limit 200")
+      .then((r) => r.rows.map((row) => {
+        const id = String(row[0]);
+        let title = "";
+        try {
+          const parsed = JSON.parse(String(row[1] ?? ""));
+          title = parsed?.title ? String(parsed.title) : "";
+        } catch {}
+        const hash = String(row[2] ?? "");
+        return { id, title, hash };
+      }))
+      .then((rows) => (noteIndex = rows));
+  };
+
+  const updateSuggestions = () => {
+    if (!isScript) {
+      suggestionBox.style.display = "none";
+      return;
+    }
+    const cursor = datafield.selectionStart ?? 0;
+    const text = datafield.value;
+    const hashPos = text.lastIndexOf("#", cursor - 1);
+    if (hashPos < 0) {
+      suggestionBox.style.display = "none";
+      return;
+    }
+    const token = text.slice(hashPos + 1, cursor);
+    if (!/^[A-Za-z0-9]*$/.test(token)) {
+      suggestionBox.style.display = "none";
+      return;
+    }
+    loadNotes().then((notes) => {
+      const q = token.toLowerCase();
+      const filtered = notes.filter((n) =>
+        n.id.toLowerCase().includes(q) ||
+        n.title.toLowerCase().includes(q)
+      ).slice(0, 8);
+      suggestionBox.innerHTML = "";
+      if (!filtered.length) {
+        suggestionBox.style.display = "none";
+        return;
+      }
+      filtered.forEach((n) => {
+        const label = `#${n.id}${n.title ? `: ${n.title}` : ""}`;
+        suggestionBox.appendChild(button(label, {
+          onclick: () => {
+            const before = text.slice(0, hashPos);
+            const after = text.slice(cursor);
+            const insert = `#${n.id}`;
+            datafield.value = `${before}${insert}${after}`;
+            const next = before.length + insert.length;
+            datafield.setSelectionRange(next, next);
+            setData(datafield.value);
+            suggestionBox.style.display = "none";
+          }
+        }));
+      });
+      suggestionBox.style.display = "block";
+    });
+  };
+
+  datafield.oninput = () => {
+    setData(datafield.value);
+    updateSuggestions();
+  };
   titleField.oninput = () => updateDraft();
 
   const updateStatus = () => {
@@ -242,6 +317,7 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
   const root = div(
     titleField,
     datafield,
+    suggestionBox,
     div(
       style({ display: "flex", gap: "0.5em", alignItems: "center" }),
       formatButton,
