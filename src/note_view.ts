@@ -25,12 +25,12 @@ export type Note = {
 
 const linkify = (text: string) => {
   const el = span();
-  const re = /#([A-Za-z0-9]+)/g;
+  const re = /#([a-f0-9]+)/g;
   let last = 0;
   let match: RegExpExecArray | null;
   while ((match = re.exec(text))) {
     const start = match.index;
-    const token = match[1];
+    let token: Ref = match[1].length === 64 ? match[1] as Ref : Number(match[1]);
     if (start > last) el.append(document.createTextNode(text.slice(last, start)));
     el.append(noteLink(token as Ref)),
     last = start + match[0].length;
