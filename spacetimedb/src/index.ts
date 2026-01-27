@@ -1,5 +1,6 @@
 import { schema, table, t, SenderError } from 'spacetimedb/server';
 import { Hash, hashData, NoteData, schemas, top, validate } from './schemas';
+import { expandLinksSync } from './expand_links';
 
 const JsonNotes = table(
   {
@@ -22,7 +23,20 @@ const add_note = spacetimedb.reducer('add_note', {
 }, (ctx, { schemaHash, data } ) => {
   const schemaRow = ctx.db.note.hash.find(schemaHash);
   if (!schemaRow) throw new SenderError('Schema not found');
-  validate(data, schemaRow.data)
+  let expandedJson: any;
+  try {
+    const parsed = JSON.parse(data);
+    expandedJson = expandLinksSync(parsed, (ref) => {
+      const row = /^\d+$/.test(ref)
+        ? ctx.db.note.id.find(BigInt(ref))
+        : ctx.db.note.hash.find(ref);
+      if (!row) throw new SenderError(`ref not found: #${ref}`);
+      return JSON.parse(row.data);
+    });
+  } catch (e: any) {
+    throw new SenderError(e.message || "Invalid JSON");
+  }
+  validate(JSON.stringify(expandedJson), schemaRow.data)
   let id = ctx.db.note.count();
 
   const hash = hashData({schemaHash: schemaHash as Hash, data})
@@ -40,4 +54,4 @@ const setup = spacetimedb.reducer('setup', {}, (ctx) => {
 })
 
 spacetimedb.init(setup)
-spacetimedb.procedure("eval", t.string(), (c)=>"ok" )
+// spacetimedb.procedure("eval", t.string(), (c)=>"ok" )

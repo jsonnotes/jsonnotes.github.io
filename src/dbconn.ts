@@ -1,7 +1,8 @@
 import { Hash, NoteData, validate } from "../spacetimedb/src/schemas";
-import { h2, p, popup, routeLink, span } from "./html";
+import { h2, p, popup, routeLink, span, th } from "./html";
 import { Note } from "./note_view";
 import { hash128 } from "../spacetimedb/src/hash";
+import { expandLinks } from "./expand_links";
 
 // const db_url = "https://maincloud.spacetimedb.com"
 const db_url = "http://localhost:3000";
@@ -67,8 +68,8 @@ export type Ref = Hash | number
 export const getNote = FunCache(async (ref: Ref) =>{
   let hash: Hash = (typeof ref === "string" ? ref as Hash : await getHashFromId(ref))
   return query_data(`select * from note where hash = '${hash}'`)
-  .then(({ names, rows }) => {
-    if (!rows[0]) throw new Error("note hash not found:" + hash)
+  .then(async ({ names, rows }) => {
+    if (!rows[0]) throw new Error("note not found: " + ref)
     return noteFrom(names, rows[0])
   })
 })
@@ -83,7 +84,19 @@ const getHashFromId = FunCache(async (id: number) =>
 
 
 if (access_token === null) req("/v1/identity", "POST").then((res) => res.json()).then((text) => {access_token = text.token; });
-export const validateNote = (note: NoteData) => getNote(note.schemaHash).then((schemaNote) => validate(note.data, schemaNote.data))
+export const validateNote = async (note: NoteData) => {
+  let expanded: any;
+  try {
+    expanded = await expandLinks(JSON.parse(note.data), async (ref) => {
+      const row = /^\d+$/.test(ref) ? await getNote(Number(ref)) : await getNote(ref as Hash);
+      return JSON.parse(row.data);
+    });
+  } catch (e: any) {
+    throw new Error(e.message || "Invalid JSON");
+  }
+  const schemaNote = await getNote(note.schemaHash);
+  return validate(JSON.stringify(expanded), schemaNote.data);
+}
 
 
 export const noteLink = (ref: Ref, style : Record<string,string> = {color:"inherit", textDecoration:"none" , border: "1px solid #ccc", padding: "0.1em", borderRadius: "0.25em"}) => {
@@ -96,4 +109,3 @@ export const noteLink = (ref: Ref, style : Record<string,string> = {color:"inher
   return routeLink(`/${ref}`, el, {style})
 
 }
-

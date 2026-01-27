@@ -1,15 +1,13 @@
 import Ajv from "ajv"
 import { hash128 } from "./hash"
-const string = { type : "string"}
-const number = { type : "number"}
+const string = {type : "string"}
+const number = {type : "number"}
 const object = (properties: Record<string, any>, extra: any = {}) => ({
   type: "object",
   properties,
   required: Object.keys(properties),
   ...extra,
 })
-
-
 
 export const validate = (data: string, schema: string) => {
   const validate = new Ajv().compile(JSON.parse(schema));
@@ -26,29 +24,25 @@ export function hashData({schemaHash, data} : NoteData){
   return hash128(String(schemaHash), data) 
 }
 
-
-
-export function NoteData(schema: NoteData, data: any): NoteData{
-
-  validate(JSON.stringify(data), schema.data)
-
+export function NoteData(title:string, schema: NoteData, data: any): NoteData{
   return {
     schemaHash: hashData(schema),
-    data: JSON.stringify(data)
+    data: JSON.stringify({
+      ...(title? {title} : {}),
+      ...data
+    })
   }
 }
 
 export const top: NoteData = {schemaHash : "0" as Hash, data: "{}"}
 
-export const script_schema = NoteData(top, object({
+export const script_schema = NoteData("script_schema", top, object({
   title: string,
   code: string,
-}, {
-  title: "script_schema"
 }))
 
 
-export const script_result_schema = NoteData(top, object({
+export const script_result_schema = NoteData("script_result_schema", top, object({
   title: string,
   script: string,
   content: {},
@@ -56,13 +50,23 @@ export const script_result_schema = NoteData(top, object({
   title: "script_result_schema"
 }))
 
+const titled_schema = NoteData("titled_schema", top, object({title: string}))
+
+const has_titled_child = NoteData("has_titled_child", top, object({"child": object({title:string})}))
+
+
+const titled = NoteData("a titled", titled_schema, {title: "im child"})
+const titled1 = NoteData("titled1", has_titled_child, { child: JSON.parse(titled.data) })
+const titled2 = NoteData("titled2", has_titled_child, {child: `#${hashData(titled)}`})
 
 
 export const schemas : NoteData[] = [
   script_schema,
   script_result_schema,
-  NoteData(top, {title: "string", ...string}),
-  NoteData(top, {title: "number", ...number}),
-  NoteData(top, {title: "titled", ...object({title: string})}),
+  NoteData("", top, string),
+  NoteData("", top, number),
+  titled_schema,
+  has_titled_child,
+  titled,
+  titled1, titled2
 ]
-
