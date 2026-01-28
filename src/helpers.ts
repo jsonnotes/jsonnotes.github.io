@@ -29,15 +29,21 @@ export const createSchemaPicker = (
             const col = div(style({ display: "flex", flexDirection: "column", gap: "0.5em" }));
             items.slice(0, 10).forEach((s) => {
               const countLabel = s.count !== undefined ? ` (${s.count})` : "";
-              col.appendChild(
-                button(`schema ${s.id}${s.title ? ` : ${s.title}` : ""}${countLabel}`, {
+              const row = div(
+                style({ display: "flex", gap: "0.5em", alignItems: "center" }),
+                button(`#${s.id}${s.title ? ` : ${s.title}` : ""}${countLabel}`, {
                   style: { textAlign: "left", width: "100%" },
                   onclick: () => {
                     onSelect(s);
                     pop.remove();
                   },
+                }),
+                button("preview", {
+                  onclick: () => window.open(`/${s.hash}`, "_blank", "noopener"),
+                  style: { fontSize: "0.85em", padding: "0.2em 0.4em" }
                 })
               );
+              col.appendChild(row);
             });
             list.appendChild(col);
           };

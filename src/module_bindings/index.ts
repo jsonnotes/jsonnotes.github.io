@@ -32,28 +32,32 @@ import {
 } from "spacetimedb";
 
 // Import and reexport all reducer arg types
-import WorldReducer from "./world_reducer";
-export { WorldReducer };
-import HelloReducer from "./hello_reducer";
-export { HelloReducer };
 import AddNoteReducer from "./add_note_reducer";
 export { AddNoteReducer };
+import SetupReducer from "./setup_reducer";
+export { SetupReducer };
 
 // Import and reexport all procedure arg types
 
 // Import and reexport all table handle types
-import JsonNoteRow from "./json_note_table";
-export { JsonNoteRow };
+import NoteRow from "./note_table";
+export { NoteRow };
+import NoteCountRow from "./note_count_table";
+export { NoteCountRow };
 
 // Import and reexport all types
 import AddNote from "./add_note_type";
 export { AddNote };
-import Hello from "./hello_type";
-export { Hello };
-import JsonNote from "./json_note_type";
-export { JsonNote };
-import World from "./world_type";
-export { World };
+import Init from "./init_type";
+export { Init };
+import Note from "./note_type";
+export { Note };
+import NoteCount from "./note_count_type";
+export { NoteCount };
+import NoteCountRow from "./note_count_row_type";
+export { NoteCountRow };
+import Setup from "./setup_type";
+export { Setup };
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema(
@@ -68,16 +72,23 @@ const tablesSchema = __schema(
       ] },
     ],
     constraints: [
-      { name: 'json_note_id_key', constraint: 'unique', columns: ['id'] },
+      { name: 'note_hash_key', constraint: 'unique', columns: ['hash'] },
+      { name: 'note_id_key', constraint: 'unique', columns: ['id'] },
     ],
-  }, JsonNoteRow),
+  }, NoteRow),
+  __table({
+    name: 'note_count',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, NoteCountRow),
 );
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
-  __reducerSchema("world", WorldReducer),
-  __reducerSchema("hello", HelloReducer),
   __reducerSchema("add_note", AddNoteReducer),
+  __reducerSchema("setup", SetupReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

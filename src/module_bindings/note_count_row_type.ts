@@ -10,7 +10,8 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default {
-  schemaHash: __t.string(),
-  data: __t.string(),
-};
+export default __t.object("NoteCountRow", {
+  count: __t.u64(),
+});
+
+

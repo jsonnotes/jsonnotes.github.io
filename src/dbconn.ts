@@ -35,15 +35,17 @@ const req = (path: string, method: string, body: string | null = null) =>
   });
 
 export const query_data = async (sql: string) : Promise<{names:string[], rows:any[]}> => {
+  const text = await (await req(`/v1/database/${DBNAME}/sql`, "POST", sql)).text();
   try {
-    const text = await (await req(`/v1/database/${DBNAME}/sql`, "POST", sql)).text();
+
     const data = JSON.parse(text);
     if (data.length > 1) console.warn("multiple rows returned, TODO: handle this");
     const { schema, rows } = data[0];
     return { names: schema.elements.map((e) => e.name.some), rows };
   } catch (e: any) {
+    console.log(text)
     console.error(e);
-    popup(p(e.message));
+    popup(p(text));
     return { names: ["error"], rows: [e.message] };
   }
 };

@@ -11,7 +11,7 @@ import {
 } from "spacetimedb";
 
 export default __t.object("AddNote", {
-  schemaId: __t.u128(),
+  schemaHash: __t.string(),
   data: __t.string(),
 });
 

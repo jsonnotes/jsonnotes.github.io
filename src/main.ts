@@ -43,7 +43,10 @@ handleRoute = () => {
   const path = window.location.pathname.replace(/^\/+/, "");
   if (path === "edit") {
     render(editView.root);
-    const searchid = new URLSearchParams(window.location.search).get("id");
+    const params = new URLSearchParams(window.location.search);
+    const searchid = params.get("id");
+    const isNew = params.get("new") === "1";
+    if (isNew) localStorage.removeItem("edit_draft");
     if (searchid === null){
       const raw = localStorage.getItem("edit_draft");
       if (raw && raw !== lastDraftRaw) {

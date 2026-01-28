@@ -13,7 +13,7 @@ type DashboardDeps = {
 };
 
 export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) => {
-  const maxId = 100;
+  let lastId = 100;
   const schemaHashAny = "any";
   const schemaHashScript = hashData(script_schema);
   const schemaHashScriptResult = hashData(script_result_schema);
@@ -71,6 +71,10 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
     result.innerHTML = "";
     result.append(p("running..."));
     let schemaId: number | null = null;
+    try {
+      const countRes = await query("select count from note_count");
+      lastId = Number(countRes.rows[0][0])
+    } catch {}
     if (currentSchema !== schemaHashAny) {
       if (/^\d+$/.test(currentSchema)) schemaId = Number(currentSchema);
       else {
@@ -83,7 +87,7 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
       result.append(p("no matches"));
       return;
     }
-    const range = `id > ${maxId - 50} and id < ${maxId}`;
+    const range = `id > ${lastId - 50} and id < ${lastId}`;
     const where = schemaId === null ? range : `schemaId = ${schemaId} and ${range}`;
     const sql = `select id, data from note where ${where} limit 50`;
     query(sql).then((data) => {
@@ -108,7 +112,7 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
   const root = div(
     style({ display: "flex", flexDirection: "column", gap: "0.75em" }),
     routeLink(
-      "/edit",
+      "/edit?new=1",
       { style: { textDecoration: "none", color: "inherit", fontWeight: "bold", border: "1px solid #ccc", borderRadius: "0.25em", padding: "0.25em 0.5em" } },
       "+ Add Note"
     ),

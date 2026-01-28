@@ -10,9 +10,6 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default __t.row({
-  id: __t.u128().primaryKey(),
-  schemaId: __t.u128(),
-  data: __t.string(),
-  hash: __t.u128(),
-});
+export default __t.object("Setup", {});
+
+

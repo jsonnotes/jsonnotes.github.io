@@ -17,6 +17,10 @@ const JsonNotes = table(
 
 export const spacetimedb = schema(JsonNotes);
 
+spacetimedb.view({ name: 'note_count', public: true }, t.array(t.object('NoteCountRow', { count: t.u64() })),
+  (ctx) => [{ count: ctx.db.note.count() }]
+);
+
 const add_note = spacetimedb.reducer('add_note', {
   schemaHash: t.string(),
   data: t.string(),

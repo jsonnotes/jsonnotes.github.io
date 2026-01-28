@@ -1,19 +1,32 @@
 import { hash128 } from "../spacetimedb/src/hash";
 import { h2, input, p, popup, style } from "./html";
-import { Stored } from "./store";
 
-const OPENROUTER_API_KEY = new Stored("$$"+hash128("openrouter"), "")
+
+const storekey = "$"+hash128("openrouter")
+
+
+
+let OPENROUTER_API_KEY = localStorage.getItem(storekey) || ""
 
 export const openrouter = async (prompt: string, schema: any) => {
 
-  if (await OPENROUTER_API_KEY.get() === "") {
-    popup(  
-      p("Please enter your OpenRouter API key to use the LLM feature"),
-      input(OPENROUTER_API_KEY, style({width:"100%"}))
-    )
-    await new Promise<string>((resolve, reject) => {
-      OPENROUTER_API_KEY.subscribeLater((key) => {
-        if (key) resolve(key)
+  if (OPENROUTER_API_KEY === "") {
+    await new Promise<void>((resolve, reject) => {
+
+      let inp = input()
+      
+      let pop = popup(
+        p("Please enter your OpenRouter API key to use the LLM feature"),
+        inp
+      )
+
+      inp.addEventListener("keydown", e=>{
+        if (e.key == "Enter"){
+          OPENROUTER_API_KEY = inp.value
+          localStorage.setItem(storekey, OPENROUTER_API_KEY)
+          resolve()
+          pop.remove()
+        }
       })
     })
   }
@@ -22,7 +35,7 @@ export const openrouter = async (prompt: string, schema: any) => {
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${await OPENROUTER_API_KEY.get()}`,
+      Authorization: `Bearer ${await OPENROUTER_API_KEY}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
