@@ -1,8 +1,9 @@
 import { Hash, hashData, NoteData, script_result_schema, script_schema, top } from "../spacetimedb/src/schemas";
-import { getNote, noteLink, Ref } from "./dbconn";
+import { add_note, addNote, getNote, noteLink, Ref } from "./dbconn";
 import { isRef } from "./expand_links";
 import { JsonFmt } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, routeLink, span, style } from "./html";
+import { AddNote } from "./module_bindings";
 import { openrouter } from "./openrouter";
 
 import { buildins as buildinlist } from "./script_worker";
@@ -16,7 +17,8 @@ export const buildins = {
     })) as [string, any]
     return openrouter(...data)
   },
-  getNote
+  getNote,
+  addNote,
 }
 
 
@@ -87,7 +89,6 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
               content: msg.result
             }, null, 2)
           } as NoteData
-          console.log(JsonFmt(result.data))
           rs(result)
         }else popup(h2("ERROR"), p(msg.error || "script error"))
       };
@@ -97,7 +98,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
 
     const renderNote = (isScript: boolean) => {
       overlay.innerHTML = "";
-      const title = h3(`${isScript ? "Script" : "Note"} ${note.id} ${titleText}`);
+      const title = h3(`${isScript ? "Script" : "Note"} #${note.id} ${titleText} `);
       if (isScript) {
         const runner = button("run", { onclick: () => {
           runner.innerHTML = "running..."
@@ -107,6 +108,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
       }
       overlay.append(
         title,
+        isScript ? "" : p("schema: ", noteLink(note.schemaId)),
         div(
           style({ fontFamily: "monospace", whiteSpace: "pre-wrap", marginTop: "1em" }),
           linkify(isScript ? codeText : JsonFmt(note.data))

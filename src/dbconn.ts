@@ -1,4 +1,4 @@
-import { Hash, NoteData, validate } from "../spacetimedb/src/schemas";
+import { Hash, hashData, NoteData, validate } from "../spacetimedb/src/schemas";
 import { p, popup, routeLink, span } from "./html";
 import { Note } from "./note_view";
 import { hash128 } from "../spacetimedb/src/hash";
@@ -81,6 +81,12 @@ const FunCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
 
 /*** represents a note id or hash ***/
 export type Ref = Hash | number | `#${number | Hash}`
+
+export const addNote = async (schema: Ref, data: Record<string, any>)=>{
+  let note = {schemaHash: (await getNote(schema)).hash,data: JSON.stringify(data)}
+  await add_note(note)
+  return "#" + hashData(note) as Ref
+}
 
 export const getNote = FunCache(async (ref: Ref) =>{
   if (typeof(ref) == "string" && ref[0] == "#"){
