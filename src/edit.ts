@@ -1,7 +1,7 @@
 import { Hash, hashData, NoteData, script_schema, top } from "../spacetimedb/src/schemas";
-import { a, button, div, input, p, popup, style, textarea } from "./html";
+import { a, button, div, input, p, style, textarea } from "./html";
 import { getNote, query_data, validateNote } from "./dbconn";
-import { JsonFmt } from "./helpers";
+import { createSchemaPicker, JsonFmt } from "./helpers";
 
 type EditDeps = {
   submit: (data: NoteData) => Promise<void>;
@@ -83,60 +83,27 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
     history.pushState({}, "", href);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
-  const schemaPicker = button("change schema", {
-    onclick: () => {
-      const search = input("", { placeholder: "search id, title, hash" });
-      const list = div(p("loading..."));
-      const container = div(
-        style({ display: "flex", flexDirection: "column", gap: "0.5em" }),
-        search,
-        list
-      );
-      const pop = popup(container);
-      query_data("select id, data, hash from note where schemaId = 0")
-        .then((r) => r.rows.map((row) => {
-
-          let title = "";
-          try {
-            const parsed = JSON.parse(String(row[1] ?? ""));
-            title = parsed?.title ? String(parsed.title) : "";
-          } catch {}
-          return { id: String(row[0]), title, hash:String(row[2] ?? "").replace(/^"|"$/g, "") };
-        }))
-        .then((schemas) => {
-          const renderList = (items: typeof schemas) => {
-            list.innerHTML = "";
-            const col = div(style({ display: "flex", flexDirection: "column", gap: "0.5em" }));
-            items.slice(0, 10).forEach((s) => {
-              col.appendChild(
-                button(`schema ${s.id}${s.title ? ` : ${s.title}` : ""}`, {
-                  onclick: () => {
-                    setSchemaHash(s.hash as Hash)
-                    pop.remove();
-                  },
-                })
-              );
-            });
-            list.appendChild(col);
-          };
-          renderList(schemas);
-          search.oninput = () => {
-            const q = search.value.trim().toLowerCase();
-            if (!q) return renderList(schemas);
-            const byId = schemas.filter((s) => s.id.toLowerCase().includes(q));
-            if (byId.length) return renderList(byId);
-            const byTitle = schemas.filter((s) => s.title.toLowerCase().includes(q));
-            if (byTitle.length) return renderList(byTitle);
-            const byHash = schemas.filter((s) => s.hash.toLowerCase().includes(q));
-            return renderList(byHash);
-          };
-        })
-        .catch((e) => {
-          list.innerHTML = "";
-          list.appendChild(p(e.message || "failed to load schemas"));
-        });
-    },
-  });
+  const fetchSchemas = () =>
+    Promise.all([
+      query_data("select id, data, hash from note where schemaId = 0"),
+      query_data("select schemaId from note")
+    ]).then(([schemasRes, countsRes]) => {
+      const counts = new Map<string, number>();
+      countsRes.rows.forEach((row) => {
+        const id = String(row[0]);
+        counts.set(id, (counts.get(id) || 0) + 1);
+      });
+      return schemasRes.rows.map((row) => {
+        let title = "";
+        try {
+          const parsed = JSON.parse(String(row[1] ?? ""));
+          title = parsed?.title ? String(parsed.title) : "";
+        } catch {}
+        const id = String(row[0]);
+        return { id, title, hash:String(row[2] ?? ""), count: counts.get(id) || 0 };
+      });
+    });
+  const schemaPicker = createSchemaPicker(fetchSchemas, (s) => setSchemaHash(s.hash as Hash));
   const schemaList = div();
   const suggestionBox = div(style({
     display: "none",

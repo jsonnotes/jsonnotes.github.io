@@ -1,13 +1,28 @@
 import { Hash, NoteData, validate } from "../spacetimedb/src/schemas";
-import { h2, p, popup, routeLink, span, th } from "./html";
+import { p, popup, routeLink, span } from "./html";
 import { Note } from "./note_view";
 import { hash128 } from "../spacetimedb/src/hash";
 import { expandLinks } from "./expand_links";
 
-// const db_url = "https://maincloud.spacetimedb.com"
-const db_url = "http://localhost:3000";
-// const DBNAME = "jsonviewtest";
 const DBNAME = "jsonview"
+
+const dbPresets: Record<string, string> = {
+  local: "http://localhost:3000",
+  prod: "https://maincloud.spacetimedb.com",
+};
+
+const loadDbPreset = () => {
+  const fromQuery = new URLSearchParams(window.location.search).get("db");
+  const fromStore = localStorage.getItem("db_preset");
+  if (fromQuery && dbPresets[fromQuery]) {
+    localStorage.setItem("db_preset", fromQuery);
+    return fromQuery;
+  }
+  return fromStore && dbPresets[fromStore] ? fromStore : "local";
+};
+
+const DB_PRESET = loadDbPreset();
+const db_url = dbPresets[DB_PRESET];
 
 
 let access_token: string | null = localStorage.getItem("access_token");
@@ -45,7 +60,7 @@ const noteFrom = (names: string[], row: any[]): Note => Object.fromEntries(names
 
 const FunCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
   const HotCache = new Map<string,Y>();
-  const fkey = hash128(fn.toString() + ":cached")
+  const fkey = hash128(fn.toString() + ":cached:" + db_url)
   return async (x:X) => {
     const lkey = fkey + JSON.stringify(x)
     if (HotCache.has(lkey)) return HotCache.get(lkey)!

@@ -2,6 +2,7 @@ import { a, div, h2, p, popup, style } from "./html";
 import { openNoteView, Note } from "./note_view";
 import { createDashboardView } from "./dashboard";
 import { createEditView } from "./edit";
+import { createSqlView } from "./sql_view";
 import { Hash, hashData, NoteData } from "../spacetimedb/src/schemas"
 import { add_note, getNote, query_data } from "./dbconn";
 
@@ -70,6 +71,8 @@ handleRoute = () => {
   } else if (!path) {
     render(dashboard.root);
     runQuery();
+  } else if (path === "sql") {
+    render(sqlView.root);
   } else if (Number.isFinite(Number(path))) {
     getNote(Number(path)).then(note=>showNote(note.hash))
   } else {
@@ -94,7 +97,8 @@ body.appendChild(div(
   div(
     style({ display: "flex", gap: "1em" }),
     a({ style: { textDecoration: "none", color: "inherit", fontWeight: "bold" }, href: "/", "data-nav": "dashboard", onclick: (e) => { if (e.metaKey) return; e.preventDefault(); navigate("/"); } }, "Dashboard"),
-    a(style({ textDecoration: "none", color: "inherit", fontWeight: "bold" }), { href: "/edit", "data-nav": "edit", onclick: (e) => { e.preventDefault(); navigate("/edit"); } }, "Edit")
+    a(style({ textDecoration: "none", color: "inherit", fontWeight: "bold" }), { href: "/edit", "data-nav": "edit", onclick: (e) => { e.preventDefault(); navigate("/edit"); } }, "Edit"),
+    a(style({ textDecoration: "none", color: "inherit", fontWeight: "bold" }), { href: "/sql", "data-nav": "sql", onclick: (e) => { e.preventDefault(); navigate("/sql"); } }, "SQL")
   )
 ));
 
@@ -110,6 +114,7 @@ const editView = createEditView({
   },
 });
 editFill = editView.fill;
+const sqlView = createSqlView({ query: query_data });
 
 contentRoot = div(bubble);
 body.appendChild(contentRoot);
