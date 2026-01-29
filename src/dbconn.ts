@@ -1,7 +1,7 @@
-import { Hash, hashData, Jsonable, NoteData, Note, tojson, validate, top, fromjson, schemas } from "../spacetimedb/src/schemas";
+import { Hash, hashData, Jsonable, NoteData, Note, tojson, validate, top, fromjson, schemas, expandLinks } from "../spacetimedb/src/schemas";
 import { p, popup, routeLink, span } from "./html";
 import { hash128 } from "../spacetimedb/src/hash";
-import { expandLinks } from "./expand_links";
+
 
 const DBNAME = "jsonview"
 

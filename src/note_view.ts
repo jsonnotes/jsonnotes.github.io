@@ -1,6 +1,6 @@
-import { Hash, hashData, NoteData, script_result_schema, script_schema } from "../spacetimedb/src/schemas";
+import { Hash, hashData, NoteData, script_result_schema, script_schema, isRef } from "../spacetimedb/src/schemas";
 import { addNote, getId, getNote, getSchemaId, noteLink, Ref } from "./dbconn";
-import { isRef } from "./expand_links";
+
 import { stringify } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, routeLink, span, style } from "./html";
 
@@ -34,7 +34,7 @@ const linkify = (text: string) => {
     const raw = match[1];
     const token: Ref = /^\d+$/.test(raw) ? Number(raw) : raw as Ref;
     if (start > last) el.append(document.createTextNode(text.slice(last, start)));
-    el.append(noteLink(token as Ref, { color:"inherit", textDecoration:"underline", border: "none", padding: "0" }, `#${raw}`)),
+    el.append(noteLink(token as Ref,)),
     last = start + match[0].length;
   }
   if (last < text.length) el.append(document.createTextNode(text.slice(last)));
@@ -76,11 +76,11 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         if (msg.ok) {
           let result = {
             schemaHash: hashData(script_result_schema),
-            data: JSON.stringify({
+            data: {
               title: "result",
               script: `#${hash}`,
               content: msg.result
-            }, null, 2)
+            }
           } as NoteData
           rs(result)
         }else popup(h2("ERROR"), p(msg.error || "script error"))

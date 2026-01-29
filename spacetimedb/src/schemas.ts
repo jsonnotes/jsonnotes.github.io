@@ -34,10 +34,10 @@ export function hashData({schemaHash, data} : NoteData){
 export function NoteData(title:string, schema: NoteData, data: any): NoteData{
   return {
     schemaHash: hashData(schema),
-    data: tojson({
+    data: {
       ...(title? {title} : {}),
       ...data
-    })
+    }
   }
 }
 
@@ -79,7 +79,7 @@ export const schemas : NoteData[] = [
 ]
 
 
-const isRef = (value: string) => /^#([a-f0-9]+)$/.exec(value);
+export const isRef = (value: string) => /^#([a-f0-9]+)$/.exec(value);
 
 export const expandLinksSync = (
   value: Jsonable,

@@ -50,30 +50,21 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
   );
   let currentSchema = schemaHashAny;
 
-  const formatCell = (cell: any) => {
-    if (typeof cell === "bigint") return cell.toString();
-    if (typeof cell === "number") {
-      const text = String(cell);
-      if (text.includes("e") || text.includes("E")) {
-        return cell.toLocaleString("fullwide", { useGrouping: false });
-      }
-      return text;
-    }
-    return String(cell);
-  };
-
   const setSchema = (value: string) => {
     currentSchema = value;
     runQuery();
   };
 
   const runQuery = async () => {
+
+    let maxitems = 50;
+
     result.innerHTML = "";
     result.append(p("running..."));
     let schemaId: number | null = null;
     try {
       const countRes = await query("select count from note_count");
-      lastId = Number(countRes.rows[0][0])
+      lastId = Math.max(maxitems, Number(countRes.rows[0][0]))
     } catch {}
     if (currentSchema !== schemaHashAny) {
       if (/^\d+$/.test(currentSchema)) schemaId = Number(currentSchema);
@@ -87,7 +78,7 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
       result.append(p("no matches"));
       return;
     }
-    const range = `id > ${lastId - 50} and id < ${lastId}`;
+    const range = `id >= ${(lastId - maxitems)} and id < ${lastId}`;
     const where = schemaId === null ? range : `schemaId = ${schemaId} and ${range}`;
     const sql = `select id, data from note where ${where} limit 50`;
     query(sql).then((data) => {
