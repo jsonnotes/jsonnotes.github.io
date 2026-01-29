@@ -1,5 +1,5 @@
-import { Hash, hashData, NoteData, script_result_schema, script_schema, isRef } from "../spacetimedb/src/schemas";
-import { addNote, getId, getNote, getSchemaId, noteLink, Ref } from "./dbconn";
+import { Hash, hashData, NoteData, script_result_schema, script_schema, isRef, Ref } from "../spacetimedb/src/notes";
+import { addNote, getId, getNote, getSchemaId, noteLink } from "./dbconn";
 
 import { stringify } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, routeLink, span, style } from "./html";
@@ -26,7 +26,7 @@ for (let exp of buildinlist) if (!Object.keys(buildins).includes(exp)) throw new
 
 const linkify = (text: string) => {
   const el = span();
-  const re = /#([A-Za-z0-9]+)/g;
+  const re = /#([a-f0-9]+)/g;
   let last = 0;
   let match: RegExpExecArray | null;
   while ((match = re.exec(text))) {
@@ -116,10 +116,11 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
       div(
         style({ display: "flex", gap: "0.75em", alignItems: "center" }),
         routeLink(`/edit?id=${id}`, "edit" ),
+        routeLink(`/deps/${hash}`, "deps" ),
         button("copy", {
-          onclick: () =>
+          onclick: (e) =>
             navigator.clipboard.writeText(text)
-              .then(() => popup(h2("OK"), p("copied")))
+              .then(() => (e.target as HTMLElement).textContent = "copied")
               .catch((e) => popup(h2("ERROR"), p(e.message || "copy failed")))
         })
       )

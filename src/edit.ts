@@ -1,4 +1,4 @@
-import { Hash, hashData, NoteData, script_schema, tojson, top } from "../spacetimedb/src/schemas";
+import { Hash, hashData, NoteData, script_schema, tojson, top } from "../spacetimedb/src/notes";
 import { a, button, div, input, p, style, textarea } from "./html";
 import { getId, getNote, query_data, validateNote } from "./dbconn";
 import { createSchemaPicker, JsonFmt } from "./helpers";

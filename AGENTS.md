@@ -23,13 +23,14 @@
 - `src/dbconn.ts`: HTTP + caching + note fetch/validation helpers.
 - `src/helpers.ts`: shared UI helpers (schema picker, formatting).
 - `spacetimedb/src/index.ts`: reducers + validation logic.
-- `spacetimedb/src/schemas.ts`: canonical schema definitions.
+- `spacetimedb/src/notes.ts`: canonical schema definitions.
 ## Internal Architecture Notes
 - **Current schema**: All data lives in the `note` table (`id`, `schemaId`, `data`, `hash`), but this is not a hard requirement.
 - **Hashes are identity**: Notes are identified by `hash` (content-based). IDs exist only for temporal ordering and simple navigation.
 - **Schemas are notes**: Schema rows are just notes with `schemaId = 0`. References should use hashes wherever possible.
 - **Validation rule**: JSON is validated against the schema on the backend; links are expanded **for validation only** and stored data stays raw.
 - **Reuse over duplication**: Prefer shared helpers (e.g., schema picker, link parsing) to avoid parallel logic in different views.
+- **Link format**: Links are lowercase hex only (e.g., `#a1b2...`).
 
 ## Note Types
 - `Note` (client raw): `{ id, hash, schemaId, data }` where `data` is the parsed JSON object.

@@ -1,5 +1,5 @@
 import { schema, table, t, SenderError } from 'spacetimedb/server';
-import { Hash, hashData, schemas, tojson, top, validate, expandLinksSync, fromjson} from './schemas';
+import { Hash, hashData, schemas, tojson, top, validate, expandLinksSync, fromjson, matchRef, Ref} from './notes';
 
 
 const JsonNotes = table(
@@ -15,7 +15,17 @@ const JsonNotes = table(
   }
 );
 
-export const spacetimedb = schema(JsonNotes);
+const Links = table(
+  {
+    name: "links",
+    public: true
+  },{
+    to: t.u64().primaryKey(),
+    from: t.array(t.u64()),
+  }
+)
+
+export const spacetimedb = schema(JsonNotes, Links);
 
 spacetimedb.view({ name: 'note_count', public: true }, t.array(t.object('NoteCountRow', { count: t.u64() })),
   (ctx) => [{ count: ctx.db.note.count() }]
@@ -43,13 +53,24 @@ const add_note = spacetimedb.reducer('add_note', {
     const expandedSchema = expandLinksSync(fromjson(schemaRow.data), resolve);
     validate(expandedJson, expandedSchema)
 
-    let id = ctx.db.note.count();
-
+    const id = ctx.db.note.count();
     const hash = hashData({schemaHash: schemaHash as Hash, data: parsed})
-
 
     if (ctx.db.note.hash.find(hash)) return;
     ctx.db.note.insert({ id, schemaId: schemaRow.id, data, hash})
+
+    const targets = new Set([schemaRow.id]);
+    const re = /#([a-f0-9]+)/g;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(data))) {
+      const id = matchRef<number | bigint | undefined>(match[1] as Ref, id=>id, hash=> ctx.db.note.hash.find(hash)?.id)
+      if (id!==undefined) targets.add(BigInt(id))
+    }
+    for (const to of targets) {
+      const existing = ctx.db.links.to.find(to);
+      if (!existing) ctx.db.links.insert({ to, from: [id] });
+      else if (!existing.from.some((x) => x === id)) ctx.db.links.to.update({ ...existing, from: [...existing.from, id] });
+    }
   }catch (e){
     throw new SenderError( "INSERT ERROR: "+fromjson(schemaRow.data))
   }

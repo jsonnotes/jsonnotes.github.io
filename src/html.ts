@@ -82,14 +82,15 @@ export const h4:HTMLGenerator<HTMLHeadingElement> = newHtmlGenerator("h4")
 export const div:HTMLGenerator<HTMLDivElement> = newHtmlGenerator("div")
 export const button:HTMLGenerator<HTMLButtonElement> = newHtmlGenerator("button")
 export const a:HTMLGenerator<HTMLAnchorElement> = newHtmlGenerator("a")
-export const routeLink = (href: string, ...cs: HTMLArg[]) =>
+export const routeLink = (href: string, text = null, ...cs: HTMLArg[]) =>
   a(
+    text ?? href,
     { href, onclick: (e) => {
       if (e.metaKey || e.ctrlKey) return;
       e.preventDefault();
       history.pushState({}, "", href);
       window.dispatchEvent(new PopStateEvent("popstate"));
-    }, style: { color: "inherit" }},
+    }, style:{color:"inherit", textDecoration: "none", border: "1px solid #ccc", padding: "0.1em", borderRadius: "0.25em"}},
     ...cs
   );
 // export const noteLink = (id: string | number | bigint, ...cs: HTMLArg[]) => routeLink(`/${id}`, ...cs);

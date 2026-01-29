@@ -121,3 +121,15 @@ export const expandLinks = async (
   }
   return value;
 };
+
+
+
+/*** represents a note id or hash ***/
+export type Ref = Hash | number | `#${number | Hash}` | `${number}`
+
+export const matchRef= <T>(ref:Ref, onid: (n:number)=>T, onhash: (h:Hash) => T) =>{
+  if (typeof ref == "number") return onid(ref)
+  if (ref[0] == "#") ref = ref.slice(1) as Hash
+  if (ref.length == 32) return onhash(ref as Hash)
+  return onid(Number(ref))
+}

@@ -1,4 +1,4 @@
-import { Hash, hashData, Jsonable, NoteData, Note, tojson, validate, top, fromjson, schemas, expandLinks } from "../spacetimedb/src/schemas";
+import { Hash, hashData, Jsonable, NoteData, Note, tojson, validate, top, fromjson, schemas, expandLinks, Ref, matchRef } from "../spacetimedb/src/notes";
 import { p, popup, routeLink, span } from "./html";
 import { hash128 } from "../spacetimedb/src/hash";
 
@@ -67,9 +67,6 @@ const FunCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
   }
 }
 
-/*** represents a note id or hash ***/
-export type Ref = Hash | number | `#${number | Hash}` | `${number}`
-
 export const addNote = async (schema: Ref, data: Jsonable)=>{
   let schemaHash = await getHash(schema)
   const res = await req(`/v1/database/${DBNAME}/call/add_note`, "POST", JSON.stringify({
@@ -78,13 +75,6 @@ export const addNote = async (schema: Ref, data: Jsonable)=>{
   }));
   if (!res.ok) throw new Error(await res.text())
   return "#" + hashData({schemaHash, data}) as Ref
-}
-
-const matchRef= <T>(ref:Ref, onid: (n:number)=>T, onhash: (h:Hash) => T) =>{
-  if (typeof ref == "number") return onid(ref)
-  if (ref[0] == "#") ref = ref.slice(1) as Hash
-  if (ref.length == 32) return onhash(ref as Hash)
-  return onid(Number(ref))
 }
 
 export const getNoteRaw = FunCache(async (ref:Ref) => {
@@ -122,18 +112,20 @@ export const validateNote = async (note: NoteData) => {
   }
 }
 
+
+export const notePreview = (ref) => getNote(ref).then(async note=>{
+  let data: any = note.data
+  let preview = typeof data === "string" ? data : JSON.stringify(data);
+  return `#${await getId(ref)}` + (data?.title ? `:${data.title}` : (typeof data == 'string' || typeof data == 'number') ? `:${preview.slice(0,20)}`: "")
+})
+
 export const noteLink = (
   ref: Ref,
-  style: Record<string,string> = {color:"inherit", textDecoration:"none" , border: "1px solid #ccc", padding: "0.1em", borderRadius: "0.25em"},
-  label?: string
+  label?: string,
+  args = {},
 ) => {
   let el = span(label ?? `#${ref}`)
-  if (label === undefined) {
-    getNote(ref).then(async note=>{
-      let data: any = note.data
-      const preview = typeof data === "string" ? data : JSON.stringify(data);
-      el.innerHTML = `#${await getId(ref)}` + (data?.title ? `:${data.title}` : (typeof data == 'string' || typeof data == 'number') ? `:${preview.slice(0,20)}`: "")
-    })
-  }
-  return routeLink(`/${ref}`, el, {style})
+  const hrefRef = typeof ref === "string" ? ref.replace(/^#/, "") : String(ref);
+  if (label === undefined) notePreview(ref).then(pr => el.innerHTML = pr)
+  return routeLink(`/${hrefRef}`, el, args)
 }
