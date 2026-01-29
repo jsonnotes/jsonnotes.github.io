@@ -1,9 +1,9 @@
-import { Hash, hashData, NoteData, script_result_schema, script_schema, top } from "../spacetimedb/src/schemas";
-import { add_note, addNote, getNote, noteLink, Ref } from "./dbconn";
+import { Hash, hashData, NoteData, script_result_schema, script_schema } from "../spacetimedb/src/schemas";
+import { addNote, getId, getNote, getSchemaId, noteLink, Ref } from "./dbconn";
 import { isRef } from "./expand_links";
-import { JsonFmt } from "./helpers";
+import { stringify } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, routeLink, span, style } from "./html";
-import { AddNote } from "./module_bindings";
+
 import { openrouter } from "./openrouter";
 
 import { buildins as buildinlist } from "./script_worker";
@@ -12,7 +12,7 @@ import { buildins as buildinlist } from "./script_worker";
 export const buildins = {
   openrouter: async (...data: [string, any]) => {
     data = await  Promise.all(data.map(s=>{
-      if (isRef(s)) return getNote(s).then(n=>JSON.parse(n.data))
+      if (isRef(s)) return getNote(s).then(n=>n.data)
       return s
     })) as [string, any]
     return openrouter(...data)
@@ -24,13 +24,6 @@ export const buildins = {
 
 for (let exp of buildinlist) if (!Object.keys(buildins).includes(exp)) throw new Error("buildin missing but expected: "+ exp)
 
-export type Note = {
-  id: number | string | bigint;
-  hash: Hash;
-  schemaId: number;
-  data: string;
-};
-
 const linkify = (text: string) => {
   const el = span();
   const re = /#([A-Za-z0-9]+)/g;
@@ -41,7 +34,7 @@ const linkify = (text: string) => {
     const raw = match[1];
     const token: Ref = /^\d+$/.test(raw) ? Number(raw) : raw as Ref;
     if (start > last) el.append(document.createTextNode(text.slice(last, start)));
-    el.append(noteLink(token as Ref)),
+    el.append(noteLink(token as Ref, { color:"inherit", textDecoration:"underline", border: "none", padding: "0" }, `#${raw}`)),
     last = start + match[0].length;
   }
   if (last < text.length) el.append(document.createTextNode(text.slice(last)));
@@ -54,16 +47,16 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
   const overlay = div(style({display: "flex", flexDirection: "column", gap: "0.75em"}));
 
 
-  getNote(hash).then(note => {
+  getNote(hash).then(async note => {
+    const id = await getId(hash);
+    const schemaId = await getSchemaId(hash);
 
-    const parsed = JSON.parse(note.data);
-    const titleText = parsed?.title ?? "";
-    const codeText = String(parsed?.code || "");
+    const titleText = (note.data as any)?.title ?? "";
 
-    const runScriptFromNote = (note: Note) =>  new Promise <NoteData>(async (rs, rj)=>{
+    const runScriptFromNote = (noteData: NoteData) =>  new Promise <NoteData>(async (rs, rj)=>{
 
-      let data = JSON.parse(note.data)
-      let code = String(data.code || "")
+
+      let code = String((noteData.data as any)?.code || "")
 
       console.log({code})
 
@@ -85,7 +78,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
             schemaHash: hashData(script_result_schema),
             data: JSON.stringify({
               title: "result",
-              script: `#${note.hash}`,
+              script: `#${hash}`,
               content: msg.result
             }, null, 2)
           } as NoteData
@@ -95,40 +88,45 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
       worker.postMessage({ type: "run", code, input: {}});
     })
 
+    const isScript = note.schemaHash === hashData(script_schema)
 
-    const renderNote = (isScript: boolean) => {
-      overlay.innerHTML = "";
-      const title = h3(`${isScript ? "Script" : "Note"} #${note.id} ${titleText} `);
-      if (isScript) {
-        const runner = button("run", { onclick: () => {
-          runner.innerHTML = "running..."
-          runScriptFromNote(note).then(result=>submitNote(result))
-        }});
-        title.append(runner);
-      }
-      overlay.append(
-        title,
-        isScript ? "" : p("schema: ", noteLink(note.schemaId)),
-        div(
-          style({ fontFamily: "monospace", whiteSpace: "pre-wrap", marginTop: "1em" }),
-          linkify(isScript ? codeText : JsonFmt(note.data))
-        ),
-        div(
-          style({ display: "flex", gap: "0.75em", alignItems: "center" }),
-          routeLink(`/edit?id=${note.id}`, "edit" ),
-          button("copy", {
-            onclick: () =>
-              navigator.clipboard.writeText(isScript ? codeText : JsonFmt(note.data))
-                .then(() => popup(h2("OK"), p("copied")))
-                .catch((e) => popup(h2("ERROR"), p(e.message || "copy failed")))
-          })
-        )
-      );
-    };
+    console.log(note)
 
-    getNote(note.schemaId)
-      .then(schema => renderNote(schema.hash == hashData(script_schema)))
-      .catch(() => renderNote(false));
+    const text = isScript ? String((note.data as any).code || "") : stringify(note.data)
+
+    console.log(text)
+
+
+    overlay.innerHTML = "";
+    const title = h3(`${isScript ? "Script" : "Note"} #${id} ${titleText} `);
+    if (isScript) {
+      const runner = button("run", { onclick: () => {
+        runner.innerHTML = "running..."
+        runScriptFromNote(note).then(result=>submitNote(result))
+      }});
+      title.append(runner);
+    }
+    overlay.append(
+      title,
+      isScript ? "" : p("schema: ", noteLink(schemaId)),
+      div(
+        style({ fontFamily: "monospace", whiteSpace: "pre-wrap", marginTop: "1em" }),
+        linkify(text)
+      ),
+      div(
+        style({ display: "flex", gap: "0.75em", alignItems: "center" }),
+        routeLink(`/edit?id=${id}`, "edit" ),
+        button("copy", {
+          onclick: () =>
+            navigator.clipboard.writeText(text)
+              .then(() => popup(h2("OK"), p("copied")))
+              .catch((e) => popup(h2("ERROR"), p(e.message || "copy failed")))
+        })
+      )
+    );
+
+
+
   });
 
   return overlay;

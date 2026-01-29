@@ -1,6 +1,8 @@
 import { button, div, input, p, popup, style } from "./html"
 
-export const JsonFmt = (data:string) => JSON.stringify(JSON.parse(data), null, 2)
+export const stringify = x=>JSON.stringify(x,null,2)
+
+export const JsonFmt = (data:string) => stringify(JSON.parse(data))
 
 export type SchemaEntry = { id: string; title: string; hash: string; count?: number };
 

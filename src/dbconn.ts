@@ -1,6 +1,5 @@
-import { Hash, hashData, NoteData, validate } from "../spacetimedb/src/schemas";
+import { Hash, hashData, Jsonable, NoteData, Note, tojson, validate, top, fromjson, schemas } from "../spacetimedb/src/schemas";
 import { p, popup, routeLink, span } from "./html";
-import { Note } from "./note_view";
 import { hash128 } from "../spacetimedb/src/hash";
 import { expandLinks } from "./expand_links";
 
@@ -23,7 +22,6 @@ const loadDbPreset = () => {
 
 const DB_PRESET = loadDbPreset();
 const db_url = dbPresets[DB_PRESET];
-
 
 let access_token: string | null = localStorage.getItem("access_token");
 
@@ -50,16 +48,6 @@ export const query_data = async (sql: string) : Promise<{names:string[], rows:an
   }
 };
 
-export const add_note = async (note: NoteData) => {
-  const res = await req(`/v1/database/${DBNAME}/call/add_note`, "POST", JSON.stringify(note));
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `Request failed (${res.status})`);
-  }
-  return res;
-};
-const noteFrom = (names: string[], row: any[]): Note => Object.fromEntries(names.map((n, i) => [n, row[i]])) as Note;
-
 const FunCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
   const HotCache = new Map<string,Y>();
   const fkey = hash128(fn.toString() + ":cached:" + db_url)
@@ -80,66 +68,72 @@ const FunCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
 }
 
 /*** represents a note id or hash ***/
-export type Ref = Hash | number | `#${number | Hash}`
+export type Ref = Hash | number | `#${number | Hash}` | `${number}`
 
-export const addNote = async (schema: Ref, data: Record<string, any>)=>{
-  let note = {schemaHash: (await getNote(schema)).hash,data: JSON.stringify(data)}
-  await add_note(note)
-  return "#" + hashData(note) as Ref
+export const addNote = async (schema: Ref, data: Jsonable)=>{
+  let schemaHash = await getHash(schema)
+  const res = await req(`/v1/database/${DBNAME}/call/add_note`, "POST", JSON.stringify({
+    schemaHash,
+    data: tojson(data)
+  }));
+  if (!res.ok) throw new Error(await res.text())
+  return "#" + hashData({schemaHash, data}) as Ref
 }
 
-export const getNote = FunCache(async (ref: Ref) =>{
-  if (typeof(ref) == "string" && ref[0] == "#"){
-    ref = ref.slice(1) as Hash
-    if (ref.length < 32) ref = Number(ref)
-  }
-  let hash: Hash = (typeof ref === "string" ? ref as Hash : await getHashFromId(ref))
-  return query_data(`select * from note where hash = '${hash}'`)
-  .then(async ({ names, rows }) => {
-    if (!rows[0]) throw new Error("note not found: " + ref)
-    return noteFrom(names, rows[0])
-  })
+const matchRef= <T>(ref:Ref, onid: (n:number)=>T, onhash: (h:Hash) => T) =>{
+  if (typeof ref == "number") return onid(ref)
+  if (ref[0] == "#") ref = ref.slice(1) as Hash
+  if (ref.length == 32) return onhash(ref as Hash)
+  return onid(Number(ref))
+}
+
+export const getNoteRaw = FunCache(async (ref:Ref) => {
+  const data = await query_data(matchRef(ref, 
+    n => `select * from note where id = ${n}`,
+    h => `select * from note where hash = '${h}'`
+  ))
+  const row = data.rows[0];
+  if (!row) throw new Error("note not found")
+  return Object.fromEntries(data.names.map((n,i)=>[n, row[i]])) as Note
 })
 
-const getHashFromId = FunCache(async (id: number) =>
-  query_data(`select hash from note where id = ${id}`)
-  .then(({ rows }) => {
-    if (!rows[0]) throw new Error("note not found")
-    return String(rows[0][0]) as Hash
-  })
-)
+export const getId = (ref: Ref) => getNoteRaw(ref).then((n)=>n.id)
+export const getHash = (ref: Ref) => getNoteRaw(ref).then(n=>n.hash)
+export const getSchemaId = (ref: Ref) => getNoteRaw(ref).then(n=>n.schemaId)
 
+
+export const getNote = FunCache(async (ref: Ref) =>{
+  const nt = await getNoteRaw(ref)
+  return {
+    schemaHash: await getHash(nt.schemaId),
+    data: fromjson(nt.data)
+  } as NoteData
+})
 
 if (access_token === null) req("/v1/identity", "POST").then((res) => res.json()).then((text) => {access_token = text.token; });
 export const validateNote = async (note: NoteData) => {
-  let expanded: any;
-  let expandedSchema: any;
-  const resolve = async (ref: string) => {
-    const row = /^\d+$/.test(ref) ? await getNote(Number(ref)) : await getNote(ref as Hash);
-    return JSON.parse(row.data);
-  };
   try {
-    expanded = await expandLinks(JSON.parse(note.data), resolve);
+    const resolve = (ref) => getNote(ref).then(n => n.data)
+    const rawData = typeof note.data === "string" ? JSON.parse(note.data) : note.data;
+    const rawSchema = (await getNote(note.schemaHash)).data;
+    return validate(await expandLinks(rawData, resolve), await expandLinks(rawSchema, resolve));
   } catch (e: any) {
-    throw new Error(e.message || "Invalid JSON");
+    throw new Error(e.message || e);
   }
-  const schemaNote = await getNote(note.schemaHash);
-  try {
-    expandedSchema = await expandLinks(JSON.parse(schemaNote.data), resolve);
-  } catch (e: any) {
-    throw new Error(e.message || "Invalid Schema");
-  }
-  return validate(JSON.stringify(expanded), JSON.stringify(expandedSchema));
 }
 
-
-export const noteLink = (ref: Ref, style : Record<string,string> = {color:"inherit", textDecoration:"none" , border: "1px solid #ccc", padding: "0.1em", borderRadius: "0.25em"}) => {
-
-  let el = span(`#${ref}`)
-  getNote(ref).then(note=>{
-    let data = JSON.parse(note.data)
-    el.innerHTML = `#${note.id}` + (data.title ? `:${data.title}` : (typeof data == 'string' || typeof data == 'number') ? `:${note.data.slice(0,20)}`: "")
-  })
+export const noteLink = (
+  ref: Ref,
+  style: Record<string,string> = {color:"inherit", textDecoration:"none" , border: "1px solid #ccc", padding: "0.1em", borderRadius: "0.25em"},
+  label?: string
+) => {
+  let el = span(label ?? `#${ref}`)
+  if (label === undefined) {
+    getNote(ref).then(async note=>{
+      let data: any = note.data
+      const preview = typeof data === "string" ? data : JSON.stringify(data);
+      el.innerHTML = `#${await getId(ref)}` + (data?.title ? `:${data.title}` : (typeof data == 'string' || typeof data == 'number') ? `:${preview.slice(0,20)}`: "")
+    })
+  }
   return routeLink(`/${ref}`, el, {style})
-
 }

@@ -1,13 +1,15 @@
 import { a, div, h2, p, popup, style } from "./html";
-import { openNoteView, Note } from "./note_view";
+import { openNoteView } from "./note_view";
 import { createDashboardView } from "./dashboard";
 import { createEditView } from "./edit";
 import { createSqlView } from "./sql_view";
-import { Hash, hashData, NoteData } from "../spacetimedb/src/schemas"
-import { add_note, getNote, query_data } from "./dbconn";
+import { Hash, NoteData, tojson } from "../spacetimedb/src/schemas"
+import { addNote, getHash, getNote, query_data } from "./dbconn";
 
 let runQuery = () => {};
-let editFill: ((schemaHash: string, data: string) => void) | null = null;
+
+export type Draft = {schemaHash: Hash, text: string}
+let editFill: ((d:Draft) => void) | null = null;
 let contentRoot: HTMLElement | null = null;
 let lastDraftRaw: string | null = null;
 let handleRoute = () => {};
@@ -20,9 +22,9 @@ const navigate = (path: string) => (history.pushState({}, "", path), handleRoute
 
 const submitNote = async (data: NoteData) => {
   try {
-    await add_note(data);
-    const hash = hashData(data);
-    navigate(`/${(await getNote(hash)).id}`);
+    const ref = await addNote(data.schemaHash, data.data);
+    const hash = typeof ref === "string" ? ref.slice(1) : String(await getHash(ref));
+    navigate(`/${hash}`);
   } catch (e: any) {
     popup(h2("ERROR"), p(e.message || "failed to add note"));
   }
@@ -53,22 +55,14 @@ handleRoute = () => {
         lastDraftRaw = raw;
         try {
           const draft = JSON.parse(raw);
-          if (draft.schemaHash) {
-            editFill(String(draft.schemaHash), String(draft.data || ""));
-          } else if (draft.schemaId) {
-            getNote(Number(draft.schemaId))
-              .then((schemaNote) => editFill(String(schemaNote.hash), String(draft.data || "")))
-              .catch((e) => popup(h2("ERROR"), p(e.message)));
-          }
+          editFill(draft)
         } catch {}
       } else {
-        getNote(0).then((schemaNote) => editFill(String(schemaNote.hash), "{}")).catch(() => {});
+        getHash(0).then((schemaHash) => editFill({schemaHash, text: "{}"})).catch(() => {});
       }
     }else{
       getNote(Number(searchid))
-        .then((note) => getNote(Number(note.schemaId)).then((schemaNote) =>
-          editFill(String(schemaNote.hash), String(note.data))
-        ))
+        .then((note) => editFill({schemaHash: note.schemaHash, text: tojson(note.data)}))
         .catch((e) => popup(h2("ERROR"), p(e.message))); 
     }
   } else if (!path) {
@@ -77,7 +71,7 @@ handleRoute = () => {
   } else if (path === "sql") {
     render(sqlView.root);
   } else if (Number.isFinite(Number(path))) {
-    getNote(Number(path)).then(note=>showNote(note.hash))
+    getHash(Number(path)).then(hash=>showNote(hash))
   } else {
     showNote(path as Hash);
   }
@@ -107,14 +101,7 @@ body.appendChild(div(
 
 const dashboard = createDashboardView({ query: query_data, navigate});
 const editView = createEditView({
-  submit: submitNote,
-  onChange: (note) => {
-    localStorage.setItem("edit_draft", JSON.stringify(note));
-    if (window.location.pathname !== "/edit" || window.location.search) {
-      history.replaceState({}, "", "/edit");
-      setActive();
-    }
-  },
+  submit: submitNote
 });
 editFill = editView.fill;
 const sqlView = createSqlView({ query: query_data });

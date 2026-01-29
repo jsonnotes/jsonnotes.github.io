@@ -1,6 +1,6 @@
 import { schema, table, t, SenderError } from 'spacetimedb/server';
-import { Hash, hashData, NoteData, schemas, top, validate } from './schemas';
-import { expandLinksSync } from './expand_links';
+import { Hash, hashData, schemas, tojson, top, validate, expandLinksSync, fromjson} from './schemas';
+
 
 const JsonNotes = table(
   {
@@ -23,14 +23,14 @@ spacetimedb.view({ name: 'note_count', public: true }, t.array(t.object('NoteCou
 
 const add_note = spacetimedb.reducer('add_note', {
   schemaHash: t.string(),
-  data: t.string(),
-}, (ctx, { schemaHash, data } ) => {
+  text: t.string(),
+}, (ctx, { schemaHash, text } ) => {
   const schemaRow = ctx.db.note.hash.find(schemaHash);
-  if (!schemaRow) throw new SenderError('Schema not found');
-  let expandedJson: any;
-  let expandedSchema: any;
-  try {
-    const parsed = JSON.parse(data);
+  if (!schemaRow) throw new SenderError('Schema not found: '+ text);
+
+
+  try{
+
     const resolve = (ref: string) => {
       const row = /^\d+$/.test(ref)
         ? ctx.db.note.id.find(BigInt(ref))
@@ -38,27 +38,30 @@ const add_note = spacetimedb.reducer('add_note', {
       if (!row) throw new SenderError(`ref not found: #${ref}`);
       return JSON.parse(row.data);
     };
-    expandedJson = expandLinksSync(parsed, resolve);
-    expandedSchema = expandLinksSync(JSON.parse(schemaRow.data), resolve);
-  } catch (e: any) {
-    throw new SenderError(e.message || "Invalid JSON");
-  }
-  validate(JSON.stringify(expandedJson), JSON.stringify(expandedSchema))
-  let id = ctx.db.note.count();
+    const data = fromjson(text)
+    const expandedJson = expandLinksSync(data, resolve);
+    const expandedSchema = expandLinksSync(fromjson(schemaRow.data), resolve);
+    validate(expandedJson, expandedSchema)
 
-  const hash = hashData({schemaHash: schemaHash as Hash, data})
-  if (ctx.db.note.hash.find(hash)) return;
-  ctx.db.note.insert({ id, schemaId: schemaRow.id, data, hash})
+    let id = ctx.db.note.count();
+
+    const hash = hashData({schemaHash: schemaHash as Hash, data})
+
+
+    if (ctx.db.note.hash.find(hash)) return;
+    ctx.db.note.insert({ id, schemaId: schemaRow.id, data:text, hash})
+  }catch (e){
+    throw new SenderError( "INSERT ERROR: "+fromjson(schemaRow.data))
+  }
 
 });
 
 
 const setup = spacetimedb.reducer('setup', {}, (ctx) => {
   try{
-    ctx.db.note.insert({id: 0n, schemaId: 0n, data: top.data, hash:  hashData(top)})
+    ctx.db.note.insert({id: 0n, schemaId: 0n, data: tojson(top.data), hash: hashData(top)})
   }catch {}
-  for (const note of schemas) add_note(ctx, note)
+  for (const note of schemas) add_note(ctx, {schemaHash: note.schemaHash, text: tojson(note.data)})
 })
 
 spacetimedb.init(setup)
-// spacetimedb.procedure("eval", t.string(), (c)=>"ok" )

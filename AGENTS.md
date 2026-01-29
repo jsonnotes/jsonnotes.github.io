@@ -31,6 +31,10 @@
 - **Validation rule**: JSON is validated against the schema on the backend; links are expanded **for validation only** and stored data stays raw.
 - **Reuse over duplication**: Prefer shared helpers (e.g., schema picker, link parsing) to avoid parallel logic in different views.
 
+## Note Types
+- `Note` (client raw): `{ id, hash, schemaId, data }` where `data` is the parsed JSON object.
+- `NoteData` (payload): `{ schemaHash, data }` where `data` is raw JSON string for storage/validation.
+
 ## Build, Test, and Development Commands
 - `npm run dev` — start the Vite dev server for the dashboard.
 - `npm run build` — build for GitHub Pages (`BUILD_TARGET=gh-pages`).

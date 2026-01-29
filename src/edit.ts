@@ -1,24 +1,21 @@
-import { Hash, hashData, NoteData, script_schema, top } from "../spacetimedb/src/schemas";
+import { Hash, hashData, NoteData, script_schema, tojson, top } from "../spacetimedb/src/schemas";
 import { a, button, div, input, p, style, textarea } from "./html";
-import { getNote, query_data, validateNote } from "./dbconn";
+import { getId, getNote, query_data, validateNote } from "./dbconn";
 import { createSchemaPicker, JsonFmt } from "./helpers";
+import { Draft } from "./main";
 
 type EditDeps = {
   submit: (data: NoteData) => Promise<void>;
-  onChange: (data: NoteData) => void;
+
 };
 
-export const createEditView = ({ submit, onChange }: EditDeps) => {
+export const createEditView = ({ submit }: EditDeps) => {
   const datafield = textarea(
     style({ fontFamily: "monospace", minHeight: "12em", resize: "vertical", background:"inherit" , color: "inherit"}),
   );
 
   const scriptHash = hashData(script_schema);
-  let isScript = false;
-  let draftNote : NoteData = {
-    schemaHash: hashData(top),
-    data: datafield.value
-  }
+
 
   let noteIndex: Array<{ id: string; title: string; hash: string }> | null = null;
 
@@ -37,31 +34,31 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
     }
   });
 
-  const updateDraft = () => {
-    if (isScript) {
-      draftNote.data = JSON.stringify({
-        title: titleField.value || "",
-        code: datafield.value || ""
-      });
-    } else {
-      draftNote.data = datafield.value;
-    }
-    updateSchemaPreview();
-    updateStatus();
-    onChange(draftNote);
-  };
 
-  const setData = (data: string) => {
-    if (datafield.value !== data) datafield.value = data;
-    updateDraft();
+
+  let schemaHash = hashData(top)
+
+
+  const isScript = () => schemaHash == scriptHash
+
+  const getDraft = (): {schemaHash: Hash, text: string} => 
+    isScript() ? ({schemaHash, text: tojson({title: titleField.value, content: datafield.value})})
+    :({schemaHash, text: datafield.value})
+
+
+
+  const setText = (text: string) => {
+    if (datafield.value !== text) datafield.value = text;
+    updateStatus();
+    localStorage.setItem("edit_draft", JSON.stringify(getDraft()));
+
   }
 
   const setSchemaHash = (hash: Hash) => {
-    draftNote.schemaHash = hash
-    isScript = hash === scriptHash;
-    titleField.style.display = isScript ? "block" : "none";
+    schemaHash = hash
+    titleField.style.display = isScript() ? "block" : "none";
     updateSchemaPreview();
-    updateDraft();
+
   }
 
   const jsonStatus = p();
@@ -184,7 +181,7 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
   };
 
   const updateSuggestions = () => {
-    if (!isScript) {
+    if (!isScript()) {
       suggestionBox.style.display = "none";
       return;
     }
@@ -221,7 +218,7 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
             datafield.value = `${before}${insert}${after}`;
             const next = before.length + insert.length;
             datafield.setSelectionRange(next, next);
-            setData(datafield.value);
+            setText(datafield.value);
             suggestionBox.style.display = "none";
           }
         }));
@@ -231,31 +228,38 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
   };
 
   datafield.oninput = () => {
-    setData(datafield.value);
+    setText(datafield.value);
     updateSuggestions();
   };
-  titleField.oninput = () => updateDraft();
+  titleField.oninput = () => setText(getDraft().text)
 
-  const updateStatus = () => {
+  const updateStatus = async () => {
     jsonStatus.innerText = "validating...";
     jsonStatus.style.color = "#666";
-    validateNote(draftNote).then(() => setJsonStatus("valid", "#2a3"))
-    .catch((e: any) => {setJsonStatus(e.message || "invalid json", "#f66")})
+    try{
+      const data = JSON.parse(datafield.value)
+      console.log(schemaHash, data)
+      validateNote({schemaHash, data})
+      setJsonStatus("valid", "#2a3")
+    }catch (e){
+      setJsonStatus(e.message || "invalid json", "#f66")
+    }
   };
 
 
   const updateSchemaPreview = () => {
-    if (draftNote.schemaHash === lastSchemaHash) return;
-    lastSchemaHash = draftNote.schemaHash;
-    getNote(draftNote.schemaHash).then((schemaNote) => {
+    if (schemaHash === lastSchemaHash) return;
+    lastSchemaHash = schemaHash;
+    getNote(schemaHash).then(async (schemaNote) => {
+      let schemaId: any = "?";
+      try { schemaId = await getId(schemaHash); } catch {}
       schemaList.innerHTML = "";
       try {
-        const parsed = JSON.parse(schemaNote.data);
-        const title = parsed?.title ? String(parsed.title) : "";
-        schemaTitle.innerText = `schema: ${schemaNote.id}${title ? ` : ${title}` : ""}`;
-        schemaLink.setAttribute("href", `/${schemaNote.id}`);
-        const props = parsed?.properties || {};
-        const entries = Object.entries(props);
+        let data = schemaNote.data as Record<string, string>;
+        const title = data.title ? data.title : "";
+        schemaTitle.innerText = `#${schemaId}${title ? ` : ${title}` : ""}`;
+        if (schemaId !== "?") schemaLink.setAttribute("href", `/${schemaId}`);
+        const entries = Object.entries(data.properties || {});
         if (!entries.length) {
           schemaList.appendChild(p("no fields"));
           return;
@@ -265,7 +269,7 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
           schemaList.appendChild(p(`${key}: ${typ}`));
         });
       } catch (e: any) {
-        schemaTitle.innerText = `schema: ${schemaNote.id}`;
+        schemaTitle.innerText = `#${schemaId}`;
         schemaList.appendChild(p(e.message || "invalid schema json"));
       }
     }).catch((e) => {
@@ -276,8 +280,8 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
 
   const formatButton = button("format json (cmd+s)", {
     onclick: () => {
-      if (isScript) return;
-      setData(JsonFmt(draftNote.data));
+      if (isScript()) return;
+      setText(tojson(datafield.value));
     }
   });
 
@@ -291,9 +295,7 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
       jsonStatus
     ),
     button("push", {
-      onclick: () => {
-        submit(draftNote).catch(() => {});
-      },
+      onclick: () => submit({schemaHash, data:tojson(getDraft().text)}),
     }),
     div(
       style({
@@ -316,26 +318,12 @@ export const createEditView = ({ submit, onChange }: EditDeps) => {
     )
   );
 
-  const fill = (schemaHash: Hash, data: string) => {
-    setSchemaHash(schemaHash);
-    if (schemaHash === scriptHash) {
-      try {
-        const parsed = JSON.parse(data);
-        titleField.value = String(parsed?.title || "");
-        datafield.value = String(parsed?.code || "");
-      } catch {
-        titleField.value = "";
-        datafield.value = "";
-      }
-      updateDraft();
-    } else {
-      setData(data);
-    }
-    datafield.focus();
-  };
-
   updateSchemaPreview();
   resizeTextarea();
 
-  return { root, fill };
+  return { root, fill:({schemaHash, text} : Draft) => {
+    setText(text);
+    setSchemaHash(schemaHash);
+    datafield.focus();
+  } };
 };
