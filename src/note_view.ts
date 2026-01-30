@@ -112,7 +112,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
       title,
       isScript ? "" : p("schema: ", noteLink(schemaId)),
       div(
-        style({ fontFamily: "monospace", whiteSpace: "pre-wrap", marginTop: "1em" }),
+        style({ fontFamily: "monospace", whiteSpace: "pre", marginTop: "1em", overflowX: "auto" }),
         linkify(text)
       ),
       div(

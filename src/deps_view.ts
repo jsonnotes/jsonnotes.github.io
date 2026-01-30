@@ -4,7 +4,7 @@ import { Ref } from "../spacetimedb/src/notes";
 import { noteSearch } from "./helpers";
 
 type QueryResult = { names: string[]; rows: any[][] };
-type DepsDeps = { query: (sql: string) => Promise<QueryResult> };
+type DepsDeps = { query: (sql: string) => Promise<QueryResult>, navigate: (ref:string) => void};
 
 export type DepsData = { currentId: number; inputs: number[]; outputs: number[] };
 export type DepsRefs = { current: Ref[]; inputs: Ref[]; outputs: Ref[] };
@@ -27,9 +27,21 @@ export const bezierPath = (
   const a = toSvgPoint(svg, from);
   const b = toSvgPoint(svg, to);
   const dx = Math.max(10, Math.abs(b.x - a.x) * curvature);
-  return appendSvg(
+  appendSvg(
     svg,
     `<path d="M ${a.x} ${a.y} C ${a.x + dx} ${a.y} ${b.x - dx} ${b.y} ${b.x} ${b.y}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"></path>`
+  );
+  const ang = Math.atan2(b.y - a.y, b.x - a.x);
+  const len = 10;
+  const a1 = ang + Math.PI * 0.85;
+  const a2 = ang - Math.PI * 0.85;
+  const x1 = b.x + Math.cos(a1) * len;
+  const y1 = b.y + Math.sin(a1) * len;
+  const x2 = b.x + Math.cos(a2) * len;
+  const y2 = b.y + Math.sin(a2) * len;
+  return appendSvg(
+    svg,
+    `<path d="M ${b.x} ${b.y} L ${x1} ${y1} M ${b.x} ${b.y} L ${x2} ${y2}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"></path>`
   );
 };
 export const svgText = (
@@ -57,7 +69,7 @@ export const svgText = (
   return g
 
 };
-export const depsDataFromRows = (rows: any[][], currentId: number, limit = 5): DepsData => {
+export const depsDataFromRows = (rows: any[][], currentId: number, limit = 10): DepsData => {
   const inputs: number[] = [];
   const outputs: number[] = [];
   rows.forEach((row) => {
@@ -75,7 +87,7 @@ export const depsDataFromRows = (rows: any[][], currentId: number, limit = 5): D
 };
 
 
-export const createDepsView = ({ query }: DepsDeps) => {
+export const createDepsView = ({ query, navigate}: DepsDeps) => {
   const root = div(style({ display: "flex", flexDirection: "column", gap: "0.75em" }));
   const panel = div(style({ width: "100%", minHeight: "320px" }));
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -122,10 +134,35 @@ export const createDepsView = ({ query }: DepsDeps) => {
       data.inputs, [data.currentId], data.outputs
     ].map((ls, col)=>{
       ls.map((l, row)=>{
-        let tag = svgText(svg, {x: 0.2 + 0.3 * col, y: 0.2 + 0.6 / ls.length * row}, `#${l}`)
-        tag.onclick = ()=> render(`#${l}`)
+
+
+
+        let mktag = (t:string) => {
+          let tag = svgText(svg, {x: 0.2 + 0.3 * col, y: 0.2 + 0.6 / ls.length * row}, `${t}`)
+          tag.onclick = ()=> l == data.currentId? navigate(`\\${l}`) :  render(`#${l}`)
+          return tag
+        }
+
+        let tag = mktag(`#${l}`)
+        notePreview(l).then(p => {
+          console.log(p)
+          tag.replaceWith(mktag(p.slice(0,15)))})
       })
     })
+
+
+    data.inputs.forEach((i,row)=>{
+      let col = 0;
+      bezierPath(svg,  {x: 0.25 + 0.3 * col, y: 0.2 + 0.6 / data.inputs.length * row}, {x: 0.15 + 0.3 * 1, y: 0.2 }, )
+    })
+
+
+
+    data.outputs.forEach((i,row)=>{
+      let col = 2;
+      bezierPath(svg, {x: 0.25 + 0.3 * 1, y: 0.2 },  {x: 0.15 + 0.3 * col, y: 0.2 + 0.6 / data.outputs.length * row} )
+    })
+    
     
 
 

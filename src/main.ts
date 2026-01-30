@@ -123,7 +123,7 @@ const editView = createEditView({
 });
 editFill = editView.fill;
 const sqlView = createSqlView({ query: query_data });
-const depsView = createDepsView({ query: query_data });
+const depsView = createDepsView({ query: query_data, navigate});
 
 contentRoot = div(bubble);
 body.appendChild(contentRoot);
@@ -134,6 +134,6 @@ handleRoute();
 
 window.addEventListener("popstate", handleRoute);
 
-import { insert_scenarios } from "./scenarios";
+// import { insert_scenarios } from "./scenarios";
 
-insert_scenarios()
+// insert_scenarios()
