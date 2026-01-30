@@ -80,6 +80,7 @@ export const h3:HTMLGenerator<HTMLHeadingElement> = newHtmlGenerator("h3")
 export const h4:HTMLGenerator<HTMLHeadingElement> = newHtmlGenerator("h4")
 
 export const div:HTMLGenerator<HTMLDivElement> = newHtmlGenerator("div")
+export const pre:HTMLGenerator<HTMLDivElement> = newHtmlGenerator("pre")
 export const button:HTMLGenerator<HTMLButtonElement> = newHtmlGenerator("button")
 export const a:HTMLGenerator<HTMLAnchorElement> = newHtmlGenerator("a")
 export const routeLink = (href: string, text = null, ...cs: HTMLArg[]) =>

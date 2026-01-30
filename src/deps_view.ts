@@ -1,5 +1,5 @@
-import { div, h3, popup, style } from "./html";
-import { getId, notePreview, query_data } from "./dbconn";
+import { div, h3, popup, pre, style } from "./html";
+import { getId, noteOverview, notePreview, query_data } from "./dbconn";
 import { Ref } from "../spacetimedb/src/notes";
 import { noteSearch } from "./helpers";
 
@@ -31,29 +31,22 @@ export const bezierPath = (
     svg,
     `<path d="M ${a.x} ${a.y} C ${a.x + dx} ${a.y} ${b.x - dx} ${b.y} ${b.x} ${b.y}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"></path>`
   );
-  const ang = Math.atan2(b.y - a.y, b.x - a.x);
   const len = 10;
-  const a1 = ang + Math.PI * 0.85;
-  const a2 = ang - Math.PI * 0.85;
-  const x1 = b.x + Math.cos(a1) * len;
-  const y1 = b.y + Math.sin(a1) * len;
-  const x2 = b.x + Math.cos(a2) * len;
-  const y2 = b.y + Math.sin(a2) * len;
+  const x1 = b.x - len;
+  const y1 = b.y - len * 0.5;
+  const x2 = b.x - len;
+  const y2 = b.y + len * 0.5;
   return appendSvg(
     svg,
     `<path d="M ${b.x} ${b.y} L ${x1} ${y1} M ${b.x} ${b.y} L ${x2} ${y2}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"></path>`
   );
 };
-export const svgText = (
-  svg: SVGSVGElement,
-  pos: { x: number; y: number },
-  text: string
-) => {
+export const svgText = (svg: SVGSVGElement, pos: { x: number; y: number }, text: string) => {
   const width = 140;
   const p = toSvgPoint(svg, pos);
   const g = appendSvg(
     svg,
-    `<g><text x="${p.x}" y="${p.y}" dominant-baseline="middle" text-anchor="middle" fill="var(--color)" font-size="14" font-family="sans-serif">${text}</text></g>`
+    `<g><text x="${p.x}" y="${p.y}" dominant-baseline="middle" text-anchor="middle" fill="var(--color)" font-size="14" cursor="pointer" font-family="sans-serif">${text}</text></g>`
   ) as SVGGElement;
   const t = g?.querySelector("text") as SVGTextElement;
   const pad = 5;
@@ -63,11 +56,9 @@ export const svgText = (
   const top = p.y - height / 2;
   g.insertAdjacentHTML(
     "afterbegin",
-    `<rect x="${left}" y="${top}" width="${width}" height="${height}" rx="2" ry="2" fill="var(--background-color)" stroke="var(--color)" stroke-width="2"></rect>`
+    `<rect x="${left}" y="${top}" width="${width}" height="${height}" rx="2" ry="2" fill="var(--background-color)" cursor="pointer" stroke="var(--color)" stroke-width="2"></rect>`
   );
-
-  return g
-
+  return { node: g, rect: { x: left, y: top, width, height } };
 };
 export const depsDataFromRows = (rows: any[][], currentId: number, limit = 10): DepsData => {
   const inputs: number[] = [];
@@ -91,9 +82,10 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
   const root = div(style({ display: "flex", flexDirection: "column", gap: "0.75em" }));
   const panel = div(style({ width: "100%", minHeight: "320px" }));
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const prev = pre()
   svg.setAttribute("width", "100%");
   svg.setAttribute("height", "320");
-  panel.appendChild(svg);
+  panel.append(svg, prev);
   const fetchSchemas = () =>
     Promise.all([
       query_data("select id, data, hash from note where schemaId = 0"),
@@ -130,44 +122,53 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
     const links = await query("select to, from from links");
     const data = depsDataFromRows(links.rows, currentId);
 
-    [
-      data.inputs, [data.currentId], data.outputs
-    ].map((ls, col)=>{
-      ls.map((l, row)=>{
+    const cols = [
+      { ids: data.inputs, x: 0.2 },
+      { ids: [data.currentId], x: 0.5 },
+      { ids: data.outputs, x: 0.8 },
+    ];
+    const labels = new Map<number, string>();
+    await Promise.all(
+      cols.flatMap((c) =>
+        c.ids.map(async (id) => {
+          const label = await notePreview(id).then((p) => p.slice(0, 15)).catch(() => `#${id}`);
+          labels.set(id, label);
+        })
+      )
+    );
 
+    const boxes = new Map<number, { x: number; y: number; width: number; height: number }>();
+    cols.forEach(({ ids, x }) => {
+      const n = Math.max(ids.length, 1);
+      ids.forEach((id, row) => {
+        const y = n === 1 ? 0.5 : 0.2 + (0.6 * (row + 0.5)) / n;
+        const tag = svgText(svg, { x, y }, labels.get(id) || `#${id}`);
+        tag.node.onclick = () => (id === data.currentId ? navigate(`/${id}`) : render(`#${id}`));
+        boxes.set(id, tag.rect);
+      });
+    });
 
+    const edge = (r: { x: number; y: number; width: number; height: number }, side: "left" | "right") => ({
+      x: side === "left" ? r.x : r.x + r.width,
+      y: r.y + r.height / 2,
+    });
 
-        let mktag = (t:string) => {
-          let tag = svgText(svg, {x: 0.2 + 0.3 * col, y: 0.2 + 0.6 / ls.length * row}, `${t}`)
-          tag.onclick = ()=> l == data.currentId? navigate(`\\${l}`) :  render(`#${l}`)
-          return tag
-        }
-
-        let tag = mktag(`#${l}`)
-        notePreview(l).then(p => {
-          console.log(p)
-          tag.replaceWith(mktag(p.slice(0,15)))})
-      })
-    })
-
-
-    data.inputs.forEach((i,row)=>{
-      let col = 0;
-      bezierPath(svg,  {x: 0.25 + 0.3 * col, y: 0.2 + 0.6 / data.inputs.length * row}, {x: 0.15 + 0.3 * 1, y: 0.2 }, )
-    })
-
-
-
-    data.outputs.forEach((i,row)=>{
-      let col = 2;
-      bezierPath(svg, {x: 0.25 + 0.3 * 1, y: 0.2 },  {x: 0.15 + 0.3 * col, y: 0.2 + 0.6 / data.outputs.length * row} )
-    })
+    const cur = boxes.get(data.currentId);
+    if (cur) {
+      data.inputs.forEach((id) => {
+        const r = boxes.get(id);
+        if (r) bezierPath(svg, edge(r, "right"), edge(cur, "left"));
+      });
+      data.outputs.forEach((id) => {
+        const r = boxes.get(id);
+        if (r) bezierPath(svg, edge(cur, "right"), edge(r, "left"));
+      });
+    }
     
-    
 
-
-
-
+    noteOverview(data.currentId).then(p=>{
+      prev.innerHTML = p
+    })
 
 
   };

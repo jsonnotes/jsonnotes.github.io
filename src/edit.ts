@@ -1,6 +1,6 @@
 import { fromjson, Hash, hashData, NoteData, script_schema, tojson, top } from "../spacetimedb/src/notes";
-import { a, button, div, input, p, style, textarea } from "./html";
-import { getId, getNote, query_data, validateNote } from "./dbconn";
+import { a, button, div, input, p, pre, style, textarea } from "./html";
+import { getId, getNote, noteOverview, query_data, validateNote } from "./dbconn";
 import { createSchemaPicker, JsonFmt } from "./helpers";
 import { Draft } from "./main";
 
@@ -11,7 +11,7 @@ type EditDeps = {
 
 export const createEditView = ({ submit }: EditDeps) => {
   const datafield = textarea(
-    style({ fontFamily: "monospace", minHeight: "12em", resize: "vertical", background:"inherit" , color: "inherit"}),
+    style({ fontFamily: "monospace", minHeight: "12em", resize: "vertical", background:"inherit" , color: "inherit", width: "100%" }),
   );
 
   const scriptHash = hashData(script_schema);
@@ -37,12 +37,10 @@ export const createEditView = ({ submit }: EditDeps) => {
 
 
   let schemaHash = hashData(top)
-
-
   const isScript = () => schemaHash == scriptHash
 
   const getDraft = (): {schemaHash: Hash, text: string} => 
-    isScript() ? ({schemaHash, text: tojson({title: titleField.value, content: datafield.value})})
+    isScript() ? ({schemaHash, text: tojson({title: titleField.value, code: datafield.value})})
     :({schemaHash, text: datafield.value})
 
 
@@ -51,14 +49,21 @@ export const createEditView = ({ submit }: EditDeps) => {
     if (datafield.value !== text) datafield.value = text;
     updateStatus();
     localStorage.setItem("edit_draft", JSON.stringify(getDraft()));
-
   }
 
   const setSchemaHash = (hash: Hash) => {
+
+    let text = datafield.value
+
+
+    
     schemaHash = hash
     titleField.style.display = isScript() ? "block" : "none";
     updateSchemaPreview();
 
+    if (isScript()) setText((fromjson(text)as {code:string}).code ?? "")
+    else setText(text)
+    
   }
 
   const jsonStatus = p();
@@ -101,7 +106,7 @@ export const createEditView = ({ submit }: EditDeps) => {
       });
     });
   const schemaPicker = createSchemaPicker(fetchSchemas, (s) => setSchemaHash(s.hash as Hash));
-  const schemaList = div();
+  const schemaList = pre();
   const suggestionBox = div(style({
     display: "none",
     border: "1px solid #ccc",
@@ -110,7 +115,6 @@ export const createEditView = ({ submit }: EditDeps) => {
     background: "var(--background-color)"
   }));
 
-  let lastSchemaHash = "";
 
   datafield.rows = 10;
   datafield.cols = 100;
@@ -231,15 +235,13 @@ export const createEditView = ({ submit }: EditDeps) => {
     setText(datafield.value);
     updateSuggestions();
   };
-  titleField.oninput = () => setText(getDraft().text)
 
   const updateStatus = async () => {
     jsonStatus.innerText = "validating...";
     jsonStatus.style.color = "#666";
     try{
-      const data = JSON.parse(datafield.value)
-      console.log(schemaHash, data)
-      validateNote({schemaHash, data})
+      const data = JSON.parse(getDraft().text)
+      await validateNote({schemaHash, data})
       setJsonStatus("valid", "#2a3")
     }catch (e){
       setJsonStatus(e.message || "invalid json", "#f66")
@@ -247,35 +249,13 @@ export const createEditView = ({ submit }: EditDeps) => {
   };
 
 
+  let lastSchemaHash = "";
+
   const updateSchemaPreview = () => {
     if (schemaHash === lastSchemaHash) return;
     lastSchemaHash = schemaHash;
-    getNote(schemaHash).then(async (schemaNote) => {
-      let schemaId: any = "?";
-      try { schemaId = await getId(schemaHash); } catch {}
-      schemaList.innerHTML = "";
-      try {
-        let data = schemaNote.data as Record<string, string>;
-        const title = data.title ? data.title : "";
-        schemaTitle.innerText = `#${schemaId}${title ? ` : ${title}` : ""}`;
-        if (schemaId !== "?") schemaLink.setAttribute("href", `/${schemaId}`);
-        const entries = Object.entries(data.properties || {});
-        if (!entries.length) {
-          schemaList.appendChild(p("no fields"));
-          return;
-        }
-        entries.forEach(([key, def]: any) => {
-          const typ = def?.type ? String(def.type) : "any";
-          schemaList.appendChild(p(`${key}: ${typ}`));
-        });
-      } catch (e: any) {
-        schemaTitle.innerText = `#${schemaId}`;
-        schemaList.appendChild(p(e.message || "invalid schema json"));
-      }
-    }).catch((e) => {
-      schemaList.innerHTML = "";
-      schemaList.appendChild(p(e.message || "schema not found"));
-    });
+
+    noteOverview(schemaHash).then(p=>schemaList.innerHTML = p)
   };
 
   const formatButton = button("format json (cmd+s)", {

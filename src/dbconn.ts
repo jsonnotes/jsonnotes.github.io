@@ -41,8 +41,7 @@ export const query_data = async (sql: string) : Promise<{names:string[], rows:an
     const { schema, rows } = data[0];
     return { names: schema.elements.map((e) => e.name.some), rows };
   } catch (e: any) {
-    console.log(text)
-    console.error(e);
+
     popup(p(text));
     return { names: ["error"], rows: [e.message] };
   }
@@ -114,9 +113,31 @@ export const validateNote = async (note: NoteData) => {
 
 
 export const notePreview = (ref) => getNote(ref).then(async note=>{
-  let data: any = note.data
+  let data :any = note.data
   let preview = typeof data === "string" ? data : JSON.stringify(data);
-  return `#${await getId(ref)}` + (data?.title ? `:${data.title}` : (typeof data == 'string' || typeof data == 'number') ? `:${preview.slice(0,20)}`: "")
+  preview = preview.replace(/\n/g, " ");
+  const id = await getId(ref);
+  return `#${id}` + (data?.title ? `:${data.title}` : (typeof data == 'string' || typeof data == 'number') ? `:${preview.slice(0,20)}`: "");
+
+})
+
+export const noteOverview = (ref) => getNote(ref).then(async note=>{
+  let data = note.data
+  let full = "";
+
+  let table = (data:Jsonable, d)=> {
+    let ws = "  ".repeat(d)
+    if (typeof data  == "string" || typeof data == "number") full += data 
+    if (typeof data == "object") {
+      Object.entries(data).forEach(([k,v]) => {
+        full += "\n" + ws + k + ":"
+        table(v, d+1)
+      })
+    }
+  }
+
+  table(data, 0)
+  return full
 })
 
 export const noteLink = (

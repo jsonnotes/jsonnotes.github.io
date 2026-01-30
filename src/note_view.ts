@@ -76,6 +76,9 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         if (msg.type !== "run_result") return;
         worker.terminate();
         if (msg.ok) {
+
+          
+          if (msg.result == undefined) return 
           let result = {
             schemaHash: hashData(script_result_schema),
             data: {
