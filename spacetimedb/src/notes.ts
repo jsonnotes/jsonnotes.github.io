@@ -5,7 +5,7 @@ import { hash128 } from "./hash"
 const string = {type : "string"}
 const number = {type : "number"}
 
-type Schema = Jsonable
+export type Schema = Jsonable
 const object = (properties: Record<string, any>, extra: any = {}) => ({
   type: "object",
   properties,

@@ -1,5 +1,5 @@
 import { div, h3, popup, pre, style } from "./html";
-import { getId, noteOverview, notePreview, query_data } from "./dbconn";
+import { getId, getSchemaId, noteOverview, notePreview, query_data } from "./dbconn";
 import { Ref } from "../spacetimedb/src/notes";
 import { noteSearch } from "./helpers";
 
@@ -17,7 +17,7 @@ export const toSvgPoint = (svg: SVGSVGElement, p: { x: number; y: number }) => {
   const { width, height } = svg.getBoundingClientRect();
   return { x: p.x * width, y: p.y * height };
 };
-export const bezierPath = (
+export const arrow = (
   svg: SVGSVGElement,
   from: { x: number; y: number },
   to: { x: number; y: number },
@@ -41,6 +41,31 @@ export const bezierPath = (
     `<path d="M ${b.x} ${b.y} L ${x1} ${y1} M ${b.x} ${b.y} L ${x2} ${y2}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"></path>`
   );
 };
+
+export const arrowDown = (
+  svg: SVGSVGElement,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  o: { stroke?: string; strokeWidth?: number } = {}
+) => {
+  const { stroke = "currentColor", strokeWidth = 2 } = o;
+  const a = toSvgPoint(svg, from);
+  const b = toSvgPoint(svg, to);
+  appendSvg(
+    svg,
+    `<path d="M ${a.x} ${a.y} L ${b.x} ${b.y}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"></path>`
+  );
+  const len = 10;
+  const x1 = b.x - len * 0.5;
+  const y1 = b.y - len;
+  const x2 = b.x + len * 0.5;
+  const y2 = b.y - len;
+  return appendSvg(
+    svg,
+    `<path d="M ${b.x} ${b.y} L ${x1} ${y1} M ${b.x} ${b.y} L ${x2} ${y2}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"></path>`
+  );
+};
+
 export const svgText = (svg: SVGSVGElement, pos: { x: number; y: number }, text: string) => {
   const width = 140;
   const p = toSvgPoint(svg, pos);
@@ -60,6 +85,7 @@ export const svgText = (svg: SVGSVGElement, pos: { x: number; y: number }, text:
   );
   return { node: g, rect: { x: left, y: top, width, height } };
 };
+
 export const depsDataFromRows = (rows: any[][], currentId: number, limit = 10): DepsData => {
   const inputs: number[] = [];
   const outputs: number[] = [];
@@ -76,7 +102,6 @@ export const depsDataFromRows = (rows: any[][], currentId: number, limit = 10): 
     outputs: uniq(outputs).slice(0, limit),
   };
 };
-
 
 export const createDepsView = ({ query, navigate}: DepsDeps) => {
   const root = div(style({ display: "flex", flexDirection: "column", gap: "0.75em" }));
@@ -119,8 +144,11 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
       return;
     }
     const currentId = await getId(ref);
+    const schemaId = await getSchemaId(ref);
     const links = await query("select to, from from links");
     const data = depsDataFromRows(links.rows, currentId);
+
+    data.inputs = data.inputs.filter(i=>i!=schemaId)
 
     const cols = [
       { ids: data.inputs, x: 0.2 },
@@ -136,6 +164,8 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
         })
       )
     );
+    const schemaLabel = await notePreview(schemaId).then((p) => p.slice(0, 15)).catch(() => `#${schemaId}`);
+    labels.set(schemaId, schemaLabel);
 
     const boxes = new Map<number, { x: number; y: number; width: number; height: number }>();
     cols.forEach(({ ids, x }) => {
@@ -147,22 +177,31 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
         boxes.set(id, tag.rect);
       });
     });
+    const schemaTag = svgText(svg, { x: 0.5, y: 0.1 }, labels.get(schemaId) || `#${schemaId}`);
+    schemaTag.node.onclick = () => render(`#${schemaId}`);
+    const schemaRect = schemaTag.rect;
 
     const edge = (r: { x: number; y: number; width: number; height: number }, side: "left" | "right") => ({
       x: side === "left" ? r.x : r.x + r.width,
       y: r.y + r.height / 2,
     });
+    const edgeV = (r: { x: number; y: number; width: number; height: number }, side: "top" | "bottom") => ({
+      x: r.x + r.width / 2,
+      y: side === "top" ? r.y : r.y + r.height,
+    });
+
 
     const cur = boxes.get(data.currentId);
     if (cur) {
       data.inputs.forEach((id) => {
         const r = boxes.get(id);
-        if (r) bezierPath(svg, edge(r, "right"), edge(cur, "left"));
+        if (r) arrow(svg, edge(r, "right"), edge(cur, "left"));
       });
       data.outputs.forEach((id) => {
         const r = boxes.get(id);
-        if (r) bezierPath(svg, edge(cur, "right"), edge(r, "left"));
+        if (r) arrow(svg, edge(cur, "right"), edge(r, "left"));
       });
+      if (schemaRect) arrowDown(svg, edgeV(schemaRect, "bottom"), edgeV(cur, "top"));
     }
     
 

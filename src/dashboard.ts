@@ -1,6 +1,6 @@
 
 import { button, div, p, routeLink, style } from "./html";
-import { hashData, script_result_schema, script_schema } from "../spacetimedb/src/notes";
+import { function_schema, hashData, script_result_schema, script_schema } from "../spacetimedb/src/notes";
 import { createSchemaPicker } from "./helpers";
 import { noteLink } from "./dbconn";
 
@@ -22,6 +22,7 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
   const schemaSelect = div(
     style({ display: "flex", gap: "0.5em", alignItems: "center", flexWrap: "wrap" }),
     button("any", { onclick: () => setSchema(schemaHashAny) }),
+    button("function", { onclick: () => setSchema(hashData(function_schema)) }),
     button("script", { onclick: () => setSchema(schemaHashScript) }),
     button("script output", { onclick: () => setSchema(schemaHashScriptResult) }),
     createSchemaPicker(
