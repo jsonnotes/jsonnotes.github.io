@@ -1,4 +1,4 @@
-import { Hash, hashData, NoteData, script_result_schema, script_schema, isRef, Ref } from "../spacetimedb/src/notes";
+import { Hash, hashData, NoteData, script_result_schema, script_schema, isRef, Ref, Jsonable, function_schema } from "../spacetimedb/src/notes";
 import { addNote, getId, getNote, getSchemaId, noteLink } from "./dbconn";
 
 import { stringify } from "./helpers";
@@ -9,16 +9,33 @@ import { openrouter } from "./openrouter";
 import { buildins as buildinlist } from "./script_worker";
 
 
+
+const callNote = async (fn: Ref, ...args: Jsonable[]) => {
+  let note = await getNote(fn)
+  if (note.schemaHash != hashData(function_schema)) throw new Error("can only call Function schema notes")
+  let data = note.data as {code: string, inputs: string[]}
+
+  let F = new Function(...data.inputs, data.code)
+
+  console.log(F)
+
+  return F(...args)
+
+}
+
+
 export const buildins = {
-  openrouter: async (...data: [string, any]) => {
-    data = await  Promise.all(data.map(s=>{
-      if (isRef(s)) return getNote(s).then(n=>n.data)
-      return s
-    })) as [string, any]
-    return openrouter(...data)
+  openrouter: async (prompt: string, schema: Ref | Jsonable) => {
+
+    if (isRef(schema)){
+      schema = (await getNote(schema as Ref)).data
+    }
+    return openrouter(prompt, schema)
   },
   getNote,
   addNote,
+  callNote
+
 }
 
 

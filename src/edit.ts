@@ -234,6 +234,10 @@ export const createEditView = ({ submit }: EditDeps) => {
   datafield.oninput = () => {
     setText(datafield.value);
     updateSuggestions();
+    resizeTextarea();
+    if (window.location.search.includes("new=1")) {
+      history.replaceState({}, "", "/edit");
+    }
   };
 
   const updateStatus = async () => {

@@ -9,7 +9,7 @@ const funcall = (name: string) => (...args: any) => new Promise((resolve, reject
   self.postMessage({ type: "call", id, name, args:JSON.stringify(args) });
 })
 
-export const buildins = ["openrouter", "getNote", "addNote"]
+export const buildins = ["openrouter", "getNote", "addNote", "callNote"]
 
 
 self.onmessage = async (e) => {
@@ -32,3 +32,4 @@ self.onmessage = async (e) => {
     self.postMessage({ type: "run_result", ok: false, error: String(err) });
   }
 };
+

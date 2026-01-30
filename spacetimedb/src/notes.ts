@@ -4,11 +4,18 @@ import { hash128 } from "./hash"
 
 const string = {type : "string"}
 const number = {type : "number"}
+
+type Schema = Jsonable
 const object = (properties: Record<string, any>, extra: any = {}) => ({
   type: "object",
   properties,
   required: Object.keys(properties),
   ...extra,
+})
+
+const arrayT = (items : Schema) => ({
+  type:"array",
+  items
 })
 
 export type Jsonable = string | number | boolean | Jsonable[] | {[key: string]: Jsonable}
@@ -64,7 +71,24 @@ const has_titled_child = NoteData("has_titled_child", top, object({"child": obje
 
 const titled = NoteData("a titled", titled_schema, {title: "im child"})
 const titled1 = NoteData("titled1", has_titled_child, { child: titled.data })
-const titled2 = NoteData("titled2", has_titled_child, {child: `#${hashData(titled)}`})
+const titled2 = NoteData("titled2", has_titled_child, {child: `#${hashData(titled)}`});
+
+
+
+export const function_schema = NoteData("function schema", top, object({
+  inputs: arrayT(string),
+  code: string,
+}, {
+  title: "function_schema"
+}))
+
+
+const example_function = NoteData("example function", function_schema, {
+  title: "example function",
+  inputs: ["a", "b"],
+  code: "return a + b",
+})
+
 
 
 export const schemas : NoteData[] = [
@@ -75,11 +99,12 @@ export const schemas : NoteData[] = [
   titled_schema,
   has_titled_child,
   titled,
-  titled1, titled2
+  titled1, titled2,
+  function_schema, example_function
 ]
 
 
-export const isRef = (value: string) => /^#([a-f0-9]+)$/.exec(value);
+export const isRef = (value: any) => typeof( value) == "string" && /^#([a-f0-9]+)$/.exec(value);
 
 export const expandLinksSync = (
   value: Jsonable,
