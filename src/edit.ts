@@ -1,4 +1,4 @@
-import { Hash, hashData, NoteData, script_schema, tojson, top } from "../spacetimedb/src/notes";
+import { fromjson, Hash, hashData, NoteData, script_schema, tojson, top } from "../spacetimedb/src/notes";
 import { a, button, div, input, p, style, textarea } from "./html";
 import { getId, getNote, query_data, validateNote } from "./dbconn";
 import { createSchemaPicker, JsonFmt } from "./helpers";
@@ -281,7 +281,7 @@ export const createEditView = ({ submit }: EditDeps) => {
   const formatButton = button("format json (cmd+s)", {
     onclick: () => {
       if (isScript()) return;
-      setText(tojson(datafield.value));
+      setText(tojson(fromjson(datafield.value)));
     }
   });
 
@@ -295,7 +295,7 @@ export const createEditView = ({ submit }: EditDeps) => {
       jsonStatus
     ),
     button("push", {
-      onclick: () => submit({schemaHash, data:tojson(getDraft().text)}),
+      onclick: () => submit({schemaHash, data:JSON.parse(getDraft().text)}),
     }),
     div(
       style({

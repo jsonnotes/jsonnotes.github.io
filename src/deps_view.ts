@@ -1,16 +1,87 @@
-import { borderRadius, div, h3, p, popup, routeLink, style } from "./html";
-import { getId, noteLink, notePreview, query_data } from "./dbconn";
+import { div, h3, popup, style } from "./html";
+import { getId, notePreview, query_data } from "./dbconn";
 import { Ref } from "../spacetimedb/src/notes";
 import { noteSearch } from "./helpers";
 
 type QueryResult = { names: string[]; rows: any[][] };
 type DepsDeps = { query: (sql: string) => Promise<QueryResult> };
 
+export type DepsData = { currentId: number; inputs: number[]; outputs: number[] };
+export type DepsRefs = { current: Ref[]; inputs: Ref[]; outputs: Ref[] };
+const appendSvg = (svg: SVGSVGElement, html: string) => {
+  svg.insertAdjacentHTML("beforeend", html);
+  return svg.lastElementChild as SVGElement | null;
+};
+export const toSvgPoint = (svg: SVGSVGElement, p: { x: number; y: number }) => {
+  if (p.x > 1 || p.y > 1) return p;
+  const { width, height } = svg.getBoundingClientRect();
+  return { x: p.x * width, y: p.y * height };
+};
+export const bezierPath = (
+  svg: SVGSVGElement,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  o: { stroke?: string; strokeWidth?: number; curvature?: number } = {}
+) => {
+  const { stroke = "currentColor", strokeWidth = 2, curvature = 0.4 } = o;
+  const a = toSvgPoint(svg, from);
+  const b = toSvgPoint(svg, to);
+  const dx = Math.max(10, Math.abs(b.x - a.x) * curvature);
+  return appendSvg(
+    svg,
+    `<path d="M ${a.x} ${a.y} C ${a.x + dx} ${a.y} ${b.x - dx} ${b.y} ${b.x} ${b.y}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"></path>`
+  );
+};
+export const svgText = (
+  svg: SVGSVGElement,
+  pos: { x: number; y: number },
+  text: string
+) => {
+  const width = 140;
+  const p = toSvgPoint(svg, pos);
+  const g = appendSvg(
+    svg,
+    `<g><text x="${p.x}" y="${p.y}" dominant-baseline="middle" text-anchor="middle" fill="var(--color)" font-size="14" font-family="sans-serif">${text}</text></g>`
+  ) as SVGGElement;
+  const t = g?.querySelector("text") as SVGTextElement;
+  const pad = 5;
+  const box = t.getBBox();
+  const height = box.height + pad * 2;
+  const left = p.x - width / 2;
+  const top = p.y - height / 2;
+  g.insertAdjacentHTML(
+    "afterbegin",
+    `<rect x="${left}" y="${top}" width="${width}" height="${height}" rx="2" ry="2" fill="var(--background-color)" stroke="var(--color)" stroke-width="2"></rect>`
+  );
+
+  return g
+
+};
+export const depsDataFromRows = (rows: any[][], currentId: number, limit = 5): DepsData => {
+  const inputs: number[] = [];
+  const outputs: number[] = [];
+  rows.forEach((row) => {
+    const to = Number(row[0]);
+    const from: number[] = row[1] || [];
+    if (from.some((id) => Number(id) === Number(currentId))) inputs.push(to);
+    if (to === Number(currentId)) outputs.push(...from);
+  });
+  const uniq = (arr: number[]) => [...new Set(arr)];
+  return {
+    currentId,
+    inputs: uniq(inputs).slice(0, limit),
+    outputs: uniq(outputs).slice(0, limit),
+  };
+};
 
 
 export const createDepsView = ({ query }: DepsDeps) => {
   const root = div(style({ display: "flex", flexDirection: "column", gap: "0.75em" }));
-  const cols = div(style({ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1em" }));
+  const panel = div(style({ width: "100%", minHeight: "320px" }));
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", "100%");
+  svg.setAttribute("height", "320");
+  panel.appendChild(svg);
   const fetchSchemas = () =>
     Promise.all([
       query_data("select id, data, hash from note where schemaId = 0"),
@@ -31,9 +102,9 @@ export const createDepsView = ({ query }: DepsDeps) => {
         return { id, title, hash:String(row[2] ?? ""), count: counts.get(id) || 0 };
       });
     });
-  root.append(h3("Dependencies"), cols);
+  root.append(h3("Dependencies"), panel);
   const render = async (ref?: Ref) => {
-    cols.innerHTML = "";
+    svg.innerHTML = "";
     if (!ref) {
       fetchSchemas().then((schemas) =>
         noteSearch((s) => {
@@ -44,33 +115,24 @@ export const createDepsView = ({ query }: DepsDeps) => {
       return;
     }
     const currentId = await getId(ref);
-    const inputCol = div(style({ display: "flex", flexDirection: "column", gap: "0.5em" }));
-    const currentCol = div(style({ display: "flex", flexDirection: "column", gap: "0.5em" }));
-    const outputCol = div(style({ display: "flex", flexDirection: "column", gap: "0.5em" }));
-
-    inputCol.append(p("Inputs"));
-    currentCol.append(p("Current"));
-    outputCol.append(p("Outputs"));
-
-    currentCol.append(noteLink(currentId));
-
     const links = await query("select to, from from links");
-    const inputs: number[] = [];
-    const outputs: number[] = [];
-    links.rows.forEach((row) => {
-      const to = Number(row[0]);
-      const from: number[] = row[1] || [];
-      if (from.some((id) => Number(id) === Number(currentId))) inputs.push(to);
-      if (to === Number(currentId)) outputs.push(...from);
-    });
+    const data = depsDataFromRows(links.rows, currentId);
 
-    const uniq = (arr: number[]) => [...new Set(arr)];
+    [
+      data.inputs, [data.currentId], data.outputs
+    ].map((ls, col)=>{
+      ls.map((l, row)=>{
+        let tag = svgText(svg, {x: 0.2 + 0.3 * col, y: 0.2 + 0.6 / ls.length * row}, `#${l}`)
+        tag.onclick = ()=> render(`#${l}`)
+      })
+    })
+    
 
-    let link = (id:Ref) => routeLink(`/deps/${id}`, notePreview(id))
-    uniq(inputs).forEach((id) => inputCol.append(link(id)));
-    uniq(outputs).forEach((id) => outputCol.append(link(id)));
 
-    cols.append(inputCol, currentCol, outputCol);
+
+
+
+
   };
 
   return { root, render };

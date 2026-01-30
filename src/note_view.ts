@@ -22,6 +22,8 @@ export const buildins = {
 }
 
 
+
+
 for (let exp of buildinlist) if (!Object.keys(buildins).includes(exp)) throw new Error("buildin missing but expected: "+ exp)
 
 const linkify = (text: string) => {

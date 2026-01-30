@@ -133,3 +133,7 @@ render(dashboard.root);
 handleRoute();
 
 window.addEventListener("popstate", handleRoute);
+
+import { insert_scenarios } from "./scenarios";
+
+insert_scenarios()
