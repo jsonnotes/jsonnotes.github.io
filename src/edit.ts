@@ -317,34 +317,34 @@ type EditDeps = {
 export const createEditView = ({ submit }: EditDeps) => {
 
   let schemaHash: Hash;
-
   let form: formfield;
 
   const setSchemaHash = (hash: Hash) => {
     schemaHash = hash;
-
     root.innerHTML = "";
+    return getNote(schemaHash).then(schema=>{
 
-    getNote(schemaHash).then(schema=>{
-
-      console.log(tojson(schema))
-
-
-      form = safeInput(schema.data)
-
+      form = safeInput(schema.data, ()=>{
+        console.log(tojson(form.getData()))
+      })
       root.append(form.element,
         button("get", {onclick:()=>console.log(form.getData())})
       );
+      console.log(form)
 
     })
   }
 
-  let root = div();
+  const setText = (text: string) => {
+    let data = fromjson(text);
+    form.setData(data);
+  }
 
+  let root = div();
 
   return {
     fill:({schemaHash, text} : Draft) => {
-      setSchemaHash(schemaHash)
+      setSchemaHash(schemaHash).then(()=>setText(text))
     },
     root
 

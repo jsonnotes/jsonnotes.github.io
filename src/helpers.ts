@@ -1,5 +1,5 @@
-import { Jsonable, Schema, tojson } from "../spacetimedb/src/notes";
-import { button, div, input, p, padding, popup, style, textarea } from "./html"
+import { fromjson, Jsonable, Schema, tojson } from "../spacetimedb/src/notes";
+import { button, div, input, p, padding, popup, span, style, textarea } from "./html"
 
 export const stringify = x=>JSON.stringify(x,null,2)
 export const JsonFmt = (data:string) => stringify(JSON.parse(data))
@@ -88,21 +88,59 @@ export type formfield = {
 
 
 export const safeInput = (
-  schema: Schema
+  schema: Schema,
+  onChange: ()=>void,
 ) : formfield => {
   let {type, properties, items} = schema as any;
-  if (!type) throw new Error("no type in schema" + tojson(schema))
-  if (type == "string") {
-    let element = input();
+
+  if (!type) {
+    let fm = safeInput({type: "string"}, ()=>{
+      try{
+        let r = fm.getData() as string;
+        let dat = fromjson(r)
+        hints.innerHTML = ""
+        format.onclick = ()=> fm.setData(tojson(dat))
+      }catch (e){
+        hints.innerHTML = String(e)
+      }
+    })
+    let format = button("format")
+    let hints = span("hello", style({color: "red", margin: "0.5em"}))
     return {
-      element,
-      getData: () => element.value,
-      setData: (data: Jsonable) => { element.value = data as string; }
+      element: div(fm.element, div(format, hints)),
+      getData: () => fromjson(fm.getData() as string),
+      setData: (data) => fm.setData(tojson(data))
+    }
+  }
+  if (type == "string") {
+    let ta = textarea()
+    ta.rows = 1;
+    ta.style.resize = "none";
+    ta.style.overflow = "hidden";
+    ta.style.verticalAlign = "middle";
+    ta.style.boxSizing = "content-box";
+    const minChars = 12;
+
+    const resize = () => {
+      ta.style.height = "0px";
+      ta.style.height = `${ta.scrollHeight}px`;
+      const longest = ta.value.split("\n").reduce((m, l) => Math.max(m, l.length), 0);
+      ta.style.width = `${Math.max(minChars, longest + 1)}ch`;
+      onChange();
+    };
+    ta.oninput = resize;
+    requestAnimationFrame(resize);
+
+    return {
+      element:ta,
+      getData: () => ta.value,
+      setData: (data: Jsonable) => { ta.value = data as string; resize(); }
     }
   }
   if (type == "number") {
     let element = input()
     element.type = "number";
+    element.oninput = onChange;
     return {
       element,
       getData: () => Number(element.value),
@@ -114,26 +152,41 @@ export const safeInput = (
 
     let list = []
     let listels = div()
+    const rowFor = (fm) => {
+      const row = div(
+        style({ display: "flex", alignItems: "center", gap: "0.25em" }),
+        button("-", { onclick: () => {
+          list = list.filter((x) => x !== fm);
+          row.remove();
+          onChange();
+        }}),
+        fm.element
+      )
+      return row
+    }
     let element = div(
       style({paddingLeft: "0.5em"}),
       listels,
       button("+", {onclick: ()=> {
-        let fm = safeInput (items)
+        let fm = safeInput (items,onChange)
         list.push(fm);
-        listels.append(p(fm.element));
+        listels.append(rowFor(fm));
+        onChange();
       }}),
     )
 
     return {
       element,
-      getData: ()=> list.map(f => f.getData()),
+      getData: ()=> list.map(f => console.log(list, f) ?? f.getData()),
       setData: (data: Jsonable) => {
         list = (data as Jsonable[]).map((item) => {
-          let fm = safeInput(items);
+          let fm = safeInput(items, onChange);
+          console.log(fm)
           fm.setData(item);
-          list.push(fm);
-          listels.append(fm.element);
-        })
+          listels.append(rowFor(fm));
+          return fm
+        }
+      )
       }
     }
   }
@@ -142,7 +195,7 @@ export const safeInput = (
 
     let entries = Object.entries(properties as Record<string, Schema>)
     .map(([key, val])=>{
-      return {key, field: safeInput(val)}
+      return {key, field: safeInput(val, onChange)}
     })
     return {
       element: div(
@@ -151,7 +204,14 @@ export const safeInput = (
         })
       ),
       getData: ()=> Object.fromEntries(entries.map(({key, field}) => [key, field.getData()])),
-      setData: (data: Jsonable) => {}
+      setData: (data: Jsonable) => {
+        Object.entries(data as Record<string, Jsonable>).forEach(([key, value]) => {
+          const entry = entries.find(e => e.key === key);
+          if (entry) {
+            entry.field.setData(value);
+          }
+        })
+      }
     }
   }
 }
