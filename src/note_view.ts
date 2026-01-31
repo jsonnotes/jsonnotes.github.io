@@ -14,10 +14,7 @@ const callNote = async (fn: Ref, ...args: Jsonable[]) => {
   let note = await getNote(fn)
   if (note.schemaHash != hashData(function_schema)) throw new Error("can only call Function schema notes")
   let data = note.data as {code: string, inputs: string[]}
-
   let F = new Function(...data.inputs, data.code)
-
-  console.log(F)
 
   return F(...args)
 
@@ -77,7 +74,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
 
       let code = String((noteData.data as any)?.code || "")
 
-      console.log({code})
+      console.info({code})
 
       const worker = new Worker(new URL("./script_worker.ts", import.meta.url), { type: "module" });
 
@@ -111,12 +108,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
     })
 
     const isScript = note.schemaHash === hashData(script_schema)
-
-    console.log(note)
-
     const text = isScript ? String((note.data as any).code || "") : stringify(note.data)
-
-    console.log(text)
 
 
     overlay.innerHTML = "";

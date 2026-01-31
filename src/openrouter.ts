@@ -50,7 +50,7 @@ export const openrouter = async (prompt: string, schema: any) => {
   try{
     return JSON.parse(data.choices[0].message.content);
   }catch {
-    console.log("openrouter response:", data)
+    // console.log("openrouter response:", data)
     return data
   }
 }

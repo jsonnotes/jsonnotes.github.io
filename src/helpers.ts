@@ -241,11 +241,10 @@ export const safeInput = (
 
     return withRef({
       element,
-      getData: ()=> list.map(f => console.log(list, f) ?? f.getData()),
+      getData: ()=> list.map(f => f.getData()),
       setData: (data: Jsonable) => {
         list = (data as Jsonable[]).map((item) => {
           let fm = safeInput(items, onChange);
-          console.log(fm)
           fm.setData(item);
           listels.append(rowFor(fm));
           return fm
