@@ -93,19 +93,7 @@ export const safeInput = (
   let {type, properties, items} = schema as any;
   if (!type) throw new Error("no type in schema" + tojson(schema))
   if (type == "string") {
-    let element:HTMLInputElement | HTMLTextAreaElement = input();
-
-    let mkbig = ()=>{
-      let ta = textarea(element.value, { style: { width: "100%", height: "10em" } })
-      element.replaceWith(ta)
-      element = ta
-      element.focus()
-    }
-
-    element.addEventListener("keydown",(e)=>{
-      if(e.key === "Enter")mkbig();
-    })
-
+    let element = input();
     return {
       element,
       getData: () => element.value,
@@ -123,21 +111,30 @@ export const safeInput = (
   }
 
   if (type == "array"){
-    let fm = safeInput (items)
 
-    let list = div()
+    let list = []
+    let listels = div()
     let element = div(
       style({paddingLeft: "0.5em"}),
-      list,
+      listels,
       button("+", {onclick: ()=> {
-        list.append(p(safeInput(items).element))
+        let fm = safeInput (items)
+        list.push(fm);
+        listels.append(p(fm.element));
       }}),
     )
 
     return {
       element,
-      getData: ()=> ({}),
-      setData: (data: Jsonable) => {}
+      getData: ()=> list.map(f => f.getData()),
+      setData: (data: Jsonable) => {
+        list = (data as Jsonable[]).map((item) => {
+          let fm = safeInput(items);
+          fm.setData(item);
+          list.push(fm);
+          listels.append(fm.element);
+        })
+      }
     }
   }
 
@@ -153,7 +150,7 @@ export const safeInput = (
           return p(key, ":", field.element)
         })
       ),
-      getData: ()=> ({}),
+      getData: ()=> Object.fromEntries(entries.map(({key, field}) => [key, field.getData()])),
       setData: (data: Jsonable) => {}
     }
   }

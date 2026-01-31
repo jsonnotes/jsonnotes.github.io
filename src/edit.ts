@@ -332,7 +332,10 @@ export const createEditView = ({ submit }: EditDeps) => {
 
       form = safeInput(schema.data)
 
-      root.appendChild(form.element);
+      root.append(form.element,
+        button("get", {onclick:()=>console.log(form.getData())})
+      );
+
     })
   }
 
