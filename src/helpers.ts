@@ -78,8 +78,6 @@ export const createSchemaPicker = (
   });
 
 
-
-
 export type formfield = {
   getData: () => Jsonable,
   setData: (data: Jsonable)=> void,
@@ -104,6 +102,7 @@ export const safeInput = (
         hints.innerHTML = String(e)
       }
     })
+    // fm.setData("{}")
     let format = button("format")
     let hints = span("hello", style({color: "red", margin: "0.5em"}))
     return {
@@ -193,22 +192,48 @@ export const safeInput = (
 
   if (type == "object") {
 
+    const required = new Set((schema as any).required || []);
     let entries = Object.entries(properties as Record<string, Schema>)
     .map(([key, val])=>{
-      return {key, field: safeInput(val, onChange)}
+      return {key, field: safeInput(val, onChange), box: input()}
     })
     return {
       element: div(
-        entries.map(({key,field})=>{
-          return p(key, ":", field.element)
+        entries.map(({key,field,box})=>{
+          box.type = "checkbox";
+          if (required.has(key)) {
+            box.checked = true;
+            box.disabled = true;
+          }
+          box.oninput = () => onChange();
+          box.onchange = () => {
+            const on = box.checked || required.has(key);
+            field.element.style.display = on ? "" : "none";
+            onChange();
+          };
+          if (!required.has(key)) field.element.style.display = "none";
+          return p(box, key, ":", field.element)
         })
       ),
-      getData: ()=> Object.fromEntries(entries.map(({key, field}) => [key, field.getData()])),
+      getData: ()=> Object.fromEntries(entries
+        .filter(({key, field}) => required.has(key) || field.element.style.display !== "none")
+        .map(({key, field}) => [key, field.getData()])),
       setData: (data: Jsonable) => {
+        entries.forEach(({key, field, box}) => {
+          if (required.has(key)) field.element.style.display = "";
+          else {
+            box.checked = false;
+            field.element.style.display = "none";
+          }
+        })
         Object.entries(data as Record<string, Jsonable>).forEach(([key, value]) => {
           const entry = entries.find(e => e.key === key);
           if (entry) {
             entry.field.setData(value);
+            if (!required.has(key)) {
+              entry.box.checked = true;
+              entry.field.element.style.display = "";
+            }
           }
         })
       }
