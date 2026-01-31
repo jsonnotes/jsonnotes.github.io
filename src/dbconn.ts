@@ -32,14 +32,20 @@ const req = (path: string, method: string, body: string | null = null) =>
     body,
   });
 
-export const query_data = async (sql: string) : Promise<{names:string[], rows:any[]}> => {
+export const query_data = async (sql: string, desc = false, maxitems = null) : Promise<{names:string[], rows:any[]}> => {
+
+  if (desc && maxitems != null){
+    const countRes = await query_data("select count from note_count");
+    let minid = Math.max(0, Number(countRes.rows[0][0]) - maxitems)
+    sql = sql + ` where id > ${minid}`;
+  }
+
   const text = await (await req(`/v1/database/${DBNAME}/sql`, "POST", sql)).text();
   try {
-
     const data = JSON.parse(text);
     if (data.length > 1) console.warn("multiple rows returned, TODO: handle this");
     const { schema, rows } = data[0];
-    return { names: schema.elements.map((e) => e.name.some), rows };
+    return { names: schema.elements.map((e) => e.name.some), rows: desc ? rows.reverse() : rows };
   } catch (e: any) {
 
     popup(p(text));

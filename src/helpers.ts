@@ -1,5 +1,6 @@
-import { fromjson, Jsonable, Schema, tojson } from "../spacetimedb/src/notes";
+import { fromjson, isRef, Jsonable, Schema, tojson } from "../spacetimedb/src/notes";
 import { button, div, input, p, padding, popup, span, style, textarea } from "./html"
+import { query_data } from "./dbconn";
 
 export const stringify = x=>JSON.stringify(x,null,2)
 export const JsonFmt = (data:string) => stringify(JSON.parse(data))
@@ -111,6 +112,70 @@ export const safeInput = (
       setData: (data) => fm.setData(tojson(data))
     }
   }
+  const withRef = (field: formfield) : formfield => {
+    let refValue = "";
+    const label = span();
+    label.style.display = "none";
+    label.onclick = () => {
+      refValue = "";
+      label.style.display = "none";
+      field.element.style.display = "";
+      onChange();
+    };
+    const setRef = (ref: string) => {
+      refValue = ref;
+      if (isRef(refValue)) {
+        label.innerText = refValue;
+        label.style.display = "";
+        field.element.style.display = "none";
+      } else {
+        label.style.display = "none";
+        field.element.style.display = "";
+      }
+      onChange();
+    };
+    const fetchNotes = () =>
+      query_data("select id, data, hash from note", true, 200).then((res) =>
+        res.rows.map((row) => {
+          let title = "";
+          try {
+            const parsed = JSON.parse(String(row[1] ?? ""));
+            title = parsed?.title ? String(parsed.title) : "";
+          } catch {}
+          return { id: String(row[0]), title, hash: String(row[2] ?? "") };
+        })
+      );
+    const openSearch = () => {
+      fetchNotes()
+        .then((items) => {
+          noteSearch((s) => setRef(`#${s.hash}`), items);
+        })
+        .catch((e) => {
+          list.innerHTML = "";
+          list.appendChild(p(e.message || "failed to load notes"));
+        });
+    };
+    const btn = button("🔗", {
+      onclick: openSearch,
+      style: { background: "transparent", border: "none", padding: "0 0.1em", cursor: "pointer" }
+    });
+    return {
+      element: div(
+        style({ display: "inline-flex", alignItems: "center", gap: "0.25em" }),
+        btn,
+        label,
+        field.element
+      ),
+      getData: () => (isRef(refValue) ? refValue : field.getData()),
+      setData: (data: Jsonable) => {
+        if (typeof data === "string" && isRef(data)) setRef(data);
+        else {
+          setRef("");
+          field.setData(data);
+        }
+      }
+    }
+  }
   if (type == "string") {
     let ta = textarea()
     ta.rows = 1;
@@ -130,21 +195,21 @@ export const safeInput = (
     ta.oninput = resize;
     requestAnimationFrame(resize);
 
-    return {
+    return withRef({
       element:ta,
       getData: () => ta.value,
       setData: (data: Jsonable) => { ta.value = data as string; resize(); }
-    }
+    })
   }
   if (type == "number") {
     let element = input()
     element.type = "number";
     element.oninput = onChange;
-    return {
+    return withRef({
       element,
       getData: () => Number(element.value),
       setData: (data: Jsonable) => { element.value = String(data); }
-    }
+    })
   }
 
   if (type == "array"){
@@ -174,7 +239,7 @@ export const safeInput = (
       }}),
     )
 
-    return {
+    return withRef({
       element,
       getData: ()=> list.map(f => console.log(list, f) ?? f.getData()),
       setData: (data: Jsonable) => {
@@ -187,7 +252,7 @@ export const safeInput = (
         }
       )
       }
-    }
+    })
   }
 
   if (type == "object") {
@@ -197,7 +262,7 @@ export const safeInput = (
     .map(([key, val])=>{
       return {key, field: safeInput(val, onChange), box: input()}
     })
-    return {
+    return withRef({
       element: div(
         entries.map(({key,field,box})=>{
           box.type = "checkbox";
@@ -237,6 +302,6 @@ export const safeInput = (
           }
         })
       }
-    }
+    })
   }
 }
