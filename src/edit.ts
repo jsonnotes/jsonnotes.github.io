@@ -1,90 +1,88 @@
-import { fromjson, Hash, hashData, Jsonable, NoteData, script_schema, tojson, top } from "../spacetimedb/src/notes";
+import { fromjson, Hash, hashData, NoteData, script_schema, tojson } from "../spacetimedb/src/notes";
 import { a, button, div, input, p, pre, style, textarea } from "./html";
-import { getId, getNote, noteOverview, query_data, validateNote } from "./dbconn";
-import { createSchemaPicker, formfield, JsonFmt, safeInput } from "./helpers";
+import { getNote, noteOverview, query_data, validateNote } from "./dbconn";
+import { createSchemaPicker, formfield, safeInput } from "./helpers";
 import { Draft } from "./main";
 
-type EditDeps = {
-  submit: (data: NoteData) => Promise<void>;
+type EditDeps = { submit: (data: NoteData) => Promise<void> };
 
+const createSchemaPanel = (onPick: (hash: Hash) => void) => {
+  let schemaHash = "" as Hash;
+  const schemaLink = a({ href: "/0", style: { textDecoration: "underline", color: "inherit" } }, "view");
+  schemaLink.onclick = (e) => {
+    if (e.metaKey || e.ctrlKey) return;
+    e.preventDefault();
+    const href = schemaLink.getAttribute("href") || "/";
+    history.pushState({}, "", href);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+  const schemaList = pre();
+  const fetchSchemas = () =>
+    Promise.all([
+      query_data("select id, data, hash from note where schemaId = 0"),
+      query_data("select schemaId from note")
+    ]).then(([schemasRes, countsRes]) => {
+      const counts = new Map<string, number>();
+      countsRes.rows.forEach((row) => {
+        const id = String(row[0]);
+        counts.set(id, (counts.get(id) || 0) + 1);
+      });
+      return schemasRes.rows.map((row) => {
+        let title = "";
+        try {
+          const parsed = JSON.parse(String(row[1] ?? ""));
+          title = parsed?.title ? String(parsed.title) : "";
+        } catch {}
+        const id = String(row[0]);
+        return { id, title, hash: String(row[2] ?? ""), count: counts.get(id) || 0 };
+      });
+    });
+  const updateSchemaPreview = () => noteOverview(schemaHash).then(p => schemaList.innerHTML = p);
+  const setSchemaHash = (hash: Hash) => {
+    if (hash === schemaHash) return;
+    schemaHash = hash;
+    schemaLink.setAttribute("href", `/${hash}`);
+    onPick(hash);
+    updateSchemaPreview();
+  };
+  const schemaPicker = createSchemaPicker(fetchSchemas, (s) => setSchemaHash(s.hash as Hash));
+  const root = div(
+    style({
+      padding: "1em",
+      marginTop: "0.5em",
+      borderRadius: "1em",
+      border: "1px solid #ccc",
+      background: "var(--background-color)",
+    }),
+    div(style({ display: "flex", alignItems: "center", gap: "0.75em", flexWrap: "wrap" }), schemaLink, schemaPicker),
+    div(style({ display: "flex", gap: "1em", alignItems: "flex-start" }), div(schemaList))
+  );
+  return { root, setSchemaHash, getSchemaHash: () => schemaHash };
 };
 
 const plainView = ({ submit }: EditDeps) => {
-  const datafield = textarea(
-    style({ fontFamily: "monospace", minHeight: "12em", resize: "vertical", background:"inherit" , color: "inherit", width: "100%" }),
-  );
-
+  const datafield = textarea(style({ fontFamily: "monospace", minHeight: "12em", resize: "vertical", background:"inherit" , color: "inherit", width: "100%" }));
   const scriptHash = hashData(script_schema);
-
-
   let noteIndex: Array<{ id: string; title: string; hash: string }> | null = null;
-
-  const titleField = input("", {
-    placeholder: "script title",
-    style: {
-      display: "none",
-      marginBottom: "0.5em",
-      fontSize: "1.1em",
-      padding: "0.4em 0.6em",
-      color: "inherit",
-      background: "inherit",
-      border: "none",
-      outline: "none",
-      width: "100%",
-    }
-  });
-
-
-
-  let schemaHash = hashData(top)
-  const isScript = () => schemaHash == scriptHash
-
-  const getDraft = (): {schemaHash: Hash, text: string} => 
-    isScript() ? ({schemaHash, text: tojson({title: titleField.value, code: datafield.value})})
-    :({schemaHash, text: datafield.value})
-
-
-
-  const setText = (text: string) => {
-    if (datafield.value !== text) datafield.value = text;
-    updateStatus();
-    localStorage.setItem("edit_draft", JSON.stringify(getDraft()));
-  }
-
-  const setSchemaHash = (hash: Hash) => {
-
-    let text = datafield.value
-    schemaHash = hash
-    titleField.style.display = isScript() ? "block" : "none";
-
-    if (isScript()) setText((fromjson(text)as {code:string}).code ?? "")
-    else setText(text)
-    
-  }
-
+  let schemaHash = "" as Hash;
+  const titleField = input("", { placeholder: "script title", style: { display: "none", marginBottom: "0.5em", fontSize: "1.1em", padding: "0.4em 0.6em", color: "inherit", background: "inherit", border: "none", outline: "none", width: "100%" }});
   const jsonStatus = p();
-  const setJsonStatus = (text: string, color: string) => {
-    jsonStatus.textContent = text;
-    jsonStatus.style.color = color;
-  }
-  setJsonStatus("valid", "green");
-
-  const suggestionBox = div(style({
-    display: "none",
-    border: "1px solid #ccc",
-    padding: "0.5em",
-    borderRadius: "0.5em",
-    background: "var(--background-color)"
-  }));
-
-
+  const suggestionBox = div(style({ display: "none", border: "1px solid #ccc", padding: "0.5em", borderRadius: "0.5em", background: "var(--background-color)" }));
   datafield.rows = 10;
   datafield.cols = 100;
 
+  const isScript = () => schemaHash == scriptHash;
+  const getDraft = (): {schemaHash: Hash, text: string} =>
+    isScript() ? ({schemaHash, text: tojson({title: titleField.value, code: datafield.value})}) : ({schemaHash, text: datafield.value});
   const resizeTextarea = () => {
     datafield.style.height = "auto";
     datafield.style.height = `${datafield.scrollHeight}px`;
   };
+  const setJsonStatus = (text: string, color: string) => {
+    jsonStatus.textContent = text;
+    jsonStatus.style.color = color;
+  };
+  setJsonStatus("valid", "green");
 
   datafield.onkeydown = (e) => {
     datafield.dispatchEvent(new Event("input"));
@@ -214,6 +212,18 @@ const plainView = ({ submit }: EditDeps) => {
     }
   };
 
+  const setText = (text: string) => {
+    if (datafield.value !== text) datafield.value = text;
+    updateStatus();
+    localStorage.setItem("edit_draft", JSON.stringify(getDraft()));
+  };
+  const setSchemaHash = (hash: Hash) => {
+    const text = datafield.value;
+    schemaHash = hash;
+    titleField.style.display = isScript() ? "block" : "none";
+    if (isScript()) setText((fromjson(text) as {code:string}).code ?? "");
+    else setText(text);
+  };
 
   const formatButton = button("format json (cmd+s)", {
     onclick: () => {
@@ -248,102 +258,28 @@ const plainView = ({ submit }: EditDeps) => {
 
 
 export const niceView = ({ submit }: EditDeps) => {
-
   let schemaHash: Hash;
   let form: formfield;
-
+  let root = div();
   const setSchemaHash = (hash: Hash) => {
     schemaHash = hash;
     root.innerHTML = "";
     return getNote(schemaHash).then(schema=>{
-      form = safeInput(schema.data, ()=>{
-        console.log(tojson(form.getData()))
-      })
-
+      form = safeInput(schema.data, ()=> {})
       root.innerHTML = "";
-      root.append(
-        form.element, 
-      );
-
+      root.append(form.element);
     })
   }
-
-  const setText = (text: string) => {
-    let data = fromjson(text);
-    form.setData(data);
-  }
-
-  let root = div();
-
-  return {
-    setSchemaHash,
-    fill:({schemaHash, text} : Draft) => {
-      setSchemaHash(schemaHash).then(()=>setText(text))
-    },
-    root
-
-  }
+  const setText = (text: string) => form.setData(fromjson(text));
+  return { setSchemaHash, fill:({schemaHash, text} : Draft) => setSchemaHash(schemaHash).then(()=>setText(text)), root }
 }
 
 
 export const createEditView = (submit:EditDeps) => {
   const plain = plainView(submit)
   const nice = niceView(submit);
-
   let active = {plain, nice}[localStorage.editmode || "nice"];
-  let schemaHash = "" as Hash;
-  const schemaLink = a(
-    { href: "/0", style: { textDecoration: "underline", color: "inherit" } },
-    "view"
-  );
-  schemaLink.onclick = (e) => {
-    if (e.metaKey || e.ctrlKey) return;
-    e.preventDefault();
-    const href = schemaLink.getAttribute("href") || "/";
-    history.pushState({}, "", href);
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  };
-  const schemaList = pre();
-  const fetchSchemas = () =>
-    Promise.all([
-      query_data("select id, data, hash from note where schemaId = 0"),
-      query_data("select schemaId from note")
-    ]).then(([schemasRes, countsRes]) => {
-      const counts = new Map<string, number>();
-      countsRes.rows.forEach((row) => {
-        const id = String(row[0]);
-        counts.set(id, (counts.get(id) || 0) + 1);
-      });
-      return schemasRes.rows.map((row) => {
-        let title = "";
-        try {
-          const parsed = JSON.parse(String(row[1] ?? ""));
-          title = parsed?.title ? String(parsed.title) : "";
-        } catch {}
-        const id = String(row[0]);
-        return { id, title, hash:String(row[2] ?? ""), count: counts.get(id) || 0 };
-      });
-    });
-  const updateSchemaPreview = () => noteOverview(schemaHash).then(p=>schemaList.innerHTML = p);
-  const setSchemaHash = (hash: Hash) => {
-    if (hash === schemaHash) return;
-    schemaHash = hash;
-    schemaLink.setAttribute("href", `/${hash}`);
-    active.setSchemaHash(hash);
-    updateSchemaPreview();
-  };
-  const schemaPicker = createSchemaPicker(fetchSchemas, (s) => setSchemaHash(s.hash as Hash));
-  const schemaPanel = div(
-    style({
-      padding: "1em",
-      marginTop: "0.5em",
-      borderRadius: "1em",
-      border: "1px solid #ccc",
-      background: "var(--background-color)",
-    }),
-    div(style({ display: "flex", alignItems: "center", gap: "0.75em", flexWrap: "wrap" }), schemaLink, schemaPicker),
-    div(style({ display: "flex", gap: "1em", alignItems: "flex-start" }), div(schemaList))
-  );
+  const schemaPanel = createSchemaPanel((hash) => active.setSchemaHash(hash));
 
   const toggle_mode = ()=>{
     active = active == nice ? plain : nice;
@@ -356,7 +292,7 @@ export const createEditView = (submit:EditDeps) => {
   const root = div();
   const mount = () => {
     root.innerHTML = "";
-    root.append(nicebut, active.root, schemaPanel);
+    root.append(nicebut, active.root, schemaPanel.root);
   };
   let data : {schemaHash: Hash, text: string};
   mount();
@@ -364,7 +300,7 @@ export const createEditView = (submit:EditDeps) => {
   return {
     fill: newdata=> {
       data = newdata
-      setSchemaHash(newdata.schemaHash)
+      schemaPanel.setSchemaHash(newdata.schemaHash)
       active.fill(newdata)
     },
     root

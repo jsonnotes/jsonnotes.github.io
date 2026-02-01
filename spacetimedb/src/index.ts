@@ -6,8 +6,7 @@ const JsonNotes = table(
   {
     name: 'note',
     public: true,
-  },
-  {
+  }, {
     id: t.u64().primaryKey(),
     schemaId: t.u64(),
     data: t.string(),
@@ -15,11 +14,23 @@ const JsonNotes = table(
   }
 );
 
+
+const Store = table(
+  {
+    name: 'store',
+    public: false,
+  }, {
+    key: t.string().primaryKey(),
+    value: t.string()
+  }
+)
+
+
 const Links = table(
   {
     name: "links",
     public: true
-  },{
+  }, {
     to: t.u64().primaryKey(),
     from: t.array(t.u64()),
   }
@@ -86,3 +97,7 @@ const setup = spacetimedb.reducer('setup', {}, (ctx) => {
 })
 
 spacetimedb.init(setup)
+
+const runNode = spacetimedb.procedure('run_note', {id:t.u128(), arg: t.string()}, t.string(), (ctx, {id, arg})=>{
+  return "ok"
+})
