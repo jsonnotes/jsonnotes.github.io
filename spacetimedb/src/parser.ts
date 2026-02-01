@@ -15,6 +15,12 @@ const keywords = new Set([
   "return",
   "let",
   "const",
+  "for",
+  "while",
+  "in",
+  "of",
+  "break",
+  "continue",
   "true",
   "false",
   "null",
@@ -93,7 +99,7 @@ const tokenize = (src: string): Token[] => {
       push("operator", three, start);
       continue;
     }
-    if (two === "&&" || two === "||" || two === "==" || two === "!=" || two === "<=" || two === ">=" || two === "=>") {
+    if (two === "&&" || two === "||" || two === "==" || two === "!=" || two === "<=" || two === ">=" || two === "=>" || two === "+=" || two === "-=" || two === "*=" || two === "/=" || two === "%=" || two === "++" || two === "--") {
       i += 2;
       push("operator", two, start);
       continue;
@@ -117,7 +123,20 @@ export type Stmt =
   | { type: "ExpressionStatement"; expression: Expr }
   | { type: "IfStatement"; test: Expr; consequent: Stmt; alternate: Stmt | null }
   | { type: "ReturnStatement"; argument: Expr | null }
-  | { type: "VariableDeclaration"; kind: "let" | "const"; declarations: VarDecl[] };
+  | { type: "VariableDeclaration"; kind: "let" | "const"; declarations: VarDecl[] }
+  | { type: "BreakStatement" }
+  | { type: "ContinueStatement" }
+  | { type: "WhileStatement"; test: Expr; body: Stmt }
+  | {
+      type: "ForStatement";
+      init: VarDecl[] | Expr | null;
+      initKind: "let" | "const" | null;
+      test: Expr | null;
+      update: Expr | null;
+      body: Stmt;
+    }
+  | { type: "ForInStatement"; left: VarDecl[] | Expr; leftKind: "let" | "const" | null; right: Expr; body: Stmt }
+  | { type: "ForOfStatement"; left: VarDecl[] | Expr; leftKind: "let" | "const" | null; right: Expr; body: Stmt };
 export type VarDecl = { type: "VariableDeclarator"; id: Identifier; init: Expr | null };
 
 export type Expr =
@@ -127,7 +146,8 @@ export type Expr =
   | { type: "ObjectExpression"; properties: Property[] }
   | { type: "CallExpression"; callee: Expr; arguments: Expr[] }
   | { type: "MemberExpression"; object: Expr; property: Expr; computed: boolean }
-  | { type: "AssignmentExpression"; operator: "="; left: Expr; right: Expr }
+  | { type: "AssignmentExpression"; operator: string; left: Expr; right: Expr }
+  | { type: "UpdateExpression"; operator: "++" | "--"; argument: Expr; prefix: boolean }
   | { type: "BinaryExpression"; operator: string; left: Expr; right: Expr }
   | { type: "LogicalExpression"; operator: string; left: Expr; right: Expr }
   | { type: "UnaryExpression"; operator: string; argument: Expr }
@@ -162,6 +182,10 @@ const renderExpr = (e: Expr): string => {
         : `${renderExpr(e.object)}.${renderExpr(e.property)}`;
     case "AssignmentExpression":
       return `${renderExpr(e.left)} ${e.operator} ${renderExpr(e.right)}`;
+    case "UpdateExpression":
+      return e.prefix
+        ? `${e.operator}${renderExpr(e.argument)}`
+        : `${renderExpr(e.argument)}${e.operator}`;
     case "BinaryExpression":
     case "LogicalExpression":
       return `(${renderExpr(e.left)} ${e.operator} ${renderExpr(e.right)})`;
@@ -191,6 +215,13 @@ const renderArrow = (e: Extract<Expr, { type: "ArrowFunctionExpression" }>) => {
 
 const renderStmt = (s: Stmt, inFn = false): string => {
   const burn = inFn ? "__burn();" : "";
+  const renderLoopBody = (body: Stmt) => {
+    if (body.type === "BlockStatement") {
+      const inner = body.body.map((b) => renderStmt(b, inFn)).join("");
+      return `{__burn();${inner}}`;
+    }
+    return `{__burn();${renderStmt(body, inFn)}}`;
+  };
   switch (s.type) {
     case "BlockStatement":
       return `{${s.body.map((b) => renderStmt(b, inFn)).join("")}}`;
@@ -205,6 +236,35 @@ const renderStmt = (s: Stmt, inFn = false): string => {
       return `${burn}return${s.argument ? ` ${renderExpr(s.argument)}` : ""};`;
     case "VariableDeclaration":
       return `${burn}${s.kind} ${s.declarations.map(renderDecl).join(", ")};`;
+    case "BreakStatement":
+      return `${burn}break;`;
+    case "ContinueStatement":
+      return `${burn}continue;`;
+    case "WhileStatement":
+      return `${burn}while (${renderExpr(s.test)}) ${renderLoopBody(s.body)}`;
+    case "ForStatement": {
+      const init =
+        s.init == null
+          ? ""
+          : Array.isArray(s.init)
+          ? `${s.initKind} ${s.init.map(renderDecl).join(", ")}`
+          : renderExpr(s.init);
+      const test = s.test ? renderExpr(s.test) : "";
+      const update = s.update ? renderExpr(s.update) : "";
+      return `${burn}for (${init}; ${test}; ${update}) ${renderLoopBody(s.body)}`;
+    }
+    case "ForInStatement": {
+      const left = Array.isArray(s.left)
+        ? `${s.leftKind} ${s.left.map(renderDecl).join(", ")}`
+        : renderExpr(s.left);
+      return `${burn}for (${left} in ${renderExpr(s.right)}) ${renderLoopBody(s.body)}`;
+    }
+    case "ForOfStatement": {
+      const left = Array.isArray(s.left)
+        ? `${s.leftKind} ${s.left.map(renderDecl).join(", ")}`
+        : renderExpr(s.left);
+      return `${burn}for (${left} of ${renderExpr(s.right)}) ${renderLoopBody(s.body)}`;
+    }
   }
 };
 
@@ -288,6 +348,10 @@ export const parse = (src: string): Program => {
   const parseStatement = (): Stmt => {
     if (match("punct", "{")) return parseBlock();
     if (match("keyword", "if")) return parseIf();
+    if (match("keyword", "while")) return parseWhile();
+    if (match("keyword", "for")) return parseFor();
+    if (match("keyword", "break")) { next(); if (match("punct", ";")) next(); return { type: "BreakStatement" }; }
+    if (match("keyword", "continue")) { next(); if (match("punct", ";")) next(); return { type: "ContinueStatement" }; }
     if (match("keyword", "return")) return parseReturn();
     if (match("keyword", "let") || match("keyword", "const")) return parseVarDecl();
     const expr = parseExpression();
@@ -324,8 +388,8 @@ export const parse = (src: string): Program => {
     return { type: "ReturnStatement", argument };
   };
 
-  const parseVarDecl = (): Stmt => {
-    const kind = (next().value as "let" | "const");
+  const parseVarDeclCore = (consumeSemi: boolean) => {
+    const kind = next().value as "let" | "const";
     const declarations: VarDecl[] = [];
     do {
       const id = parseIdentifier();
@@ -334,18 +398,65 @@ export const parse = (src: string): Program => {
       if (!match("punct", ",")) break;
       next();
     } while (true);
-    if (match("punct", ";")) next();
+    if (consumeSemi && match("punct", ";")) next();
+    return { kind, declarations };
+  };
+
+  const parseVarDecl = (): Stmt => {
+    const { kind, declarations } = parseVarDeclCore(true);
     return { type: "VariableDeclaration", kind, declarations };
+  };
+
+  const parseWhile = (): Stmt => {
+    eat("keyword", "while");
+    eat("punct", "(");
+    const test = parseExpression();
+    eat("punct", ")");
+    const body = parseStatement();
+    return { type: "WhileStatement", test, body };
+  };
+
+  const parseFor = (): Stmt => {
+    eat("keyword", "for");
+    eat("punct", "(");
+    let init: VarDecl[] | Expr | null = null;
+    let initKind: "let" | "const" | null = null;
+    if (!match("punct", ";")) {
+      if (match("keyword", "let") || match("keyword", "const")) {
+        const parsed = parseVarDeclCore(false);
+        init = parsed.declarations;
+        initKind = parsed.kind;
+      } else {
+        init = parseExpression();
+      }
+    }
+    if (match("keyword", "in") || match("keyword", "of")) {
+      const kind = next().value;
+      const right = parseExpression();
+      eat("punct", ")");
+      const body = parseStatement();
+      if (!init) throw new Error(`Expected initializer before ${kind} at ${peek().pos}`);
+      return kind === "in"
+        ? { type: "ForInStatement", left: init, leftKind: initKind, right, body }
+        : { type: "ForOfStatement", left: init, leftKind: initKind, right, body };
+    }
+    eat("punct", ";");
+    const test = match("punct", ";") ? null : parseExpression();
+    eat("punct", ";");
+    const update = match("punct", ")") ? null : parseExpression();
+    eat("punct", ")");
+    const body = parseStatement();
+    return { type: "ForStatement", init, initKind, test, update, body };
   };
 
   const parseExpression = (): Expr => parseAssignment();
 
   const parseAssignment = (): Expr => {
     const left = parseConditional();
-    if (match("operator", "=")) {
-      next();
+    if (match("operator", "=") || match("operator", "+=") || match("operator", "-=") || match("operator", "*=") || match("operator", "/=") || match("operator", "%=")) {
+      const op = next().value;
       const right = parseAssignment();
-      return { type: "AssignmentExpression", operator: "=", left, right };
+      return { type: "AssignmentExpression", operator: op, left, right };
     }
     return left;
   };
@@ -423,6 +534,10 @@ export const parse = (src: string): Program => {
   };
 
   const parseUnary = (): Expr => {
+    if (match("operator", "++") || match("operator", "--")) {
+      const op = next().value as "++" | "--";
+      return { type: "UpdateExpression", operator: op, argument: parseUnary(), prefix: true };
+    }
     if (match("operator", "!") || match("operator", "-") || match("operator", "+")) {
       const op = next().value;
       return { type: "UnaryExpression", operator: op, argument: parseUnary() };
@@ -433,6 +548,11 @@ export const parse = (src: string): Program => {
   const parsePostfix = (): Expr => {
     let expr = parseArrowOrPrimary();
     while (true) {
+      if (match("operator", "++") || match("operator", "--")) {
+        const op = next().value as "++" | "--";
+        expr = { type: "UpdateExpression", operator: op, argument: expr, prefix: false };
+        continue;
+      }
       if (match("punct", "(")) {
         const args = parseArguments();
         expr = { type: "CallExpression", callee: expr, arguments: args };

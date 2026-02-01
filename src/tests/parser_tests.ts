@@ -40,9 +40,6 @@ const cases: TestCase[] = [
   { name: "arrow-call", code: "const f=(x)=>x+1; return f(4);" },
   { name: "logical", code: "const x=true && false; return x || 5;" },
   { name: "conditional", code: "const x=1; return x===1 ? 9 : 0;" },
-  { name: "nested-funcall", code: "let ob={f:(x)=>x+3,g:(x)=>x+4}; return ob.g(ob.f(5));" },
-  { name: "async-promise", code: "const f=(x)=>Promise.resolve(x+1); return f(4);" },
-  { name: "async-chain", code: "return Promise.resolve(3).then(x=>x*2);", expect: 6},
   {
     name: "doomloop-recursion-fuel",
     code: "const f=(n)=>f(n+1); return f(0);",
@@ -50,6 +47,16 @@ const cases: TestCase[] = [
     compareWithNative: false,
     expectFuelError: true,
   },
+  { name: "nested-funcall", code: "let ob={f:(x)=>x+3,g:(x)=>x+4}; return ob.g(ob.f(5));" },
+  { name: "async-promise", code: "const f=(x)=>Promise.resolve(x+1); return f(4);" },
+  { name: "async-chain", code: "return Promise.resolve(3).then(x=>x*2);", expect: 6},
+  { name: "loop-test", code: "let sm = 0; for (let i = 0; i < 10; i++) { sm += i; } return sm;", expect: 45},
+  { name: "for-in", code: "let s=0; const o={a:1,b:2}; for (let k in o) { s += o[k]; } return s;", expect: 3},
+  { name: "for-of", code: "let s=0; const a=[1,2,3]; for (let v of a) { s += v; } return s;", expect: 6},
+  { name: "break-test", code: "let s=0; for (let i=0;i<10;i++){ if (i===3) break; s+=i; } return s;", expect: 3},
+  { name: "continue-test", code: "let s=0; for (let i=0;i<5;i++){ if (i===2) continue; s+=i; } return s;", expect: 8},
+  { name: "while-10", code: "let sm = 0; let i = 0; while (i < 10) { sm += i; i++; } return sm;"},
+  { name: "while-true", code: "let sm = 0; let i = 0; while (true) { sm += i; i++; } return sm;", fuel: 50, expectFuelError: true,}
 ];
 
 export const runParserTests = async () => {
