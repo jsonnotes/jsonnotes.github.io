@@ -54,12 +54,8 @@ const plainView = ({ submit }: EditDeps) => {
   const setSchemaHash = (hash: Hash) => {
 
     let text = datafield.value
-
-
-    
     schemaHash = hash
     titleField.style.display = isScript() ? "block" : "none";
-    updateSchemaPreview();
 
     if (isScript()) setText((fromjson(text)as {code:string}).code ?? "")
     else setText(text)
@@ -73,40 +69,6 @@ const plainView = ({ submit }: EditDeps) => {
   }
   setJsonStatus("valid", "green");
 
-  const schemaTitle = p("");
-  const schemaLink = a(
-    { href: "/0", style: { textDecoration: "underline", color: "inherit" } },
-    "view"
-  );
-  schemaLink.onclick = (e) => {
-    if (e.metaKey || e.ctrlKey) return;
-    e.preventDefault();
-    const href = schemaLink.getAttribute("href") || "/";
-    history.pushState({}, "", href);
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  };
-  const fetchSchemas = () =>
-    Promise.all([
-      query_data("select id, data, hash from note where schemaId = 0"),
-      query_data("select schemaId from note")
-    ]).then(([schemasRes, countsRes]) => {
-      const counts = new Map<string, number>();
-      countsRes.rows.forEach((row) => {
-        const id = String(row[0]);
-        counts.set(id, (counts.get(id) || 0) + 1);
-      });
-      return schemasRes.rows.map((row) => {
-        let title = "";
-        try {
-          const parsed = JSON.parse(String(row[1] ?? ""));
-          title = parsed?.title ? String(parsed.title) : "";
-        } catch {}
-        const id = String(row[0]);
-        return { id, title, hash:String(row[2] ?? ""), count: counts.get(id) || 0 };
-      });
-    });
-  const schemaPicker = createSchemaPicker(fetchSchemas, (s) => setSchemaHash(s.hash as Hash));
-  const schemaList = pre();
   const suggestionBox = div(style({
     display: "none",
     border: "1px solid #ccc",
@@ -253,15 +215,6 @@ const plainView = ({ submit }: EditDeps) => {
   };
 
 
-  let lastSchemaHash = "";
-
-  const updateSchemaPreview = () => {
-    if (schemaHash === lastSchemaHash) return;
-    lastSchemaHash = schemaHash;
-
-    noteOverview(schemaHash).then(p=>schemaList.innerHTML = p)
-  };
-
   const formatButton = button("format json (cmd+s)", {
     onclick: () => {
       if (isScript()) return;
@@ -281,36 +234,16 @@ const plainView = ({ submit }: EditDeps) => {
     button("push", {
       onclick: () => submit({schemaHash, data:JSON.parse(getDraft().text)}),
     }),
-    div(
-      style({
-        padding: "1em",
-        marginTop: "0.5em",
-        borderRadius: "1em",
-        border: "1px solid #ccc",
-        background: "var(--background-color)",
-      }),
-      div(
-        style({ display: "flex", alignItems: "center", gap: "0.75em", flexWrap: "wrap" }),
-        schemaTitle,
-        schemaLink,
-        schemaPicker
-      ),
-      div(
-        style({ display: "flex", gap: "1em", alignItems: "flex-start" }),
-        div(schemaList)
-      )
-    )
   );
 
-  updateSchemaPreview();
   resizeTextarea();
 
-  return { root, fill:({schemaHash, text} : Draft) => {
+  return { root, setSchemaHash, fill:({schemaHash, text} : Draft) => {
     setText(text);
     setSchemaHash(schemaHash);
     datafield.focus();
   } };
-};
+};  
 
 
 
@@ -323,17 +256,13 @@ export const niceView = ({ submit }: EditDeps) => {
     schemaHash = hash;
     root.innerHTML = "";
     return getNote(schemaHash).then(schema=>{
-
       form = safeInput(schema.data, ()=>{
         console.log(tojson(form.getData()))
       })
 
       root.innerHTML = "";
       root.append(
-        form.element,
-        button("get", {onclick:()=>console.log(form.getData())}),
-
-        pre(noteOverview(schemaHash))
+        form.element, 
       );
 
     })
@@ -347,6 +276,7 @@ export const niceView = ({ submit }: EditDeps) => {
   let root = div();
 
   return {
+    setSchemaHash,
     fill:({schemaHash, text} : Draft) => {
       setSchemaHash(schemaHash).then(()=>setText(text))
     },
@@ -361,26 +291,81 @@ export const createEditView = (submit:EditDeps) => {
   const nice = niceView(submit);
 
   let active = {plain, nice}[localStorage.editmode || "nice"];
+  let schemaHash = "" as Hash;
+  const schemaLink = a(
+    { href: "/0", style: { textDecoration: "underline", color: "inherit" } },
+    "view"
+  );
+  schemaLink.onclick = (e) => {
+    if (e.metaKey || e.ctrlKey) return;
+    e.preventDefault();
+    const href = schemaLink.getAttribute("href") || "/";
+    history.pushState({}, "", href);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+  const schemaList = pre();
+  const fetchSchemas = () =>
+    Promise.all([
+      query_data("select id, data, hash from note where schemaId = 0"),
+      query_data("select schemaId from note")
+    ]).then(([schemasRes, countsRes]) => {
+      const counts = new Map<string, number>();
+      countsRes.rows.forEach((row) => {
+        const id = String(row[0]);
+        counts.set(id, (counts.get(id) || 0) + 1);
+      });
+      return schemasRes.rows.map((row) => {
+        let title = "";
+        try {
+          const parsed = JSON.parse(String(row[1] ?? ""));
+          title = parsed?.title ? String(parsed.title) : "";
+        } catch {}
+        const id = String(row[0]);
+        return { id, title, hash:String(row[2] ?? ""), count: counts.get(id) || 0 };
+      });
+    });
+  const updateSchemaPreview = () => noteOverview(schemaHash).then(p=>schemaList.innerHTML = p);
+  const setSchemaHash = (hash: Hash) => {
+    if (hash === schemaHash) return;
+    schemaHash = hash;
+    schemaLink.setAttribute("href", `/${hash}`);
+    active.setSchemaHash(hash);
+    updateSchemaPreview();
+  };
+  const schemaPicker = createSchemaPicker(fetchSchemas, (s) => setSchemaHash(s.hash as Hash));
+  const schemaPanel = div(
+    style({
+      padding: "1em",
+      marginTop: "0.5em",
+      borderRadius: "1em",
+      border: "1px solid #ccc",
+      background: "var(--background-color)",
+    }),
+    div(style({ display: "flex", alignItems: "center", gap: "0.75em", flexWrap: "wrap" }), schemaLink, schemaPicker),
+    div(style({ display: "flex", gap: "1em", alignItems: "flex-start" }), div(schemaList))
+  );
 
   const toggle_mode = ()=>{
-    root.innerHTML = "";
     active = active == nice ? plain : nice;
     active.fill(data)
     localStorage.editmode = active == nice ? "nice" : "plain"
-    root.append(
-      nicebut,
-      active.root
-    )
+    mount()
   }
 
   const nicebut = button("niceview", {onclick: toggle_mode});
-  const root = div(nicebut, active.root);
+  const root = div();
+  const mount = () => {
+    root.innerHTML = "";
+    root.append(nicebut, active.root, schemaPanel);
+  };
   let data : {schemaHash: Hash, text: string};
+  mount();
 
   return {
     fill: newdata=> {
-      active.fill(newdata)
       data = newdata
+      setSchemaHash(newdata.schemaHash)
+      active.fill(newdata)
     },
     root
   }
