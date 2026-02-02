@@ -147,3 +147,36 @@ spacetimedb.procedure('run_note_v2', {id:t.u64(), arg: t.string()}, t.string(), 
   const res = runWithFuelShared(`let args = ${arg}; ${data.code}`, fuelRef, { storage, call, hash: hash128 });
   return tojson(res as Jsonable);
 })))
+
+
+/** this will outside of transaction allowing for fetch requests */
+spacetimedb.procedure('run_note_async', {id:t.u64(), arg: t.string()}, t.string(), (ctx, {id, arg})=> {
+
+  const getNote = (ref : Ref) => ctx.withTx(c=> matchRef(ref,id => c.db.note.id.find(BigInt(id)), hash => c.db.note.hash.find(hash)))
+  const fuelRef = { value: 10000 };
+
+  const call = (ref: Ref, arg:string) => {
+
+    const fn = getNote(ref);
+    if (fn == null) throw new SenderError("fn not found")
+    if (fn.schemaId != getNote(hashData(server_function))?.id) throw new SenderError("not a server function")
+
+    const keyFor = (key: string) => `${id}:${key}`;
+    const storage = {
+      getItem: (key: string) => ctx.withTx(ctx => ctx.db.store.key.find(keyFor(key))?.value ?? null),
+      setItem: (key: string, value: string) => ctx.withTx(ctx => {
+        const k = keyFor(key);
+        const existing = ctx.db.store.key.find(k);
+        if (existing) ctx.db.store.key.update({ key: k, value });
+        else ctx.db.store.insert({ key: k, value });
+      })
+    };
+
+    let ret = runWithFuelShared(`let args = ${arg}; ${(fromjson(fn.data) as {code: string}).code}`, fuelRef, {storage, call, hash: hash128})
+    if ("err" in ret) throw new SenderError(String(ret.err));
+    return (ret as any).ok;
+  }
+
+  return call(Number(id), arg)
+
+})

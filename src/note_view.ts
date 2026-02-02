@@ -165,7 +165,30 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
           runFn.textContent = "run server";
         }
       }});
-      title.append(runFn);
+
+      const runAsyncFn = button("run async", { onclick: async () => {
+
+        let lastarg = localStorage.getItem("server_fun_arg") ?? "{}";
+        const argText =  prompt("args as JSON (array or value)", lastarg);
+        localStorage.setItem("server_fun_arg", argText)
+        if (argText == null) return;
+        try {
+          runAsyncFn.textContent = "running...";
+          const raw = await callProcedure("run_note_async", { id, arg: argText });
+          let out: any = raw;
+          try { out = JSON.parse(raw); } catch {}
+          if (typeof out === "string") {
+            try { out = JSON.parse(out); } catch {}
+          }
+          popup(h2("result"), pre(JSON.stringify(out, null, 2)));
+        } catch (e: any) {
+          popup(h2("ERROR"), p(e.message || "run failed"));
+        } finally {
+          runAsyncFn.textContent = "run async";
+        }
+      }});
+
+      title.append(runFn, runAsyncFn);
     }
 
     updateContentDisplay();
