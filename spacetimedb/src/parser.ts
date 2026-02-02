@@ -408,8 +408,11 @@ const renderExpr = (e: Expr): string => {
       return `[${e.elements.map(renderExpr).join(", ")}]`;
     case "ObjectExpression":
       return `{${e.properties.map(renderProp).join(", ")}}`;
-    case "CallExpression":
-      return `${renderExpr(e.callee)}(${e.arguments.map(renderExpr).join(", ")})`;
+    case "CallExpression": {
+      const calleeStr = renderExpr(e.callee);
+      const needsParens = e.callee.type === "ArrowFunctionExpression";
+      return `${needsParens ? "(" : ""}${calleeStr}${needsParens ? ")" : ""}(${e.arguments.map(renderExpr).join(", ")})`;
+    }
     case "MemberExpression":
       return e.computed
         ? `${renderExpr(e.object)}[${renderExpr(e.property)}]`
@@ -442,7 +445,7 @@ const renderProp = (p: Property) => {
 const renderArrow = (e: Extract<Expr, { type: "ArrowFunctionExpression" }>) => {
   const params = `(${e.params.map((p) => p.name).join(", ")})`;
   if (e.body.type === "BlockStatement") {
-    return `${params} ${renderStmt(e.body, true)}`;
+    return `${params} => ${renderStmt(e.body, true)}`;
   }
   return `${params} => { __burn(); return ${renderExpr(e.body)}; }`;
 };
@@ -520,16 +523,41 @@ export const renderWithFuel = (program: Program, fuel = 10000) => {
 export const renderRunnerWithFuel = (program: Program, fuel = 10000) => {
   const prelude = `let __fuel = ${fuel}; const __burn = () => { if (--__fuel < 0) throw new Error("fuel exhausted"); };`;
   const body = program.body.map((s) => renderStmt(s, true)).join("");
-  return `${prelude}const __run = () => {${body}}; try { const ok = __run(); return { ok, fuel: __fuel }; } catch (err) { return { err, fuel: __fuel }; }`;
+  return `${prelude}const __run = () => {${body}}; try { const ok = __run(); return { ok, fuel: __fuel }; } catch (err) { return { err: String(err), fuel: __fuel }; }`;
+};
+
+export const renderRunnerWithFuelShared = (program: Program, fuelRefName = "__fuel") => {
+  const prelude = `const __burn = () => { if (--${fuelRefName}.value < 0) throw new Error("fuel exhausted"); };`;
+  const body = program.body.map((s) => renderStmt(s, true)).join("");
+  return `${prelude}const __run = () => {${body}}; try { const ok = __run(); return { ok, fuel: ${fuelRefName}.value }; } catch (err) { return { err: String(err), fuel: ${fuelRefName}.value }; }`;
 };
 
 export const renderRunnerWithFuelAsync = (program: Program, fuel = 10000) => {
   const prelude = `let __fuel = ${fuel}; const __burn = () => { if (--__fuel < 0) throw new Error("fuel exhausted"); };`;
   const body = program.body.map((s) => renderStmt(s, true)).join("");
-  return `${prelude}const __run = async () => {${body}}; return __run().then(ok => ({ ok, fuel: __fuel })).catch(err => ({ err, fuel: __fuel }));`;
+  return `${prelude}const __run = async () => {${body}}; return __run().then(ok => ({ ok, fuel: __fuel })).catch(err => ({ err: String(err), fuel: __fuel }));`;
 };
 
-export type runRes = { ok: unknown; fuel: number } | { err: unknown; fuel: number };
+export type runRes = { ok: unknown; fuel: number } | { err: string; fuel: number };
+
+const stringifyError = (err: unknown): string => {
+  if (err instanceof Error) {
+    const stack = err.stack || '';
+    const prefix = `${err.name}: ${err.message}`;
+    const cleanStack = stack
+      .replace(/^[^\n]*\n?/, '')
+      .replace(/spacetimedb_module:(\d+):(\d+)/g, '<bundled:$1:$2>');
+    return cleanStack ? `${prefix}\n${cleanStack}` : prefix;
+  }
+  if (typeof err === 'object' && err !== null) {
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  }
+  return String(err);
+};
 
 export const runWithFuel = (
   src: string,
@@ -543,7 +571,25 @@ export const runWithFuel = (
     return (new Function(...Object.keys(env),renderRunnerWithFuel(program, fuel)) as (...args:unknown[]) => runRes)(...Object.values(env));
   } catch (err) {
     console.log("run with Fuel error: ",err)
-    return {err: String(err), fuel };
+    return {err: stringifyError(err), fuel };
+  }
+};
+
+export const runWithFuelShared = (
+  src: string,
+  fuelRef: { value: number },
+  env: Record<string, unknown> = {},
+  fuelRefName = "__fuel"
+): runRes => {
+  try {
+    const program = parse(src);
+    const protoErrs = validateNoPrototype(program);
+    if (protoErrs.length) return { err: "prototype access", fuel: fuelRef.value };
+    const code = renderRunnerWithFuelShared(program, fuelRefName);
+    const fullEnv = { ...env, [fuelRefName]: fuelRef };
+    return (new Function(...Object.keys(fullEnv), code) as (...args:unknown[]) => runRes)(...Object.values(fullEnv));
+  } catch (err) {
+    return { err: stringifyError(err), fuel: fuelRef.value };
   }
 };
 
@@ -560,7 +606,7 @@ export const runWithFuelAsync = async (
     const fn = new Function(...Object.keys(env), code) as (...args:unknown[]) => Promise<runRes>;
     return await fn(...Object.values(env));
   } catch (err) {
-    return { err, fuel };
+    return { err: stringifyError(err), fuel };
   }
 };
 

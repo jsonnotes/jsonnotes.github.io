@@ -1,6 +1,6 @@
 import { schema, table, t, SenderError } from 'spacetimedb/server';
 import { Hash, hashData, schemas, tojson, top, validate, expandLinksSync, fromjson, matchRef, Ref, function_schema, Jsonable, server_function} from './notes';
-import { runWithFuel } from './parser';
+import { runWithFuelShared } from './parser';
 
 
 const JsonNotes = table(
@@ -99,20 +99,39 @@ spacetimedb.init(setup)
 
 spacetimedb.procedure('run_note_v2', {id:t.u64(), arg: t.string()}, t.string(), (ctx, {id, arg})=> ctx.withTx((ctx=>{
 
+  const fuelRef = { value: 10000 };
+  const keyFor = (key: string) => `${id}:${key}`;
   const storage = {
-    getItem : (key:string)=> ctx.db.store.key.find(id + key),
+    getItem : (key:string)=> ctx.db.store.key.find(keyFor(key))?.value ?? null,
     setItem : (key:string, value: string) => {
-      const existing = ctx.db.store.key.find(id + key);
-      if (existing) ctx.db.store.key.update({ ...existing, value });
-      else ctx.db.store.insert({ key: id + key, value });
+      const k = keyFor(key);
+      const existing = ctx.db.store.key.find(k);
+      if (existing) ctx.db.store.key.update({ key: k, value });
+      else ctx.db.store.insert({ key: k, value });
     }
   }
+
+  const call = (ref: Ref, ...args: Jsonable[]) => {
+    const idOrHash = ref.toString().replace(/^#/, "");
+    const target = /^\d+$/.test(idOrHash)
+      ? ctx.db.note.id.find(BigInt(idOrHash))
+      : ctx.db.note.hash.find(idOrHash);
+    if (!target) throw new SenderError("function not found");
+    const fnSchemaRow = ctx.db.note.hash.find(hashData(server_function));
+    if (target.schemaId !== fnSchemaRow?.id) throw new SenderError("note is not function schema");
+    const data = fromjson(target.data) as {inputs: string[], code: string};
+    const argsLiteral = JSON.stringify(args);
+    const src = `let [${data.inputs.join(",")}] = ${argsLiteral}; ${data.code}`;
+    const res = runWithFuelShared(src, fuelRef, { storage, call });
+    if ("err" in res) throw new SenderError(String(res.err));
+    return (res as any).ok;
+  };
   
   const fnNote = ctx.db.note.id.find(id);
   if (!fnNote) throw new SenderError("note not found (v2)");
   const fnSchemaRow = ctx.db.note.hash.find(hashData(server_function));
   if (fnNote.schemaId !== fnSchemaRow?.id) throw new SenderError("note is not function schema");
   const data = fromjson(fnNote.data) as {inputs: string[], code: string};
-  return tojson(runWithFuel(`let [${data.inputs.join(",")}] = ${arg}; ${data.code}`, 10000, {storage, A:()=>33}) as Jsonable);
+  const res = runWithFuelShared(`let [${data.inputs.join(",")}] = ${arg}; ${data.code}`, fuelRef, { storage, call });
+  return tojson(res as Jsonable);
 })))
-

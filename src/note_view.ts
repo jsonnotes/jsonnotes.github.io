@@ -102,7 +102,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
             }
           } as NoteData
           rs(result)
-        }else popup(h2("ERROR"), p(msg.error || "script error"))
+        }else popup(h2("ERROR"), pre(msg.error || "script error"))
       };
       worker.postMessage({ type: "run", code, input: {}});
     })

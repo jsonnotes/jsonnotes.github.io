@@ -173,12 +173,23 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
       ids.forEach((id, row) => {
         const y = n === 1 ? 0.5 : 0.2 + (0.6 * (row + 0.5)) / n;
         const tag = svgText(svg, { x, y }, labels.get(id) || `#${id}`);
-        tag.node.onclick = () => (id === data.currentId ? navigate(`/${id}`) : render(`#${id}`));
+        tag.node.onclick = () => {
+          if (id === data.currentId) {
+            window.history.pushState({}, "", `/${id}`);
+            navigate(`/${id}`);
+          } else {
+            window.history.pushState({}, "", `/deps/${id}`);
+            render(id as Ref);
+          }
+        };
         boxes.set(id, tag.rect);
       });
     });
     const schemaTag = svgText(svg, { x: 0.5, y: 0.1 }, labels.get(schemaId) || `#${schemaId}`);
-    schemaTag.node.onclick = () => render(`#${schemaId}`);
+    schemaTag.node.onclick = () => {
+      window.history.pushState({}, "", `/deps/${schemaId}`);
+      render(schemaId as Ref);
+    };
     const schemaRect = schemaTag.rect;
 
     const edge = (r: { x: number; y: number; width: number; height: number }, side: "left" | "right") => ({

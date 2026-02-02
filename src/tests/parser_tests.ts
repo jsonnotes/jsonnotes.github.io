@@ -65,7 +65,9 @@ const cases: TestCase[] = [
   { name: "break-test", code: "let s=0; for (let i=0;i<10;i++){ if (i===3) break; s+=i; } return s;", expect: 3},
   { name: "continue-test", code: "let s=0; for (let i=0;i<5;i++){ if (i===2) continue; s+=i; } return s;", expect: 8},
   { name: "while-10", code: "let sm = 0; let i = 0; while (i < 10) { sm += i; i++; } return sm;"},
-  { name: "while-true", code: "let sm = 0; let i = 0; while (true) { sm += i; i++; } return sm;", fuel: 50, expectFuelError: true,}
+  { name: "while-true", code: "let sm = 0; let i = 0; while (true) { sm += i; i++; } return sm;", fuel: 50, expectFuelError: true,},
+  { name: "closure-call", code: "(()=>44)()"},
+  { name: "closure-call-void", code: "(()=>{})()"},
 
 ];
 
