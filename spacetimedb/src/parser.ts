@@ -289,10 +289,12 @@ export const renderRunnerWithFuelAsync = (program: Program, fuel = 10000) => {
   return `${prelude}const __run = async () => {${body}}; return __run().then(ok => ({ ok, fuel: __fuel })).catch(err => ({ err, fuel: __fuel }));`;
 };
 
+export type runRes = { ok: unknown; fuel: number } | { err: unknown; fuel: number };
+
 export const runWithFuel = (
   src: string,
   fuel = 10000
-): { ok: unknown; fuel: number } | { err: unknown; fuel: number } => {
+): runRes => {
   try {
     const program = parse(src);
     const code = renderRunnerWithFuel(program, fuel);
