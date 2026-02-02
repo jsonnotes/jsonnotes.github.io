@@ -1,8 +1,8 @@
-import { Hash, hashData, NoteData, script_result_schema, script_schema, isRef, Ref, Jsonable, function_schema } from "../spacetimedb/src/notes";
-import { addNote, getId, getNote, getSchemaId, noteLink } from "./dbconn";
+import { Hash, hashData, NoteData, script_result_schema, script_schema, isRef, Ref, Jsonable, function_schema, server_function } from "../spacetimedb/src/notes";
+import { addNote, callProcedure, getId, getNote, getSchemaId, noteLink } from "./dbconn";
 
 import { stringify } from "./helpers";
-import { a, button, div, h2, h3, p, padding, popup, routeLink, span, style } from "./html";
+import { a, button, div, h2, h3, p, padding, popup, pre, routeLink, span, style } from "./html";
 
 import { openrouter } from "./openrouter";
 
@@ -108,6 +108,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
     })
 
     const isScript = note.schemaHash === hashData(script_schema)
+
     const text = isScript ? String((note.data as any).code || "") : stringify(note.data)
 
 
@@ -119,6 +120,28 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         runScriptFromNote(note).then(result=>submitNote(result))
       }});
       title.append(runner);
+    }
+    if (note.schemaHash === hashData(server_function)) {
+      const runFn = button("run server", { onclick: async () => {
+
+        const argText = ((note.data as {inputs: string[]}).inputs.length)  ? prompt("args as JSON (array or value)", "[]"): "[]";
+        if (argText == null) return;
+        try {
+          runFn.textContent = "running...";
+          const raw = await callProcedure("run_note_v2", { id, arg: argText });
+          let out: any = raw;
+          try { out = JSON.parse(raw); } catch {}
+          if (typeof out === "string") {
+            try { out = JSON.parse(out); } catch {}
+          }
+          popup(h2("result"), pre(JSON.stringify(out, null, 2)));
+        } catch (e: any) {
+          popup(h2("ERROR"), p(e.message || "run failed"));
+        } finally {
+          runFn.textContent = "run server";
+        }
+      }});
+      title.append(runFn);
     }
     overlay.append(
       title,

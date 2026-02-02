@@ -83,6 +83,16 @@ export const function_schema = NoteData("function schema", top, object({
 }))
 
 
+export const server_function = NoteData("function schema", top, object({
+  inputs: arrayT(string),
+  code: string,
+}, {
+  title: "server_function"
+}))
+
+
+
+
 const example_function = NoteData("example function", function_schema, {
   title: "example function",
   inputs: ["a", "b"],
@@ -100,7 +110,8 @@ export const schemas : NoteData[] = [
   has_titled_child,
   titled,
   titled1, titled2,
-  function_schema, example_function
+  function_schema, example_function,
+  server_function,
 ]
 
 

@@ -32,6 +32,12 @@ const req = (path: string, method: string, body: string | null = null) =>
     body,
   });
 
+export const callProcedure = async (name: string, payload: any) => {
+  const res = await req(`/v1/database/${DBNAME}/call/${name}`, "POST", JSON.stringify(payload));
+  if (!res.ok) throw new Error(await res.text());
+  return res.text();
+};
+
 export const query_data = async (sql: string, desc = false, maxitems = null) : Promise<{names:string[], rows:any[]}> => {
 
   if (desc && maxitems != null){

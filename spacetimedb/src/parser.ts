@@ -137,7 +137,12 @@ export type Stmt =
     }
   | { type: "ForInStatement"; left: VarDecl[] | Expr; leftKind: "let" | "const" | null; right: Expr; body: Stmt }
   | { type: "ForOfStatement"; left: VarDecl[] | Expr; leftKind: "let" | "const" | null; right: Expr; body: Stmt };
-export type VarDecl = { type: "VariableDeclarator"; id: Identifier; init: Expr | null };
+export type Pattern =
+  | Identifier
+  | { type: "ArrayPattern"; elements: Identifier[] }
+  | { type: "ObjectPattern"; properties: Identifier[] };
+
+export type VarDecl = { type: "VariableDeclarator"; id: Pattern; init: Expr | null };
 
 export type Expr =
   | Identifier
@@ -157,6 +162,235 @@ export type Expr =
 export type Identifier = { type: "Identifier"; name: string };
 export type Literal = { type: "Literal"; value: string | number | boolean | null };
 export type Property = { type: "Property"; key: Identifier | Literal; value: Expr; shorthand: boolean };
+
+export const validateScopes = (program: Program, allowedGlobals: string[] = []) => {
+  const errors: string[] = [];
+  const globals = new Set(allowedGlobals);
+  const scopes: Array<Set<string>> = [new Set()];
+
+  const declare = (name: string) => scopes[scopes.length - 1].add(name);
+  const isDeclared = (name: string) => scopes.some((s) => s.has(name)) || globals.has(name);
+  const enter = () => scopes.push(new Set());
+  const exit = () => { scopes.pop(); };
+  const checkIdent = (name: string) => {
+    if (!isDeclared(name)) errors.push(`undeclared: ${name}`);
+  };
+
+  const declarePattern = (p: Pattern) => {
+    if (p.type === "Identifier") declare(p.name);
+    else if (p.type === "ArrayPattern") p.elements.forEach((e) => declare(e.name));
+    else p.properties.forEach((e) => declare(e.name));
+  };
+
+  const visitExpr = (e: Expr): void => {
+    switch (e.type) {
+      case "Identifier":
+        checkIdent(e.name);
+        return;
+      case "Literal":
+        return;
+      case "ArrayExpression":
+        e.elements.forEach(visitExpr);
+        return;
+      case "ObjectExpression":
+        e.properties.forEach((p) => visitExpr(p.value));
+        return;
+      case "CallExpression":
+        visitExpr(e.callee);
+        e.arguments.forEach(visitExpr);
+        return;
+      case "MemberExpression":
+        visitExpr(e.object);
+        if (e.computed) visitExpr(e.property);
+        return;
+      case "AssignmentExpression":
+        visitExpr(e.left);
+        visitExpr(e.right);
+        return;
+      case "UpdateExpression":
+        visitExpr(e.argument);
+        return;
+      case "BinaryExpression":
+      case "LogicalExpression":
+        visitExpr(e.left);
+        visitExpr(e.right);
+        return;
+      case "UnaryExpression":
+        visitExpr(e.argument);
+        return;
+      case "ConditionalExpression":
+        visitExpr(e.test);
+        visitExpr(e.consequent);
+        visitExpr(e.alternate);
+        return;
+      case "ArrowFunctionExpression":
+        enter();
+        e.params.forEach((p) => declare(p.name));
+        if (e.body.type === "BlockStatement") visitStmt(e.body);
+        else visitExpr(e.body);
+        exit();
+        return;
+    }
+  };
+
+  const visitVarDecl = (d: VarDecl) => {
+    declarePattern(d.id);
+    if (d.init) visitExpr(d.init);
+  };
+
+  const visitStmt = (s: Stmt): void => {
+    switch (s.type) {
+      case "BlockStatement":
+        enter();
+        s.body.forEach(visitStmt);
+        exit();
+        return;
+      case "ExpressionStatement":
+        visitExpr(s.expression);
+        return;
+      case "IfStatement":
+        visitExpr(s.test);
+        visitStmt(s.consequent);
+        if (s.alternate) visitStmt(s.alternate);
+        return;
+      case "ReturnStatement":
+        if (s.argument) visitExpr(s.argument);
+        return;
+      case "VariableDeclaration":
+        s.declarations.forEach(visitVarDecl);
+        return;
+      case "WhileStatement":
+        visitExpr(s.test);
+        visitStmt(s.body);
+        return;
+      case "ForStatement": {
+        enter();
+        if (Array.isArray(s.init)) s.init.forEach(visitVarDecl);
+        else if (s.init) visitExpr(s.init);
+        if (s.test) visitExpr(s.test);
+        if (s.update) visitExpr(s.update);
+        visitStmt(s.body);
+        exit();
+        return;
+      }
+      case "ForInStatement":
+      case "ForOfStatement": {
+        enter();
+        if (Array.isArray(s.left)) s.left.forEach(visitVarDecl);
+        else visitExpr(s.left);
+        visitExpr(s.right);
+        visitStmt(s.body);
+        exit();
+        return;
+      }
+      case "BreakStatement":
+      case "ContinueStatement":
+        return;
+    }
+  };
+
+  program.body.forEach(visitStmt);
+  return errors;
+};
+
+export const validateNoPrototype = (program: Program) => {
+  const errors: string[] = [];
+  const visitExpr = (e: Expr): void => {
+    switch (e.type) {
+      case "MemberExpression":
+        if (!e.computed && e.property.type === "Identifier" && e.property.name === "prototype") {
+          errors.push("prototype access");
+        }
+        if (e.computed && e.property.type === "Literal" && e.property.value === "prototype") {
+          errors.push("prototype access");
+        }
+        visitExpr(e.object);
+        if (e.computed) visitExpr(e.property);
+        return;
+      case "CallExpression":
+        visitExpr(e.callee);
+        e.arguments.forEach(visitExpr);
+        return;
+      case "ArrayExpression":
+        e.elements.forEach(visitExpr);
+        return;
+      case "ObjectExpression":
+        e.properties.forEach((p) => visitExpr(p.value));
+        return;
+      case "AssignmentExpression":
+        visitExpr(e.left);
+        visitExpr(e.right);
+        return;
+      case "UpdateExpression":
+        visitExpr(e.argument);
+        return;
+      case "BinaryExpression":
+      case "LogicalExpression":
+        visitExpr(e.left);
+        visitExpr(e.right);
+        return;
+      case "UnaryExpression":
+        visitExpr(e.argument);
+        return;
+      case "ConditionalExpression":
+        visitExpr(e.test);
+        visitExpr(e.consequent);
+        visitExpr(e.alternate);
+        return;
+      case "ArrowFunctionExpression":
+        if (e.body.type === "BlockStatement") visitStmt(e.body);
+        else visitExpr(e.body);
+        return;
+      case "Identifier":
+      case "Literal":
+        return;
+    }
+  };
+  const visitStmt = (s: Stmt): void => {
+    switch (s.type) {
+      case "BlockStatement":
+        s.body.forEach(visitStmt);
+        return;
+      case "ExpressionStatement":
+        visitExpr(s.expression);
+        return;
+      case "IfStatement":
+        visitExpr(s.test);
+        visitStmt(s.consequent);
+        if (s.alternate) visitStmt(s.alternate);
+        return;
+      case "ReturnStatement":
+        if (s.argument) visitExpr(s.argument);
+        return;
+      case "VariableDeclaration":
+        s.declarations.forEach((d) => d.init && visitExpr(d.init));
+        return;
+      case "WhileStatement":
+        visitExpr(s.test);
+        visitStmt(s.body);
+        return;
+      case "ForStatement":
+        if (Array.isArray(s.init)) s.init.forEach((d) => d.init && visitExpr(d.init));
+        else if (s.init) visitExpr(s.init);
+        if (s.test) visitExpr(s.test);
+        if (s.update) visitExpr(s.update);
+        visitStmt(s.body);
+        return;
+      case "ForInStatement":
+      case "ForOfStatement":
+        if (Array.isArray(s.left)) s.left.forEach((d) => d.init && visitExpr(d.init));
+        else visitExpr(s.left);
+        visitExpr(s.right);
+        visitStmt(s.body);
+        return;
+      case "BreakStatement":
+      case "ContinueStatement":
+        return;
+    }
+  };
+  program.body.forEach(visitStmt);
+  return errors;
+};
 
 const renderLiteral = (v: Literal["value"]) => {
   if (v === null) return "null";
@@ -269,7 +503,13 @@ const renderStmt = (s: Stmt, inFn = false): string => {
 };
 
 const renderDecl = (d: VarDecl) =>
-  `${d.id.name}${d.init ? ` = ${renderExpr(d.init)}` : ""}`;
+  `${renderPattern(d.id)}${d.init ? ` = ${renderExpr(d.init)}` : ""}`;
+
+const renderPattern = (p: Pattern): string => {
+  if (p.type === "Identifier") return p.name;
+  if (p.type === "ArrayPattern") return `[${p.elements.map((e) => e.name).join(", ")}]`;
+  return `{${p.properties.map((e) => e.name).join(", ")}}`;
+};
 
 export const renderWithFuel = (program: Program, fuel = 10000) => {
   const prelude = `let __fuel = ${fuel}; const __burn = () => { if (--__fuel < 0) throw new Error("fuel exhausted"); };`;
@@ -293,32 +533,32 @@ export type runRes = { ok: unknown; fuel: number } | { err: unknown; fuel: numbe
 
 export const runWithFuel = (
   src: string,
-  fuel = 10000
+  fuel = 10000,
+  env: Record<string, unknown> = {},
 ): runRes => {
   try {
     const program = parse(src);
-    const code = renderRunnerWithFuel(program, fuel);
-    const fn = new Function(code) as () =>
-      | { ok: unknown; fuel: number }
-      | { err: unknown; fuel: number };
-    return fn();
+    const protoErrs = validateNoPrototype(program);
+    if (protoErrs.length) return { err: "prototype access", fuel };
+    return (new Function(...Object.keys(env),renderRunnerWithFuel(program, fuel)) as (...args:unknown[]) => runRes)(...Object.values(env));
   } catch (err) {
-    return { err, fuel };
+    console.log("run with Fuel error: ",err)
+    return {err: String(err), fuel };
   }
 };
 
 export const runWithFuelAsync = async (
   src: string,
-  fuel = 10000
-): Promise<{ ok: unknown; fuel: number } | { err: unknown; fuel: number }> => {
+  fuel = 10000,
+  env: Record<string, unknown> = {}
+): Promise<runRes> => {
   try {
     const program = parse(src);
+    const protoErrs = validateNoPrototype(program);
+    if (protoErrs.length) return { err: "prototype access", fuel };
     const code = renderRunnerWithFuelAsync(program, fuel);
-    const fn = new Function(code) as () => Promise<
-      | { ok: unknown; fuel: number }
-      | { err: unknown; fuel: number }
-    >;
-    return await fn();
+    const fn = new Function(...Object.keys(env), code) as (...args:unknown[]) => Promise<runRes>;
+    return await fn(...Object.values(env));
   } catch (err) {
     return { err, fuel };
   }
@@ -394,7 +634,7 @@ export const parse = (src: string): Program => {
     const kind = next().value as "let" | "const";
     const declarations: VarDecl[] = [];
     do {
-      const id = parseIdentifier();
+      const id = parsePattern();
       const init = match("operator", "=") ? (next(), parseExpression()) : null;
       declarations.push({ type: "VariableDeclarator", id, init });
       if (!match("punct", ",")) break;
@@ -690,6 +930,36 @@ export const parse = (src: string): Program => {
   const parseIdentifier = (): Identifier => {
     const t = eat("identifier");
     return { type: "Identifier", name: t.value };
+  };
+
+  const parsePattern = (): Pattern => {
+    if (match("punct", "[")) {
+      eat("punct", "[");
+      const elements: Identifier[] = [];
+      if (!match("punct", "]")) {
+        do {
+          elements.push(parseIdentifier());
+          if (!match("punct", ",")) break;
+          next();
+        } while (true);
+      }
+      eat("punct", "]");
+      return { type: "ArrayPattern", elements };
+    }
+    if (match("punct", "{")) {
+      eat("punct", "{");
+      const properties: Identifier[] = [];
+      if (!match("punct", "}")) {
+        do {
+          properties.push(parseIdentifier());
+          if (!match("punct", ",")) break;
+          next();
+        } while (true);
+      }
+      eat("punct", "}");
+      return { type: "ObjectPattern", properties };
+    }
+    return parseIdentifier();
   };
 
   return parseProgram();

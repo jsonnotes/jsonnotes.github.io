@@ -5,15 +5,16 @@ type TestCase = {
   code: string;
   expect?: any;
   fuel?: number;
+  env?: Record<string, unknown>;
   compareWithNative?: boolean;
   expectFuelError?: boolean;
 };
 type TestResult = { name: string; ok: boolean; details?: string };
 
-const runNativeAsync = async (code: string): Promise<{ ok: unknown } | { err: unknown }> => {
+const runNativeAsync = async (code: string, env: Record<string, unknown> = {}): Promise<{ ok: unknown } | { err: unknown }> => {
   try {
-    const fn = new Function(`"use strict"; ${code}`);
-    const res = fn();
+    const fn = new Function(...Object.keys(env), `"use strict"; ${code}`);
+    const res = fn(...Object.values(env));
     return { ok: res && typeof res.then === "function" ? await res : res };
   } catch (err) {
     return { err };
@@ -53,16 +54,25 @@ const cases: TestCase[] = [
   { name: "loop-test", code: "let sm = 0; for (let i = 0; i < 10; i++) { sm += i; } return sm;", expect: 45},
   { name: "for-in", code: "let s=0; const o={a:1,b:2}; for (let k in o) { s += o[k]; } return s;", expect: 3},
   { name: "for-of", code: "let s=0; const a=[1,2,3]; for (let v of a) { s += v; } return s;", expect: 6},
+  { name: "array-destructure", code: "let [a,b] = [1,2]; return a + b;", expect: 3},
+  { name: "object-destructure", code: "let {a,b} = {a:2,b:3}; return a * b;", expect: 6},
+  { name: "env-basic", code: "return a + b;", env: { a: 2, b: 5 }, expect: 7 },
+  { name: "env-missing", code: "return a + b;", env: { a: 2 } },
+  { name: "env-object", code: "return cfg.x + cfg.y;", env: { cfg: { x: 4, y: 1 } }, expect: 5 },
+  { name: "Math-use", code: "return Math.sqrt(25);", expect: 5 },
+  { name: "no-prototype", code: "return ({a:1}).constructor.prototype;", compareWithNative: false, expectFuelError: true },
+  // { name: "no-prototype-index", code: "return ({a:1}).constructor['proto' + 'type'];", compareWithNative: false, expectFuelError: true },
   { name: "break-test", code: "let s=0; for (let i=0;i<10;i++){ if (i===3) break; s+=i; } return s;", expect: 3},
   { name: "continue-test", code: "let s=0; for (let i=0;i<5;i++){ if (i===2) continue; s+=i; } return s;", expect: 8},
   { name: "while-10", code: "let sm = 0; let i = 0; while (i < 10) { sm += i; i++; } return sm;"},
   { name: "while-true", code: "let sm = 0; let i = 0; while (true) { sm += i; i++; } return sm;", fuel: 50, expectFuelError: true,}
+
 ];
 
 export const runParserTests = async () => {
   const results: TestResult[] = [];
-  for (const { name, code, fuel = 10000, compareWithNative = true, expectFuelError = false, expect} of cases) {
-    const fuelRes = await runWithFuelAsync(code, fuel);
+  for (const { name, code, fuel = 10000, env = {}, compareWithNative = true, expectFuelError = false, expect} of cases) {
+    const fuelRes = await runWithFuelAsync(code, fuel, env);
     if (expectFuelError) {
       results.push({ name, ok: isErr(fuelRes), details: isErr(fuelRes) ? undefined : "expected fuel error" });
       continue;
@@ -71,7 +81,7 @@ export const runParserTests = async () => {
       results.push({ name, ok: !isErr(fuelRes), details: isErr(fuelRes) ? "fuel error" : undefined });
       continue;
     }
-    const native = await runNativeAsync(code);
+    const native = await runNativeAsync(code, env);
     if (isErr(native)) {
       results.push({ name, ok: isErr(fuelRes), details: "native error" });
       continue;

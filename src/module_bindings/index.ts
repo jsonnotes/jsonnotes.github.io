@@ -38,18 +38,26 @@ import SetupReducer from "./setup_reducer";
 export { SetupReducer };
 
 // Import and reexport all procedure arg types
+import * as RunNoteProcedure from "./run_note_procedure";
+export { RunNoteProcedure };
 
 // Import and reexport all table handle types
+import LinksRow from "./links_table";
+export { LinksRow };
 import NoteRow from "./note_table";
 export { NoteRow };
 import NoteCountRow from "./note_count_table";
 export { NoteCountRow };
+import StoreRow from "./store_table";
+export { StoreRow };
 
 // Import and reexport all types
 import AddNote from "./add_note_type";
 export { AddNote };
 import Init from "./init_type";
 export { Init };
+import Links from "./links_type";
+export { Links };
 import Note from "./note_type";
 export { Note };
 import NoteCount from "./note_count_type";
@@ -58,9 +66,22 @@ import NoteCountRow from "./note_count_row_type";
 export { NoteCountRow };
 import Setup from "./setup_type";
 export { Setup };
+import Store from "./store_type";
+export { Store };
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema(
+  __table({
+    name: 'links',
+    indexes: [
+      { name: 'to', algorithm: 'btree', columns: [
+        'to',
+      ] },
+    ],
+    constraints: [
+      { name: 'links_to_key', constraint: 'unique', columns: ['to'] },
+    ],
+  }, LinksRow),
   __table({
     name: 'note',
     indexes: [
@@ -76,6 +97,17 @@ const tablesSchema = __schema(
       { name: 'note_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, NoteRow),
+  __table({
+    name: 'store',
+    indexes: [
+      { name: 'key', algorithm: 'btree', columns: [
+        'key',
+      ] },
+    ],
+    constraints: [
+      { name: 'store_key_key', constraint: 'unique', columns: ['key'] },
+    ],
+  }, StoreRow),
   __table({
     name: 'note_count',
     indexes: [
@@ -93,6 +125,7 @@ const reducersSchema = __reducers(
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
 const proceduresSchema = __procedures(
+  __procedureSchema("run_note", RunNoteProcedure.params, RunNoteProcedure.returnType),
 );
 
 /** The remote SpacetimeDB module schema, both runtime and type information. */
