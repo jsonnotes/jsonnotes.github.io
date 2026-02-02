@@ -1,7 +1,7 @@
 
 import { button, div, p, routeLink, style } from "./html";
 import { function_schema, hashData, script_result_schema, script_schema } from "../spacetimedb/src/notes";
-import { createSchemaPicker } from "./helpers";
+import { createSchemaPicker, noteSearch, SchemaEntry } from "./helpers";
 import { noteLink } from "./dbconn";
 
 type QueryResult = { names: string[]; rows: any[][] };
@@ -50,6 +50,23 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
     )
   );
   let currentSchema = schemaHashAny;
+
+  const fetchAllNotes = (): Promise<SchemaEntry[]> =>
+    query("select id, data, hash from note limit 200").then((r) =>
+      r.rows.map((row) => {
+        let title = "";
+        try {
+          title = JSON.parse(String(row[1] ?? ""))?.title ?? "";
+        } catch {}
+        return { id: String(row[0]), title, hash: String(row[2] ?? "") };
+      })
+    );
+
+  const openSearch = () => {
+    fetchAllNotes().then((notes) => {
+      noteSearch((note) => navigate(`/${note.id}`), notes);
+    });
+  };
 
   const setSchema = (value: string) => {
     currentSchema = value;
@@ -101,12 +118,28 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
     });
   };
 
+  const searchButton = button("🔍 Search Notes", {
+    onclick: openSearch,
+    style: {
+      padding: "0.25em 0.5em",
+      border: "1px solid #ccc",
+      borderRadius: "0.25em",
+      background: "inherit",
+      color: "inherit",
+      cursor: "pointer"
+    }
+  });
+
   const root = div(
     style({ display: "flex", flexDirection: "column", gap: "0.75em" }),
-    routeLink(
-      "/edit?new=1",
-      { style: { textDecoration: "none", color: "inherit", fontWeight: "bold", border: "1px solid #ccc", borderRadius: "0.25em", padding: "0.25em 0.5em" } },
-      "+ Add Note"
+    div(
+      style({ display: "flex", gap: "0.5em", flexWrap: "wrap" }),
+      routeLink(
+        "/edit?new=1",
+        { style: { textDecoration: "none", color: "inherit", fontWeight: "bold", border: "1px solid #ccc", borderRadius: "0.25em", padding: "0.25em 0.5em" } },
+        "+ Add Note"
+      ),
+      searchButton
     ),
     schemaSelect,
     result

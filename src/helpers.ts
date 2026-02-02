@@ -193,6 +193,70 @@ export const safeInput = (
     ta.style.boxSizing = "content-box";
     const minChars = 50;
 
+    const suggestionBox = div(style({
+      display: "none",
+      position: "absolute",
+      border: "1px solid #ccc",
+      padding: "0.5em",
+      borderRadius: "0.5em",
+      background: "var(--background-color)",
+      zIndex: "1000",
+      maxHeight: "200px",
+      overflowY: "auto"
+    }));
+
+    const fetchNotes = () =>
+      query_data("select id, data, hash from note", true, 200).then((res) =>
+        res.rows.map((row) => {
+          let title = "";
+          try {
+            const parsed = JSON.parse(String(row[1] ?? ""));
+            title = parsed?.title ? String(parsed.title) : "";
+          } catch {}
+          return { id: String(row[0]), title, hash: String(row[2] ?? "") };
+        })
+      );
+
+    const updateSuggestions = () => {
+      const cursor = ta.selectionStart ?? 0;
+      const text = ta.value;
+      const hashPos = text.lastIndexOf("#", cursor - 1);
+      if (hashPos < 0) {
+        suggestionBox.style.display = "none";
+        return;
+      }
+      const token = text.slice(hashPos + 1, cursor);
+      if (!/^[A-Za-z0-9]*$/.test(token)) {
+        suggestionBox.style.display = "none";
+        return;
+      }
+      fetchNotes().then((notes) => {
+        const q = token.toLowerCase();
+        const filtered = notes.filter((n) =>
+          n.id.toLowerCase().includes(q) || n.title.toLowerCase().includes(q)
+        ).slice(0, 8);
+        suggestionBox.innerHTML = "";
+        if (!filtered.length) {
+          suggestionBox.style.display = "none";
+          return;
+        }
+        filtered.forEach((n) => {
+          suggestionBox.appendChild(button(`#${n.id}${n.title ? `: ${n.title}` : ""}`, {
+            onclick: () => {
+              const before = text.slice(0, hashPos);
+              const after = text.slice(cursor);
+              ta.value = `${before}#${n.id}${after}`;
+              const next = hashPos + 1 + n.id.length;
+              ta.setSelectionRange(next, next);
+              suggestionBox.style.display = "none";
+              resize();
+            }
+          }));
+        });
+        suggestionBox.style.display = "block";
+      });
+    };
+
     const resize = () => {
       ta.style.height = "0px";
       ta.style.height = `${ta.scrollHeight}px`;
@@ -200,11 +264,28 @@ export const safeInput = (
       ta.style.width = `${Math.max(minChars, longest + 1)}ch`;
       onChange();
     };
-    ta.oninput = resize;
+
+    ta.oninput = () => {
+      resize();
+      updateSuggestions();
+    };
+
+    ta.onkeydown = (e) => {
+      if (e.key === "#") {
+        updateSuggestions();
+      }
+    };
+
     requestAnimationFrame(resize);
 
+    const container = div(
+      style({ position: "relative", display: "inline-block" }),
+      ta,
+      suggestionBox
+    );
+
     return withRef({
-      element:ta,
+      element: container,
       getData: () => ta.value,
       setData: (data: Jsonable) => { ta.value = data as string; resize(); }
     })

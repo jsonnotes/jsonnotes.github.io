@@ -10,7 +10,13 @@
     "preview": "vite preview",
     "test": "node scripts/test.js",
     "check": "tsc --noEmit",
-    "build:tsc": "tsc -p tsconfig.build.json"
+    "build:tsc": "tsc -p tsconfig.build.json",
+    "db": "node scripts/db-cli.js",
+    "db:add-note": "npm run db add-note",
+    "db:get-note": "npm run db get-note",
+    "db:remote": "npm run db remote",
+    "db:sql": "npm run db sql",
+    "db:run-local": "npm run db run-local"
   },
   "devDependencies": {
     "@clockworklabs/spacetimedb-sdk": "^1.1.0",

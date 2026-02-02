@@ -1,22 +1,55 @@
 import { Hash, hashData, NoteData, script_result_schema, script_schema, isRef, Ref, Jsonable, function_schema, server_function } from "../spacetimedb/src/notes";
 import { addNote, callProcedure, getId, getNote, getSchemaId, noteLink, noteOverview } from "./dbconn";
+import { hash128 } from "../spacetimedb/src/hash";
 
 import { stringify } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, pre, routeLink, span, style } from "./html";
 
-import { openrouter } from "./openrouter";
+import { openrouter } from "../spacetimedb/src/openrouter";
 
 import { buildins as buildinlist } from "./script_worker";
 
 
 
-const callNote = async (fn: Ref, ...args: Jsonable[]) => {
+const callNote = async (fn: Ref, ...args: Jsonable[]): Promise<any> => {
   let note = await getNote(fn)
   if (note.schemaHash != hashData(function_schema)) throw new Error("can only call Function schema notes")
-  let data = note.data as {code: string, inputs: string[]}
-  let F = new Function(...data.inputs, data.code)
+  let data = note.data as {code: string, inputs?: string[]}
 
-  return F(...args)
+  // Create builtin functions available to local functions
+  const localBuiltins = {
+    getNote,
+    addNote,
+    call: callNote,
+    remote: async (ref: Ref, arg?: Jsonable) => {
+      const idOrHash = String(ref).replace(/^#/, "");
+      const id = /^\d+$/.test(idOrHash) ? Number(idOrHash) : await getId(idOrHash as Hash);
+      const argStr = arg !== undefined ? JSON.stringify(arg) : "null";
+      const raw = await callProcedure("run_note_async", { id, arg: argStr });
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return raw;
+      }
+    },
+    openrouter: async (prompt: string, schema: Ref | Jsonable) => {
+      if (isRef(schema)){
+        schema = (await getNote(schema as Ref)).data
+      }
+      return openrouter(prompt, schema)
+    },
+    hash: hash128
+  };
+
+  // If inputs field exists, use it; otherwise pass args as object
+  if (data.inputs && data.inputs.length > 0) {
+    let F = new Function(...data.inputs, ...Object.keys(localBuiltins), `return (async () => {${data.code}})()`)
+    return F(...args, ...Object.values(localBuiltins))
+  } else {
+    // Pass args as an object for new-style functions with builtins
+    let F = new Function('args', ...Object.keys(localBuiltins), `return (async () => {${data.code}})()`)
+    return F(args.length === 1 ? args[0] : args, ...Object.values(localBuiltins))
+  }
 
 }
 
@@ -31,7 +64,17 @@ export const buildins = {
   },
   getNote,
   addNote,
-  callNote
+  callNote,
+  remote: async (ref: Ref, arg: Jsonable) => {
+    const idOrHash = String(ref).replace(/^#/, "");
+    const id = /^\d+$/.test(idOrHash) ? BigInt(idOrHash) : await getId(idOrHash as Hash);
+    const raw = await callProcedure("run_note_async", { id, arg: JSON.stringify(arg) });
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return raw;
+    }
+  }
 
 }
 
@@ -136,40 +179,11 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
 
     overlay.innerHTML = "";
     const title = h3(`${isScript ? "Script" : "Note"} #${id} ${titleText} `);
-    if (isScript) {
-      const runner = button("run", { onclick: () => {
-        runner.innerHTML = "running..."
-        runScriptFromNote(note).then(result=>submitNote(result))
-      }});
-      title.append(runner);
-    }
     if (note.schemaHash === hashData(server_function)) {
-      const runFn = button("run server", { onclick: async () => {
-
-        let lastarg = localStorage.getItem("server_fun_arg") ?? "{}";
-        const argText =  prompt("args as JSON (array or value)", lastarg);
-        localStorage.setItem("server_fun_arg", argText)
-        if (argText == null) return;
-        try {
-          runFn.textContent = "running...";
-          const raw = await callProcedure("run_note_v2", { id, arg: argText });
-          let out: any = raw;
-          try { out = JSON.parse(raw); } catch {}
-          if (typeof out === "string") {
-            try { out = JSON.parse(out); } catch {}
-          }
-          popup(h2("result"), pre(JSON.stringify(out, null, 2)));
-        } catch (e: any) {
-          popup(h2("ERROR"), p(e.message || "run failed"));
-        } finally {
-          runFn.textContent = "run server";
-        }
-      }});
-
       const runAsyncFn = button("run async", { onclick: async () => {
 
         let lastarg = localStorage.getItem("server_fun_arg") ?? "{}";
-        const argText =  prompt("args as JSON (array or value)", lastarg);
+        const argText = prompt("args as JSON (array or value)", lastarg);
         localStorage.setItem("server_fun_arg", argText)
         if (argText == null) return;
         try {
@@ -188,7 +202,48 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         }
       }});
 
-      title.append(runFn, runAsyncFn);
+      title.append(runAsyncFn);
+    }
+
+    if (note.schemaHash === hashData(function_schema)) {
+      const runLocalFn = button("run local", { onclick: async () => {
+        const fnData = note.data as {code: string};
+        const usesArgs = fnData.code.includes('args');
+        let args = {};
+
+        if (usesArgs) {
+          const defaultArgs = '{"a": 1, "b": 2}';
+          let lastarg = localStorage.getItem("local_fun_arg") ?? defaultArgs;
+          const argText = prompt("args as JSON object (e.g., {\"a\": 5, \"b\": 3})", lastarg);
+          if (argText == null) return;
+
+          const trimmed = argText.trim();
+          if (!trimmed) {
+            popup(h2("ERROR"), p("Args cannot be empty. Use {} for no arguments."));
+            return;
+          }
+
+          try {
+            args = JSON.parse(trimmed);
+            localStorage.setItem("local_fun_arg", trimmed);
+          } catch (e: any) {
+            popup(h2("ERROR"), p("Invalid JSON: " + e.message));
+            return;
+          }
+        }
+
+        try {
+          runLocalFn.textContent = "running...";
+          const argsArray = Array.isArray(args) ? args : [args];
+          const result = await callNote(hash, ...argsArray);
+          popup(h2("result"), pre(JSON.stringify(result, null, 2)));
+        } catch (e: any) {
+          popup(h2("ERROR"), p(e.message || "run failed"));
+        } finally {
+          runLocalFn.textContent = "run local";
+        }
+      }});
+      title.append(runLocalFn);
     }
 
     updateContentDisplay();

@@ -80,6 +80,7 @@ export const function_schema = NoteData("function schema", top, object({
   code: string,
 }, {
   title: "function_schema",
+  required: ["code"]
 }))
 
 
@@ -116,12 +117,12 @@ export const schemas : NoteData[] = [
 ]
 
 
-export const isRef = (value: any) => typeof( value) == "string" && /^#([a-f0-9]+)$/.exec(value);
+export const isRef = (value: any) => typeof( value) == "string" && /^#([a-f0-9]+)$/.exec(value) as Ref[] | null;
 
 export const expandLinksSync = (
   value: Jsonable,
-  resolve: (ref: string) => Jsonable,
-  seen = new Set<string>()
+  resolve: (ref: Ref) => Jsonable,
+  seen = new Set<Ref>()
 ): Jsonable => {
   if (typeof value === "string") {
     const match = isRef(value);
@@ -141,8 +142,8 @@ export const expandLinksSync = (
 
 export const expandLinks = async (
   value: Jsonable,
-  resolve: (ref: string) => Promise<Jsonable>,
-  seen = new Set<string>()
+  resolve: (ref: Ref ) => Promise<Jsonable>,
+  seen = new Set<Ref>()
 ): Promise<Jsonable> => {
   if (typeof value === "string") {
     const match = isRef(value);

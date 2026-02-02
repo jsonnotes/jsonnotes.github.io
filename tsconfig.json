@@ -20,7 +20,7 @@
   },
   "include": [
     "src"
-  ],
+, "spacetimedb/src/openrouter.ts"  ],
   "exclude": [
     "src/module_bindings"
   ]

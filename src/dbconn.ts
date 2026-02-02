@@ -139,8 +139,21 @@ export const noteOverview = (ref) => getNote(ref).then(async note=>{
 
   let table = (data:Jsonable, d)=> {
     let ws = "  ".repeat(d)
-    if (typeof data  == "string" || typeof data == "number") full += data 
-    if (typeof data == "object") {
+    if (typeof data == "string") {
+      const isBigString = data.length > 60 || data.includes('\n');
+      if (isBigString) {
+        const lines = data.split('\n');
+        full += "\n" + ws + "`";
+        lines.forEach((line, i) => {
+          full += (i === 0 ? "" : "\n" + ws) + line;
+        });
+        full += "`";
+      } else {
+        full += " " + data;
+      }
+    } else if (typeof data == "number") {
+      full += " " + data;
+    } else if (typeof data == "object") {
       Object.entries(data).forEach(([k,v]) => {
         full += "\n" + ws + k + ":"
         table(v, d+1)

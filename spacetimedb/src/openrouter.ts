@@ -1,5 +1,5 @@
-import { hash128 } from "../spacetimedb/src/hash";
-import { h2, input, p, popup, style } from "./html";
+import { hash128 } from "./hash";
+import { h2, input, p, popup, style } from "../../src/html";
 
 
 const storekey = "$"+hash128("openrouter")
@@ -30,6 +30,8 @@ export const openrouter = async (prompt: string, schema: any) => {
       })
     })
   }
+
+  console.log(schema)
 
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
