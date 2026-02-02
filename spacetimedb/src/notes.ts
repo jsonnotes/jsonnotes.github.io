@@ -76,18 +76,19 @@ const titled2 = NoteData("titled2", has_titled_child, {child: `#${hashData(title
 
 
 export const function_schema = NoteData("function schema", top, object({
-  inputs: arrayT(string),
+  title: string,
   code: string,
 }, {
-  title: "function_schema"
+  title: "function_schema",
 }))
 
 
 export const server_function = NoteData("function schema", top, object({
-  inputs: arrayT(string),
+  title: string,
   code: string,
 }, {
-  title: "server_function"
+  title: "server_function",
+  required: ["code"]
 }))
 
 
@@ -111,7 +112,7 @@ export const schemas : NoteData[] = [
   titled,
   titled1, titled2,
   function_schema, example_function,
-  server_function,
+  server_function,  
 ]
 
 

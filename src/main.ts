@@ -69,6 +69,9 @@ handleRoute = () => {
         .then((note) => editFill({schemaHash: note.schemaHash, text: tojson(note.data)}))
         .catch((e) => popup(h2("ERROR"), p(e.message))); 
     }
+    if (window.location.search) {
+      history.replaceState({}, "", "/edit");
+    }
   } else if (!path) {
     render(dashboard.root);
     runQuery();

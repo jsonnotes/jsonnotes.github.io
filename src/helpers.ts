@@ -89,6 +89,7 @@ export type formfield = {
 export const safeInput = (
   schema: Schema,
   onChange: ()=>void,
+  onNavigate?: (ref: string)=>void,
 ) : formfield => {
   let {type, properties, items} = schema as any;
 
@@ -116,7 +117,14 @@ export const safeInput = (
     let refValue = "";
     const label = span();
     label.style.display = "none";
-    label.onclick = () => {
+    label.style.cursor = onNavigate ? "pointer" : "default";
+    label.style.textDecoration = onNavigate ? "underline" : "none";
+    label.onclick = (e) => {
+      if (onNavigate && isRef(refValue)) {
+        e.preventDefault();
+        onNavigate(refValue.slice(1));
+        return;
+      }
       refValue = "";
       label.style.display = "none";
       field.element.style.display = "";
@@ -183,7 +191,7 @@ export const safeInput = (
     ta.style.overflow = "hidden";
     ta.style.verticalAlign = "middle";
     ta.style.boxSizing = "content-box";
-    const minChars = 12;
+    const minChars = 50;
 
     const resize = () => {
       ta.style.height = "0px";

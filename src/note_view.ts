@@ -1,5 +1,5 @@
 import { Hash, hashData, NoteData, script_result_schema, script_schema, isRef, Ref, Jsonable, function_schema, server_function } from "../spacetimedb/src/notes";
-import { addNote, callProcedure, getId, getNote, getSchemaId, noteLink } from "./dbconn";
+import { addNote, callProcedure, getId, getNote, getSchemaId, noteLink, noteOverview } from "./dbconn";
 
 import { stringify } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, pre, routeLink, span, style } from "./html";
@@ -41,7 +41,7 @@ export const buildins = {
 for (let exp of buildinlist) if (!Object.keys(buildins).includes(exp)) throw new Error("buildin missing but expected: "+ exp)
 
 const linkify = (text: string) => {
-  const el = span();
+  const el = span(style({margin:"0.5em"}));
   const re = /#([a-f0-9]+)/g;
   let last = 0;
   let match: RegExpExecArray | null;
@@ -111,6 +111,28 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
 
     const text = isScript ? String((note.data as any).code || "") : stringify(note.data)
 
+    let useOverview = localStorage.getItem("note_view_mode") === "overview";
+    const contentDiv = div(style({ fontFamily: "monospace", whiteSpace: "pre", marginTop: "1em", overflowX: "auto", paddingBottom: "0.5em" }));
+
+    const updateContentDisplay = () => {
+      contentDiv.innerHTML = "";
+      if (useOverview && !isScript) {
+        noteOverview(hash).then(overview => {
+          contentDiv.append(pre(linkify(overview)));
+        });
+      } else {
+        contentDiv.append(linkify(text));
+      }
+    };
+
+    const toggleViewBtn = button(useOverview ? "json view" : "overview", {
+      onclick: () => {
+        useOverview = !useOverview;
+        localStorage.setItem("note_view_mode", useOverview ? "overview" : "json");
+        toggleViewBtn.textContent = useOverview ? "json view" : "overview";
+        updateContentDisplay();
+      }
+    });
 
     overlay.innerHTML = "";
     const title = h3(`${isScript ? "Script" : "Note"} #${id} ${titleText} `);
@@ -124,7 +146,9 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
     if (note.schemaHash === hashData(server_function)) {
       const runFn = button("run server", { onclick: async () => {
 
-        const argText = ((note.data as {inputs: string[]}).inputs.length)  ? prompt("args as JSON (array or value)", "[]"): "[]";
+        let lastarg = localStorage.getItem("server_fun_arg") ?? "{}";
+        const argText =  prompt("args as JSON (array or value)", lastarg);
+        localStorage.setItem("server_fun_arg", argText)
         if (argText == null) return;
         try {
           runFn.textContent = "running...";
@@ -143,15 +167,16 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
       }});
       title.append(runFn);
     }
+
+    updateContentDisplay();
+
     overlay.append(
       title,
       isScript ? "" : p("schema: ", noteLink(schemaId)),
+      isScript ? "" : div(style({ marginBottom: "0.5em" }), toggleViewBtn),
+      contentDiv,
       div(
-        style({ fontFamily: "monospace", whiteSpace: "pre", marginTop: "1em", overflowX: "auto" }),
-        linkify(text)
-      ),
-      div(
-        style({ display: "flex", gap: "0.75em", alignItems: "center" }),
+        style({ display: "flex", gap: "0.75em", alignItems: "center", paddingBottom: "0.5em" }),
         routeLink(`/edit?id=${id}`, "edit" ),
         routeLink(`/deps/${hash}`, "deps" ),
         button("copy", {

@@ -59,7 +59,7 @@ const cases: TestCase[] = [
   { name: "env-basic", code: "return a + b;", env: { a: 2, b: 5 }, expect: 7 },
   { name: "env-missing", code: "return a + b;", env: { a: 2 } },
   { name: "env-object", code: "return cfg.x + cfg.y;", env: { cfg: { x: 4, y: 1 } }, expect: 5 },
-  { name: "Math-use", code: "return Math.sqrt(25);", expect: 5 }, b
+  { name: "Math-use", code: "return Math.sqrt(25);", expect: 5 },
   { name: "no-prototype", code: "return ({a:1}).constructor.prototype;", compareWithNative: false, expectFuelError: true },
   // { name: "no-prototype-index", code: "return ({a:1}).constructor['proto' + 'type'];", compareWithNative: false, expectFuelError: true },
   { name: "break-test", code: "let s=0; for (let i=0;i<10;i++){ if (i===3) break; s+=i; } return s;", expect: 3},

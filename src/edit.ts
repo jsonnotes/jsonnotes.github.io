@@ -1,10 +1,34 @@
 import { fromjson, Hash, hashData, NoteData, script_schema, tojson } from "../spacetimedb/src/notes";
-import { a, button, div, input, p, pre, style, textarea } from "./html";
+import { a, button, div, input, pre, style, textarea } from "./html";
 import { getNote, noteOverview, query_data, validateNote } from "./dbconn";
-import { createSchemaPicker, formfield, safeInput } from "./helpers";
+import { createSchemaPicker, formfield, safeInput, SchemaEntry } from "./helpers";
 import { Draft } from "./main";
 
 type EditDeps = { submit: (data: NoteData) => Promise<void> };
+
+const fetchSchemas = (): Promise<SchemaEntry[]> =>
+  Promise.all([
+    query_data("select id, data, hash from note where schemaId = 0"),
+    query_data("select schemaId from note")
+  ]).then(([schemasRes, countsRes]) => {
+    const counts = new Map<string, number>();
+    countsRes.rows.forEach((row) => counts.set(String(row[0]), (counts.get(String(row[0])) || 0) + 1));
+    return schemasRes.rows.map((row) => {
+      let title = "";
+      try { title = JSON.parse(String(row[1] ?? ""))?.title ?? ""; } catch {}
+      const id = String(row[0]);
+      return { id, title, hash: String(row[2] ?? ""), count: counts.get(id) || 0 };
+    });
+  });
+
+const fetchNotes = (): Promise<SchemaEntry[]> =>
+  query_data("select id, data, hash from note limit 200").then((r) =>
+    r.rows.map((row) => {
+      let title = "";
+      try { title = JSON.parse(String(row[1] ?? ""))?.title ?? ""; } catch {}
+      return { id: String(row[0]), title, hash: String(row[2] ?? "") };
+    })
+  );
 
 const createSchemaPanel = (onPick: (hash: Hash) => void) => {
   let schemaHash = "" as Hash;
@@ -12,32 +36,13 @@ const createSchemaPanel = (onPick: (hash: Hash) => void) => {
   schemaLink.onclick = (e) => {
     if (e.metaKey || e.ctrlKey) return;
     e.preventDefault();
-    const href = schemaLink.getAttribute("href") || "/";
-    history.pushState({}, "", href);
+    history.pushState({}, "", schemaLink.getAttribute("href") || "/");
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
+
   const schemaList = pre();
-  const fetchSchemas = () =>
-    Promise.all([
-      query_data("select id, data, hash from note where schemaId = 0"),
-      query_data("select schemaId from note")
-    ]).then(([schemasRes, countsRes]) => {
-      const counts = new Map<string, number>();
-      countsRes.rows.forEach((row) => {
-        const id = String(row[0]);
-        counts.set(id, (counts.get(id) || 0) + 1);
-      });
-      return schemasRes.rows.map((row) => {
-        let title = "";
-        try {
-          const parsed = JSON.parse(String(row[1] ?? ""));
-          title = parsed?.title ? String(parsed.title) : "";
-        } catch {}
-        const id = String(row[0]);
-        return { id, title, hash: String(row[2] ?? ""), count: counts.get(id) || 0 };
-      });
-    });
-  const updateSchemaPreview = () => noteOverview(schemaHash).then(p => schemaList.innerHTML = p);
+  const updateSchemaPreview = () => noteOverview(schemaHash).then((p) => (schemaList.innerHTML = p));
+
   const setSchemaHash = (hash: Hash) => {
     if (hash === schemaHash) return;
     schemaHash = hash;
@@ -45,46 +50,51 @@ const createSchemaPanel = (onPick: (hash: Hash) => void) => {
     onPick(hash);
     updateSchemaPreview();
   };
+
   const schemaPicker = createSchemaPicker(fetchSchemas, (s) => setSchemaHash(s.hash as Hash));
   const root = div(
-    style({
-      padding: "1em",
-      marginTop: "0.5em",
-      borderRadius: "1em",
-      border: "1px solid #ccc",
-      background: "var(--background-color)",
-    }),
+    style({ padding: "1em", marginTop: "0.5em", borderRadius: "1em", border: "1px solid #ccc", background: "var(--background-color)" }),
     div(style({ display: "flex", alignItems: "center", gap: "0.75em", flexWrap: "wrap" }), schemaLink, schemaPicker),
     div(style({ display: "flex", gap: "1em", alignItems: "flex-start" }), div(schemaList))
   );
+
   return { root, setSchemaHash, getSchemaHash: () => schemaHash };
 };
 
 const plainView = ({ submit }: EditDeps) => {
-  const datafield = textarea(style({ fontFamily: "monospace", minHeight: "12em", resize: "vertical", background:"inherit" , color: "inherit", width: "100%" }));
   const scriptHash = hashData(script_schema);
-  let noteIndex: Array<{ id: string; title: string; hash: string }> | null = null;
   let schemaHash = "" as Hash;
-  const titleField = input("", { placeholder: "script title", style: { display: "none", marginBottom: "0.5em", fontSize: "1.1em", padding: "0.4em 0.6em", color: "inherit", background: "inherit", border: "none", outline: "none", width: "100%" }});
-  const jsonStatus = p();
-  const suggestionBox = div(style({ display: "none", border: "1px solid #ccc", padding: "0.5em", borderRadius: "0.5em", background: "var(--background-color)" }));
+  let noteIndex: SchemaEntry[] | null = null;
+
+  const titleField = input("", {
+    placeholder: "script title",
+    style: { display: "none", marginBottom: "0.5em", fontSize: "1.1em", padding: "0.4em 0.6em", color: "inherit", background: "inherit", border: "none", outline: "none", width: "100%" }
+  });
+
+  const datafield = textarea(style({ fontFamily: "monospace", minHeight: "12em", resize: "vertical", background: "inherit", color: "inherit", width: "100%" }));
   datafield.rows = 10;
   datafield.cols = 100;
 
-  const isScript = () => schemaHash == scriptHash;
-  const getDraft = (): {schemaHash: Hash, text: string} =>
-    isScript() ? ({schemaHash, text: tojson({title: titleField.value, code: datafield.value})}) : ({schemaHash, text: datafield.value});
+  const jsonStatus = document.createElement("p");
+  const suggestionBox = div(style({ display: "none", border: "1px solid #ccc", padding: "0.5em", borderRadius: "0.5em", background: "var(--background-color)" }));
+
+  const isScript = () => schemaHash === scriptHash;
+  const getDraft = (): Draft => isScript()
+    ? { schemaHash, text: tojson({ title: titleField.value, code: datafield.value }) }
+    : { schemaHash, text: datafield.value };
+
   const resizeTextarea = () => {
     datafield.style.height = "auto";
     datafield.style.height = `${datafield.scrollHeight}px`;
   };
+
   const setJsonStatus = (text: string, color: string) => {
     jsonStatus.textContent = text;
     jsonStatus.style.color = color;
   };
   setJsonStatus("valid", "green");
 
-  datafield.onkeydown = (e) => {
+  const handleKeydown = (e: KeyboardEvent) => {
     datafield.dispatchEvent(new Event("input"));
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
       e.preventDefault();
@@ -97,52 +107,37 @@ const plainView = ({ submit }: EditDeps) => {
       const end = datafield.selectionEnd || 0;
       const before = datafield.value.slice(0, start);
       const after = datafield.value.slice(end);
-      const lineStart = before.lastIndexOf("\n") + 1;
-      const line = before.slice(lineStart);
+      const line = before.slice(before.lastIndexOf("\n") + 1);
       const indent = line.match(/^\s*/)?.[0] || "";
       const extra = /[\{\[]\s*$/.test(line) ? "  " : "";
-      const insert = `\n${indent}${extra}`;
-      datafield.value =(`${before}${insert}${after}`);
-      const cursor = start + insert.length;
+      datafield.value = `${before}\n${indent}${extra}${after}`;
+      const cursor = start + 1 + indent.length + extra.length;
       datafield.setSelectionRange(cursor, cursor);
-    }else{
-      const pairs: Record<string, string> = { "{": "}", "[": "]", "(": ")", "\"": "\"" };
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (!(e.key in pairs)) return;
-      const start = datafield.selectionStart || 0;
-      const end = datafield.selectionEnd || 0;
-      if (start === end && datafield.value[start] === pairs[e.key]) {
-        e.preventDefault();
-        datafield.setSelectionRange(start + 1, start + 1);
-        return;
-      }
-      if (e.key === "\"" && start === end && datafield.value[start - 1] === "\\") return;
-      e.preventDefault();
-      const before = datafield.value.slice(0, start);
-      const after = datafield.value.slice(end);
-      const close = pairs[e.key];
-      const selection = datafield.value.slice(start, end);
-      datafield.value = (`${before}${e.key}${selection}${close}${after}`)
-      const cursor = start + 1 + selection.length;
-      datafield.setSelectionRange(cursor, cursor);
+      return;
     }
+
+    const pairs: Record<string, string> = { "{": "}", "[": "]", "(": ")", '"': '"' };
+    if (e.metaKey || e.ctrlKey || e.altKey || !(e.key in pairs)) return;
+
+    const start = datafield.selectionStart || 0;
+    const end = datafield.selectionEnd || 0;
+    if (start === end && datafield.value[start] === pairs[e.key]) {
+      e.preventDefault();
+      datafield.setSelectionRange(start + 1, start + 1);
+      return;
+    }
+    if (e.key === '"' && start === end && datafield.value[start - 1] === "\\") return;
+    e.preventDefault();
+    const before = datafield.value.slice(0, start);
+    const after = datafield.value.slice(end);
+    const selection = datafield.value.slice(start, end);
+    datafield.value = `${before}${e.key}${selection}${pairs[e.key]}${after}`;
+    datafield.setSelectionRange(start + 1 + selection.length, start + 1 + selection.length);
   };
 
-  const loadNotes = () => {
-    if (noteIndex) return Promise.resolve(noteIndex);
-    return query_data("select id, data, hash from note limit 200")
-      .then((r) => r.rows.map((row) => {
-        const id = String(row[0]);
-        let title = "";
-        try {
-          const parsed = JSON.parse(String(row[1] ?? ""));
-          title = parsed?.title ? String(parsed.title) : "";
-        } catch {}
-        const hash = String(row[2] ?? "");
-        return { id, title, hash };
-      }))
-      .then((rows) => (noteIndex = rows));
-  };
+  datafield.onkeydown = handleKeydown;
+
+  const loadNotes = () => noteIndex ? Promise.resolve(noteIndex) : fetchNotes().then((rows) => (noteIndex = rows));
 
   const updateSuggestions = () => {
     if (!isScript()) {
@@ -163,24 +158,19 @@ const plainView = ({ submit }: EditDeps) => {
     }
     loadNotes().then((notes) => {
       const q = token.toLowerCase();
-      const filtered = notes.filter((n) =>
-        n.id.toLowerCase().includes(q) ||
-        n.title.toLowerCase().includes(q)
-      ).slice(0, 8);
+      const filtered = notes.filter((n) => n.id.toLowerCase().includes(q) || n.title.toLowerCase().includes(q)).slice(0, 8);
       suggestionBox.innerHTML = "";
       if (!filtered.length) {
         suggestionBox.style.display = "none";
         return;
       }
       filtered.forEach((n) => {
-        const label = `#${n.id}${n.title ? `: ${n.title}` : ""}`;
-        suggestionBox.appendChild(button(label, {
+        suggestionBox.appendChild(button(`#${n.id}${n.title ? `: ${n.title}` : ""}`, {
           onclick: () => {
             const before = text.slice(0, hashPos);
             const after = text.slice(cursor);
-            const insert = `#${n.id}`;
-            datafield.value = `${before}${insert}${after}`;
-            const next = before.length + insert.length;
+            datafield.value = `${before}#${n.id}${after}`;
+            const next = hashPos + 1 + n.id.length;
             datafield.setSelectionRange(next, next);
             setText(datafield.value);
             suggestionBox.style.display = "none";
@@ -191,24 +181,14 @@ const plainView = ({ submit }: EditDeps) => {
     });
   };
 
-  datafield.oninput = () => {
-    setText(datafield.value);
-    updateSuggestions();
-    resizeTextarea();
-    if (window.location.search.includes("new=1")) {
-      history.replaceState({}, "", "/edit");
-    }
-  };
-
   const updateStatus = async () => {
     jsonStatus.innerText = "validating...";
     jsonStatus.style.color = "#666";
-    try{
-      const data = JSON.parse(getDraft().text)
-      await validateNote({schemaHash, data})
-      setJsonStatus("valid", "#2a3")
-    }catch (e){
-      setJsonStatus(e.message || "invalid json", "#f66")
+    try {
+      await validateNote({ schemaHash, data: JSON.parse(getDraft().text) });
+      setJsonStatus("valid", "#2a3");
+    } catch (e: any) {
+      setJsonStatus(e.message || "invalid json", "#f66");
     }
   };
 
@@ -217,93 +197,129 @@ const plainView = ({ submit }: EditDeps) => {
     updateStatus();
     localStorage.setItem("edit_draft", JSON.stringify(getDraft()));
   };
+
   const setSchemaHash = (hash: Hash) => {
-    const text = datafield.value;
     schemaHash = hash;
     titleField.style.display = isScript() ? "block" : "none";
-    if (isScript()) setText((fromjson(text) as {code:string}).code ?? "");
-    else setText(text);
+  };
+
+  datafield.oninput = () => {
+    setText(datafield.value);
+    updateSuggestions();
+    resizeTextarea();
+    if (window.location.search.includes("new=1")) history.replaceState({}, "", "/edit");
   };
 
   const formatButton = button("format json (cmd+s)", {
-    onclick: () => {
-      if (isScript()) return;
-      setText(tojson(fromjson(datafield.value)));
-    }
+    onclick: () => { if (!isScript()) setText(tojson(fromjson(datafield.value))); }
   });
 
   const root = div(
     titleField,
     datafield,
     suggestionBox,
-    div(
-      style({ display: "flex", gap: "0.5em", alignItems: "center" }),
-      formatButton,
-      jsonStatus
-    ),
-    button("push", {
-      onclick: () => submit({schemaHash, data:JSON.parse(getDraft().text)}),
-    }),
+    div(style({ display: "flex", gap: "0.5em", alignItems: "center" }), formatButton, jsonStatus),
+    button("push", { onclick: () => submit({ schemaHash, data: JSON.parse(getDraft().text) }) })
   );
 
   resizeTextarea();
 
-  return { root, setSchemaHash, fill:({schemaHash, text} : Draft) => {
-    setText(text);
-    setSchemaHash(schemaHash);
-    datafield.focus();
-  } };
-};  
-
-
+  return {
+    root,
+    setSchemaHash,
+    getDraft,
+    fill: ({ schemaHash: hash, text }: Draft) => {
+      setSchemaHash(hash);
+      if (isScript()) {
+        try {
+          const parsed = fromjson(text) as { title?: string; code?: string };
+          titleField.value = parsed.title ?? "";
+          datafield.value = parsed.code ?? "";
+        } catch {
+          datafield.value = text;
+        }
+      } else {
+        datafield.value = text;
+      }
+      updateStatus();
+      localStorage.setItem("edit_draft", JSON.stringify(getDraft()));
+      datafield.focus();
+    }
+  };
+};
 
 export const niceView = ({ submit }: EditDeps) => {
   let schemaHash: Hash;
   let form: formfield;
-  let root = div();
+  const root = div();
+
+  const getDraft = (): Draft => ({
+    schemaHash,
+    text: tojson(form.getData())
+  });
+
+  const saveDraft = () => {
+    localStorage.setItem("edit_draft", JSON.stringify(getDraft()));
+  };
+
   const setSchemaHash = (hash: Hash) => {
     schemaHash = hash;
     root.innerHTML = "";
-    return getNote(schemaHash).then(schema=>{
-      form = safeInput(schema.data, ()=> {})
+    return getNote(schemaHash).then((schema) => {
+      form = safeInput(schema.data, saveDraft);
       root.innerHTML = "";
-      root.append(form.element);
-    })
-  }
-  const setText = (text: string) => form.setData(fromjson(text));
-  return { setSchemaHash, fill:({schemaHash, text} : Draft) => setSchemaHash(schemaHash).then(()=>setText(text)), root }
-}
+      root.append(
+        form.element,
+        div(
+          style({ marginTop: "0.5em" }),
+          button("push", { onclick: () => submit({ schemaHash, data: form.getData() }) })
+        )
+      );
+    });
+  };
 
+  const setText = (text: string) => {
+    form.setData(fromjson(text));
+    saveDraft();
+  };
 
-export const createEditView = (submit:EditDeps) => {
-  const plain = plainView(submit)
+  return {
+    setSchemaHash,
+    getDraft,
+    fill: ({ schemaHash, text }: Draft) => setSchemaHash(schemaHash).then(() => setText(text)),
+    root
+  };
+};
+
+export const createEditView = (submit: EditDeps) => {
+  const plain = plainView(submit);
   const nice = niceView(submit);
-  let active = {plain, nice}[localStorage.editmode || "nice"];
+  let active: typeof plain | typeof nice = { plain, nice }[localStorage.editmode || "nice"] ?? nice;
   const schemaPanel = createSchemaPanel((hash) => active.setSchemaHash(hash));
+  let data: Draft;
 
-  const toggle_mode = ()=>{
-    active = active == nice ? plain : nice;
-    active.fill(data)
-    localStorage.editmode = active == nice ? "nice" : "plain"
-    mount()
-  }
+  const toggleMode = () => {
+    data = active.getDraft();
+    active = active === nice ? plain : nice;
+    active.fill(data);
+    localStorage.editmode = active === nice ? "nice" : "plain";
+    mount();
+  };
 
-  const nicebut = button("niceview", {onclick: toggle_mode});
+  const nicebut = button("niceview", { onclick: toggleMode });
   const root = div();
   const mount = () => {
     root.innerHTML = "";
     root.append(nicebut, active.root, schemaPanel.root);
   };
-  let data : {schemaHash: Hash, text: string};
   mount();
 
   return {
-    fill: newdata=> {
-      data = newdata
-      schemaPanel.setSchemaHash(newdata.schemaHash)
-      active.fill(newdata)
+    fill: (newdata: Draft) => {
+      data = newdata;
+      schemaPanel.setSchemaHash(newdata.schemaHash);
+      active.fill(newdata);
     },
     root
-  }
-
-}
+  };
+};
