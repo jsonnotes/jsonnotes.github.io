@@ -32,14 +32,14 @@ import {
 } from "spacetimedb";
 
 // Import and reexport all reducer arg types
-import AddNoteReducer from "./add_note_reducer";
-export { AddNoteReducer };
 import SetupReducer from "./setup_reducer";
 export { SetupReducer };
 
 // Import and reexport all procedure arg types
-import * as RunNoteProcedure from "./run_note_procedure";
-export { RunNoteProcedure };
+import * as AddNoteProcedure from "./add_note_procedure";
+export { AddNoteProcedure };
+import * as RunNoteAsyncProcedure from "./run_note_async_procedure";
+export { RunNoteAsyncProcedure };
 
 // Import and reexport all table handle types
 import LinksRow from "./links_table";
@@ -52,8 +52,6 @@ import StoreRow from "./store_table";
 export { StoreRow };
 
 // Import and reexport all types
-import AddNote from "./add_note_type";
-export { AddNote };
 import Init from "./init_type";
 export { Init };
 import Links from "./links_type";
@@ -119,13 +117,13 @@ const tablesSchema = __schema(
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
-  __reducerSchema("add_note", AddNoteReducer),
   __reducerSchema("setup", SetupReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
 const proceduresSchema = __procedures(
-  __procedureSchema("run_note", RunNoteProcedure.params, RunNoteProcedure.returnType),
+  __procedureSchema("add_note", AddNoteProcedure.params, AddNoteProcedure.returnType),
+  __procedureSchema("run_note_async", RunNoteAsyncProcedure.params, RunNoteAsyncProcedure.returnType),
 );
 
 /** The remote SpacetimeDB module schema, both runtime and type information. */
