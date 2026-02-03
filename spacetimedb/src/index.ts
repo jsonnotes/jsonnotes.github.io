@@ -114,6 +114,20 @@ const setup = spacetimedb.reducer('setup', {}, (ctx) => {
 
 spacetimedb.init(setup)
 
+// Simple reducer for migration - no validation, no return value
+spacetimedb.reducer('import_note', { schemaHash: t.string(), data: t.string() }, (ctx, { schemaHash, data }) => {
+  const schemaRow = ctx.db.note.hash.find(schemaHash);
+  if (!schemaRow) throw new SenderError('Schema not found: ' + schemaHash);
+
+  const parsed = fromjson(data);
+  const hash = hashData({ schemaHash: schemaHash as Hash, data: parsed });
+
+  if (ctx.db.note.hash.find(hash)) return; // already exists
+
+  const id = ctx.db.note.count();
+  ctx.db.note.insert({ id, schemaId: schemaRow.id, data, hash });
+})
+
 
 /* this will outside of transaction allowing for fetch requests */
 spacetimedb.procedure('run_note_async', {id:t.u64(), arg: t.string()}, t.string(), (ctx, {id, arg})=> {
