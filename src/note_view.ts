@@ -33,9 +33,7 @@ const callNote = async (fn: Ref, ...args: Jsonable[]): Promise<any> => {
       }
     },
     openrouter: async (prompt: string, schema: Ref | Jsonable) => {
-      if (isRef(schema)){
-        schema = (await getNote(schema as Ref)).data
-      }
+      if (isRef(schema)) schema = (await getNote(schema as Ref)).data
       return openrouter(prompt, schema)
     },
     hash: hash128

@@ -10,6 +10,8 @@ const dbPresets: Record<string, string> = {
   prod: "https://maincloud.spacetimedb.com",
 };
 
+const isLocalhost = () => ["localhost", "127.0.0.1"].includes(window.location.hostname);
+
 const loadDbPreset = () => {
   const fromQuery = new URLSearchParams(window.location.search).get("db");
   const fromStore = localStorage.getItem("db_preset");
@@ -17,7 +19,8 @@ const loadDbPreset = () => {
     localStorage.setItem("db_preset", fromQuery);
     return fromQuery;
   }
-  return fromStore && dbPresets[fromStore] ? fromStore : "local";
+  if (fromStore && dbPresets[fromStore]) return fromStore;
+  return isLocalhost() ? "local" : "prod";
 };
 
 const DB_PRESET = loadDbPreset();

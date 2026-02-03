@@ -172,9 +172,20 @@ export const popup = (...cs:HTMLArg[])=>{
 
   popupbackground.appendChild(dialogfield);
   document.body.appendChild(popupbackground);
-  popupbackground.onclick = () => {
+
+  const closePopup = () => {
     popupbackground.remove();
-  }
+    document.removeEventListener("keydown", handleKeydown);
+  };
+
+  const handleKeydown = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      closePopup();
+    }
+  };
+
+  popupbackground.onclick = closePopup;
+  document.addEventListener("keydown", handleKeydown);
 
   dialogfield.onclick = (e) => {
     e.stopPropagation();

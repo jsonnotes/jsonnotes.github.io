@@ -67,7 +67,7 @@ export const arrowDown = (
 };
 
 export const svgText = (svg: SVGSVGElement, pos: { x: number; y: number }, text: string) => {
-  const width = 140;
+  const width = 220;
   const p = toSvgPoint(svg, pos);
   const g = appendSvg(
     svg,

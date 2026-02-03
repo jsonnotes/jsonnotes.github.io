@@ -1,5 +1,6 @@
 import { hash128 } from "./hash";
 import { h2, input, p, popup, style } from "../../src/html";
+import { validate } from "./notes";
 
 
 const storekey = "$"+hash128("openrouter")
@@ -8,7 +9,7 @@ const storekey = "$"+hash128("openrouter")
 
 let OPENROUTER_API_KEY = localStorage.getItem(storekey) || ""
 
-export const openrouter = async (prompt: string, schema: any) => {
+export const openrouter = async (prompt: string, schema: any, model = "openai/gpt-4o") => {
 
   if (OPENROUTER_API_KEY === "") {
     await new Promise<void>((resolve, reject) => {
@@ -31,9 +32,6 @@ export const openrouter = async (prompt: string, schema: any) => {
     })
   }
 
-  console.log(schema)
-
-
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -41,7 +39,7 @@ export const openrouter = async (prompt: string, schema: any) => {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: "openai/gpt-4o",
+      model,
       messages: [{role: "user",content: prompt}],
       "response_format": { "type": "json_schema", json_schema: {"name": "response", "schema": schema}}
 
@@ -50,7 +48,9 @@ export const openrouter = async (prompt: string, schema: any) => {
 
   const data = await response.json();
   try{
-    return JSON.parse(data.choices[0].message.content);
+    let resp = JSON.parse(data.choices[0].message.content);
+    validate(resp, schema)
+    return resp
   }catch {
     // console.log("openrouter response:", data)
     return data
