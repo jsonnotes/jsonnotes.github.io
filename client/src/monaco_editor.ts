@@ -6,7 +6,7 @@ import HtmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { Hash, fromjson, tojson, hashData, script_schema } from "@jsonview/core";
 import { div, button, style, input } from "./html";
-import { query_data, validateNote } from "./dbconn";
+import { notePreview, query_data, validateNote } from "./dbconn";
 import { SchemaEntry } from "./helpers";
 import { Draft } from "./main";
 
@@ -56,6 +56,11 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
   const scriptHash = hashData(script_schema);
   let schemaHash = "" as Hash;
   let editor: monaco.editor.IStandaloneCodeEditor | null = null;
+  let linkDecorations: string[] = [];
+  const previewCache = new Map<string, string>();
+  let updateTimer: number | null = null;
+  let styleInjected = false;
+  let showPreviews = true;
 
   const titleField = input("", {
     placeholder: "script title",
@@ -220,18 +225,90 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
       }
     });
 
+    const injectStyles = () => {
+      if (styleInjected) return;
+      styleInjected = true;
+      const style = document.createElement("style");
+      style.textContent = `
+        .jv-link-hidden { color: transparent !important; font-size: 0 !important; letter-spacing: 0 !important; }
+        .jv-link-hidden::selection { color: transparent !important; background: #b3d4fc !important; }
+        .jv-link-preview { color: var(--color); opacity: 0.8; text-decoration: underline; cursor: pointer; }
+      `;
+      document.head.appendChild(style);
+    };
+
+    const scheduleUpdate = () => {
+      if (updateTimer !== null) window.clearTimeout(updateTimer);
+      updateTimer = window.setTimeout(updateLinkDecorations, 50);
+    };
+
+    const updateLinkDecorations = () => {
+      if (!editor) return;
+      injectStyles();
+      const model = editor.getModel();
+      if (!model) return;
+      const text = model.getValue();
+      const re = /#([a-f0-9]{32})/g;
+      const next: monaco.editor.IModelDeltaDecoration[] = [];
+      const hashesToFetch: string[] = [];
+      let match: RegExpExecArray | null;
+      while ((match = re.exec(text))) {
+        const hash = match[1];
+        const start = model.getPositionAt(match.index);
+        const end = model.getPositionAt(match.index + match[0].length);
+        const preview = previewCache.get(hash);
+        if (!preview) hashesToFetch.push(hash);
+        next.push({
+          range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+          options: showPreviews ? {
+            inlineClassName: "jv-link-hidden",
+            after: {
+              content: preview ?? `#${hash.slice(0, 8)}`,
+              inlineClassName: "jv-link-preview",
+              cursorStops: monaco.editor.InjectedTextCursorStops.Both,
+            },
+          } : {
+            inlineClassName: undefined,
+            after: undefined,
+          },
+        });
+      }
+      linkDecorations = editor.deltaDecorations(linkDecorations, next);
+
+      if (hashesToFetch.length) {
+        Promise.all(hashesToFetch.map((h) => notePreview(h).then((p) => [h, p] as const).catch(() => [h, `#${h.slice(0,8)}`] as const)))
+          .then((pairs) => {
+            let changed = false;
+            for (const [h, p] of pairs) {
+              if (previewCache.get(h) !== p) {
+                previewCache.set(h, p);
+                changed = true;
+              }
+            }
+            if (changed) scheduleUpdate();
+          });
+      }
+    };
+
     // Listen for changes
     editor.onDidChangeModelContent(() => {
       updateStatus();
       saveDraft();
       if (window.location.search.includes("new=1"))
         history.replaceState({}, "", "/edit");
+      scheduleUpdate();
     });
+
+    editor.onDidFocusEditorText(() => {});
+    editor.onDidBlurEditorText(() => {});
 
     // Cmd+S to format
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       formatButton.click();
     });
+
+    showPreviews = true;
+    scheduleUpdate();
   };
 
   const setSchemaHash = (hash: Hash) => {
