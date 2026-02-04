@@ -231,7 +231,7 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
 
     editor = monaco.editor.create(editorContainer, {
       value: "{}",
-      language: "json",
+      language: isScript() ? "javascript" : isFunction() ? "javascript" : "json",
       theme: "jsonview",
       minimap: { enabled: false },
       automaticLayout: true,
@@ -430,7 +430,7 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
     if (editor) {
       monaco.editor.setModelLanguage(
         editor.getModel()!,
-        isScript() ? "javascript" : isFunction() ? "typescript" : "json"
+        isScript() ? "javascript" : isFunction() ? "javascript" : "json"
       );
     }
   };
@@ -449,9 +449,6 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
       style: { marginTop: "0.5em" },
     })
   );
-
-    // Initialize editor when container is mounted
-    requestAnimationFrame(initEditor);
 
   return {
     root,
