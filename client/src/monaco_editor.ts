@@ -134,10 +134,29 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
 
     const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
+    const resolveBackground = () => {
+      const root = document.documentElement;
+      const fromVar =
+        getComputedStyle(root).getPropertyValue("--background") ||
+        getComputedStyle(root).getPropertyValue("--background-color");
+      const trimmed = fromVar.trim();
+      if (trimmed) return trimmed;
+      return isDark ? "#1e1e1e" : "#ffffff";
+    };
+
+    monaco.editor.defineTheme("jsonview", {
+      base: isDark ? "vs-dark" : "vs",
+      inherit: true,
+      rules: [],
+      colors: {
+        "editor.background": resolveBackground(),
+      },
+    });
+
     editor = monaco.editor.create(editorContainer, {
       value: "{}",
       language: "json",
-      theme: isDark ? "vs-dark" : "vs",
+      theme: "jsonview",
       minimap: { enabled: false },
       automaticLayout: true,
       fontSize: 14,
@@ -230,9 +249,17 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
       styleInjected = true;
       const style = document.createElement("style");
       style.textContent = `
-        .jv-link-hidden { color: transparent !important; font-size: 0 !important; letter-spacing: 0 !important; }
-        .jv-link-hidden::selection { color: transparent !important; background: #b3d4fc !important; }
-        .jv-link-preview { color: var(--color); opacity: 0.8; text-decoration: underline; cursor: pointer; }
+        .jv-link-dim { opacity: 0.45; }
+        .jv-link-preview {
+          color: var(--color);
+          opacity: 0.9;
+          cursor: pointer;
+          background: #ccc4;
+          border: 1px solid #ccc4;
+          border-radius: 6px;
+          padding: 0 6px;
+          margin-left: 0;
+        }
       `;
       document.head.appendChild(style);
     };
@@ -261,11 +288,11 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
         next.push({
           range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
           options: showPreviews ? {
-            inlineClassName: "jv-link-hidden",
+            inlineClassName: "jv-link-dim",
             after: {
-              content: preview ?? `#${hash.slice(0, 8)}`,
+              content: `${preview ?? `#${hash.slice(0, 8)}`}`,
               inlineClassName: "jv-link-preview",
-              cursorStops: monaco.editor.InjectedTextCursorStops.Both,
+              cursorStops: monaco.editor.InjectedTextCursorStops.None,
             },
           } : {
             inlineClassName: undefined,
