@@ -1,6 +1,6 @@
 
 import { button, div, p, routeLink, style } from "./html";
-import { function_schema, hashData, script_result_schema, script_schema } from "../spacetimedb/src/notes";
+import { function_schema, hashData, script_result_schema, script_schema, top } from "../spacetimedb/src/notes";
 import { createSchemaPicker, noteSearch, SchemaEntry } from "./helpers";
 import { noteLink } from "./dbconn";
 
@@ -13,10 +13,10 @@ type DashboardDeps = {
 };
 
 export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) => {
-  let lastId = 100;
   const schemaHashAny = "any";
   const schemaHashScript = hashData(script_schema);
   const schemaHashScriptResult = hashData(script_result_schema);
+  const topHash = hashData(top);
 
   let cachedCount: number | null = null;
   let cachedRows: Map<string, any[][]> = new Map(); // schema -> rows
@@ -31,13 +31,13 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
     createSchemaPicker(
       () =>
         Promise.all([
-          query("select id, data, hash from note where schemaId = 0"),
-          query("select schemaId from note")
+          query(`select hash, data from note where schemaHash = '${topHash}'`),
+          query("select schemaHash from note")
         ]).then(([schemasRes, countsRes]) => {
           const counts = new Map<string, number>();
           countsRes.rows.forEach((row) => {
-            const id = String(row[0]);
-            counts.set(id, (counts.get(id) || 0) + 1);
+            const hash = String(row[0]);
+            counts.set(hash, (counts.get(hash) || 0) + 1);
           });
           return schemasRes.rows.map((row) => {
             let title = "";
@@ -45,8 +45,8 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
               const parsed = JSON.parse(String(row[1] ?? ""));
               title = parsed?.title ? String(parsed.title) : "";
             } catch {}
-            const id = String(row[0]);
-            return { id, title, hash:String(row[2] ?? ""), count: counts.get(id) || 0 };
+            const hash = String(row[0] ?? "");
+            return { hash, title, count: counts.get(hash) || 0 };
           });
         }),
       (s) => setSchema(s.hash)
@@ -55,19 +55,19 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
   let currentSchema = schemaHashAny;
 
   const fetchAllNotes = (): Promise<SchemaEntry[]> =>
-    query("select id, data, hash from note limit 200").then((r) =>
+    query("select hash, data from note limit 200").then((r) =>
       r.rows.map((row) => {
         let title = "";
         try {
           title = JSON.parse(String(row[1] ?? ""))?.title ?? "";
         } catch {}
-        return { id: String(row[0]), title, hash: String(row[2] ?? "") };
+        return { hash: String(row[0] ?? ""), title };
       })
     );
 
   const openSearch = () => {
     fetchAllNotes().then((notes) => {
-      noteSearch((note) => navigate(`/${note.id}`), notes);
+      noteSearch((note) => navigate(`/${note.hash}`), notes);
     });
   };
 
@@ -81,9 +81,9 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
     const list = div(style({ display: "flex", flexDirection: "column", gap: "0.5em" }));
     const reversed = [...rows].reverse();
     reversed.forEach((row) => {
-      const note = { id: row[0], data: row[1] };
+      const note = { hash: row[0], data: row[1] };
       onRow && onRow(note);
-      list.append(noteLink(note.id));
+      list.append(noteLink(note.hash));
     });
     result.append(list);
   };
@@ -103,7 +103,6 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
     try {
       const countRes = await query("select count from note_count");
       currentCount = Number(countRes.rows[0][0]);
-      lastId = Math.max(maxitems, currentCount);
     } catch {}
 
     // Cache still valid - no need to refetch
@@ -117,22 +116,9 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
       cachedCount = currentCount;
     }
 
-    let schemaId: number | null = null;
-    if (currentSchema !== schemaHashAny) {
-      if (/^\d+$/.test(currentSchema)) schemaId = Number(currentSchema);
-      else {
-        const lookup = await query(`select id from note where hash = '${currentSchema}'`);
-        schemaId = lookup.rows[0]?.[0] ?? null;
-      }
-    }
-    if (currentSchema !== schemaHashAny && schemaId === null) {
-      result.innerHTML = "";
-      result.append(p("no matches"));
-      return;
-    }
-    const range = `id >= ${(lastId - maxitems)} and id < ${lastId}`;
-    const where = schemaId === null ? range : `schemaId = ${schemaId} and ${range}`;
-    const sql = `select id, data from note where ${where} limit 50`;
+    const sql = currentSchema === schemaHashAny
+      ? `select hash, data from note limit ${maxitems}`
+      : `select hash, data from note where schemaHash = '${currentSchema}' limit ${maxitems}`;
     const data = await query(sql);
     cachedRows.set(currentSchema, data.rows);
     renderRows(data.rows);

@@ -1,12 +1,12 @@
 import { div, h3, popup, pre, style } from "./html";
-import { getId, getSchemaId, noteOverview, notePreview, query_data } from "./dbconn";
-import { Ref } from "../spacetimedb/src/notes";
+import { getNote, noteOverview, notePreview, query_data } from "./dbconn";
+import { Hash, Ref, hashData, top, normalizeRef } from "../spacetimedb/src/notes";
 import { noteSearch } from "./helpers";
 
 type QueryResult = { names: string[]; rows: any[][] };
 type DepsDeps = { query: (sql: string) => Promise<QueryResult>, navigate: (ref:string) => void};
 
-export type DepsData = { currentId: number; inputs: number[]; outputs: number[] };
+export type DepsData = { currentHash: string; inputs: string[]; outputs: string[] };
 export type DepsRefs = { current: Ref[]; inputs: Ref[]; outputs: Ref[] };
 const appendSvg = (svg: SVGSVGElement, html: string) => {
   svg.insertAdjacentHTML("beforeend", html);
@@ -86,18 +86,18 @@ export const svgText = (svg: SVGSVGElement, pos: { x: number; y: number }, text:
   return { node: g, rect: { x: left, y: top, width, height } };
 };
 
-export const depsDataFromRows = (rows: any[][], currentId: number, limit = 10): DepsData => {
-  const inputs: number[] = [];
-  const outputs: number[] = [];
+export const depsDataFromRows = (rows: any[][], currentHash: string, limit = 10): DepsData => {
+  const inputs: string[] = [];
+  const outputs: string[] = [];
   rows.forEach((row) => {
-    const to = Number(row[0]);
-    const from: number[] = row[1] || [];
-    if (from.some((id) => Number(id) === Number(currentId))) inputs.push(to);
-    if (to === Number(currentId)) outputs.push(...from);
+    const to = String(row[0] ?? "");
+    const from: string[] = row[1] || [];
+    if (from.some((hash) => hash === currentHash)) inputs.push(to);
+    if (to === currentHash) outputs.push(...from);
   });
-  const uniq = (arr: number[]) => [...new Set(arr)];
+  const uniq = (arr: string[]) => [...new Set(arr)];
   return {
-    currentId,
+    currentHash,
     inputs: uniq(inputs).slice(0, limit),
     outputs: uniq(outputs).slice(0, limit),
   };
@@ -111,15 +111,16 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
   svg.setAttribute("width", "100%");
   svg.setAttribute("height", "320");
   panel.append(svg, prev);
+  const topHash = hashData(top);
   const fetchSchemas = () =>
     Promise.all([
-      query_data("select id, data, hash from note where schemaId = 0"),
-      query_data("select schemaId from note")
+      query_data(`select hash, data from note where schemaHash = '${topHash}'`),
+      query_data("select schemaHash from note")
     ]).then(([schemasRes, countsRes]) => {
       const counts = new Map<string, number>();
       countsRes.rows.forEach((row) => {
-        const id = String(row[0]);
-        counts.set(id, (counts.get(id) || 0) + 1);
+        const hash = String(row[0]);
+        counts.set(hash, (counts.get(hash) || 0) + 1);
       });
       return schemasRes.rows.map((row) => {
         let title = "";
@@ -127,8 +128,8 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
           const parsed = JSON.parse(String(row[1] ?? ""));
           title = parsed?.title ? String(parsed.title) : "";
         } catch {}
-        const id = String(row[0]);
-        return { id, title, hash:String(row[2] ?? ""), count: counts.get(id) || 0 };
+        const hash = String(row[0] ?? "");
+        return { hash, title, count: counts.get(hash) || 0 };
       });
     });
   root.append(h3("Dependencies"), panel);
@@ -137,58 +138,58 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
     if (!ref) {
       fetchSchemas().then((schemas) =>
         noteSearch((s) => {
-          window.history.pushState({}, "", `/deps/${s.id}`);
-          render(s.id as Ref);
+          window.history.pushState({}, "", `/deps/${s.hash}`);
+          render(s.hash as Ref);
         }, schemas)
       );
       return;
     }
-    const currentId = await getId(ref);
-    const schemaId = await getSchemaId(ref);
+    const currentHash = normalizeRef(ref);
+    const schemaHash = (await getNote(ref)).schemaHash;
     const links = await query("select to, from from links");
-    const data = depsDataFromRows(links.rows, currentId);
+    const data = depsDataFromRows(links.rows, currentHash);
 
-    data.inputs = data.inputs.filter(i=>i!=schemaId)
+    data.inputs = data.inputs.filter((h)=>h!==schemaHash)
 
     const cols = [
       { ids: data.inputs, x: 0.2 },
-      { ids: [data.currentId], x: 0.5 },
+      { ids: [data.currentHash], x: 0.5 },
       { ids: data.outputs, x: 0.8 },
     ];
-    const labels = new Map<number, string>();
+    const labels = new Map<string, string>();
     await Promise.all(
       cols.flatMap((c) =>
-        c.ids.map(async (id) => {
-          const label = await notePreview(id).then((p) => p.slice(0, 30)).catch(() => `#${id}`);
-          labels.set(id, label);
+        c.ids.map(async (hash) => {
+          const label = await notePreview(hash).then((p) => p.slice(0, 30)).catch(() => `#${hash}`);
+          labels.set(hash, label);
         })
       )
     );
-    const schemaLabel = await notePreview(schemaId).then((p) => p.slice(0, 15)).catch(() => `#${schemaId}`);
-    labels.set(schemaId, schemaLabel);
+    const schemaLabel = await notePreview(schemaHash).then((p) => p.slice(0, 15)).catch(() => `#${schemaHash}`);
+    labels.set(schemaHash, schemaLabel);
 
-    const boxes = new Map<number, { x: number; y: number; width: number; height: number }>();
+    const boxes = new Map<string, { x: number; y: number; width: number; height: number }>();
     cols.forEach(({ ids, x }) => {
       const n = Math.max(ids.length, 1);
-      ids.forEach((id, row) => {
+      ids.forEach((hash, row) => {
         const y = n === 1 ? 0.5 : 0.2 + (0.6 * (row + 0.5)) / n;
-        const tag = svgText(svg, { x, y }, labels.get(id) || `#${id}`);
+        const tag = svgText(svg, { x, y }, labels.get(hash) || `#${hash}`);
         tag.node.onclick = () => {
-          if (id === data.currentId) {
-            window.history.pushState({}, "", `/${id}`);
-            navigate(`/${id}`);
+          if (hash === data.currentHash) {
+            window.history.pushState({}, "", `/${hash}`);
+            navigate(`/${hash}`);
           } else {
-            window.history.pushState({}, "", `/deps/${id}`);
-            render(id as Ref);
+            window.history.pushState({}, "", `/deps/${hash}`);
+            render(hash as Ref);
           }
         };
-        boxes.set(id, tag.rect);
+        boxes.set(hash, tag.rect);
       });
     });
-    const schemaTag = svgText(svg, { x: 0.5, y: 0.1 }, labels.get(schemaId) || `#${schemaId}`);
+    const schemaTag = svgText(svg, { x: 0.5, y: 0.1 }, labels.get(schemaHash) || `#${schemaHash}`);
     schemaTag.node.onclick = () => {
-      window.history.pushState({}, "", `/deps/${schemaId}`);
-      render(schemaId as Ref);
+      window.history.pushState({}, "", `/deps/${schemaHash}`);
+      render(schemaHash as Ref);
     };
     const schemaRect = schemaTag.rect;
 
@@ -202,21 +203,21 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
     });
 
 
-    const cur = boxes.get(data.currentId);
+    const cur = boxes.get(data.currentHash);
     if (cur) {
-      data.inputs.forEach((id) => {
-        const r = boxes.get(id);
+      data.inputs.forEach((hash) => {
+        const r = boxes.get(hash);
         if (r) arrow(svg, edge(r, "right"), edge(cur, "left"));
       });
-      data.outputs.forEach((id) => {
-        const r = boxes.get(id);
+      data.outputs.forEach((hash) => {
+        const r = boxes.get(hash);
         if (r) arrow(svg, edge(cur, "right"), edge(r, "left"));
       });
       if (schemaRect) arrowDown(svg, edgeV(schemaRect, "bottom"), edgeV(cur, "top"));
     }
     
 
-    noteOverview(data.currentId).then(p=>{
+    noteOverview(data.currentHash as Hash).then(p=>{
       prev.innerHTML = p
     })
 

@@ -4,8 +4,8 @@ import { createDashboardView } from "./dashboard";
 import { createEditView } from "./edit";
 import { createSqlView } from "./sql_view";
 import { createDepsView } from "./deps_view";
-import { Hash, NoteData, Ref, tojson } from "../spacetimedb/src/notes"
-import { addNote, getHash, getNote, query_data } from "./dbconn";
+import { Hash, NoteData, Ref, tojson, hashData, top } from "../spacetimedb/src/notes"
+import { addNote, getNote, query_data } from "./dbconn";
 
 let runQuery = () => {};
 
@@ -22,8 +22,7 @@ const navigate = (path: string) => (history.pushState({}, "", path), handleRoute
 
 const submitNote = async (data: NoteData) => {
   try {
-    const ref = await addNote(data.schemaHash, data.data);
-    const hash = typeof ref === "string" ? ref.slice(1) : String(await getHash(ref));
+    const hash = await addNote(data.schemaHash, data.data);
     navigate(`/${hash}`);
   } catch (e: any) {
     popup(h2("ERROR"), p(e.message || "failed to add note"));
@@ -50,10 +49,10 @@ handleRoute = () => {
   if (path === "edit") {
     render(editView.root);
     const params = new URLSearchParams(window.location.search);
-    const searchid = params.get("id");
+    const searchhash = params.get("hash");
     const isNew = params.get("new") === "1";
     if (isNew) localStorage.removeItem("edit_draft");
-    if (searchid === null){
+    if (searchhash === null){
       const raw = localStorage.getItem("edit_draft");
       if (raw && raw !== lastDraftRaw) {
         lastDraftRaw = raw;
@@ -62,10 +61,11 @@ handleRoute = () => {
           editFill(draft)
         } catch {}
       } else {
-        getHash(0).then((schemaHash) => editFill({schemaHash, text: "{}"})).catch(() => {});
+        const schemaHash = hashData(top);
+        editFill({schemaHash, text: "{}"});
       }
     }else{
-      getNote(Number(searchid))
+      getNote(searchhash as Hash)
         .then((note) => editFill({schemaHash: note.schemaHash, text: tojson(note.data)}))
         .catch((e) => popup(h2("ERROR"), p(e.message))); 
     }
@@ -80,11 +80,6 @@ handleRoute = () => {
   } else if (path.startsWith("deps")) {
     render(depsView.root);
     depsView.render((path.slice(5) || lastNoteRef) as Ref);
-  } else if (Number.isFinite(Number(path))) {
-    getHash(Number(path)).then(hash=>{
-      lastNoteRef = String(hash);
-      showNote(hash)
-    })
   } else {
     lastNoteRef = path;
     showNote(path as Hash);

@@ -1,4 +1,4 @@
-import { fromjson, Hash, hashData, NoteData, script_schema, tojson } from "../spacetimedb/src/notes";
+import { fromjson, Hash, hashData, NoteData, script_schema, tojson, top } from "../spacetimedb/src/notes";
 import { a, button, div, input, pre, style, textarea } from "./html";
 import { getNote, noteOverview, query_data, validateNote } from "./dbconn";
 import { createSchemaPicker, formfield, safeInput, SchemaEntry } from "./helpers";
@@ -6,33 +6,35 @@ import { Draft } from "./main";
 
 type EditDeps = { submit: (data: NoteData) => Promise<void> };
 
+const topHash = hashData(top);
+
 const fetchSchemas = (): Promise<SchemaEntry[]> =>
   Promise.all([
-    query_data("select id, data, hash from note where schemaId = 0"),
-    query_data("select schemaId from note")
+    query_data(`select hash, data from note where schemaHash = '${topHash}'`),
+    query_data("select schemaHash from note")
   ]).then(([schemasRes, countsRes]) => {
     const counts = new Map<string, number>();
     countsRes.rows.forEach((row) => counts.set(String(row[0]), (counts.get(String(row[0])) || 0) + 1));
     return schemasRes.rows.map((row) => {
       let title = "";
       try { title = JSON.parse(String(row[1] ?? ""))?.title ?? ""; } catch {}
-      const id = String(row[0]);
-      return { id, title, hash: String(row[2] ?? ""), count: counts.get(id) || 0 };
+      const hash = String(row[0] ?? "");
+      return { hash, title, count: counts.get(hash) || 0 };
     });
   });
 
 const fetchNotes = (): Promise<SchemaEntry[]> =>
-  query_data("select id, data, hash from note limit 200").then((r) =>
+  query_data("select hash, data from note limit 200").then((r) =>
     r.rows.map((row) => {
       let title = "";
       try { title = JSON.parse(String(row[1] ?? ""))?.title ?? ""; } catch {}
-      return { id: String(row[0]), title, hash: String(row[2] ?? "") };
+      return { hash: String(row[0] ?? ""), title };
     })
   );
 
 const createSchemaPanel = (onPick: (hash: Hash) => void) => {
   let schemaHash = "" as Hash;
-  const schemaLink = a({ href: "/0", style: { textDecoration: "underline", color: "inherit" } }, "view");
+  const schemaLink = a({ href: `/${topHash}`, style: { textDecoration: "underline", color: "inherit" } }, "view");
   schemaLink.onclick = (e) => {
     if (e.metaKey || e.ctrlKey) return;
     e.preventDefault();
@@ -154,19 +156,20 @@ const plainView = ({ submit }: EditDeps) => {
     }
     loadNotes().then((notes) => {
       const q = token.toLowerCase();
-      const filtered = notes.filter((n) => n.id.toLowerCase().includes(q) || n.title.toLowerCase().includes(q)).slice(0, 8);
+      const filtered = notes.filter((n) => n.hash.toLowerCase().includes(q) || n.title.toLowerCase().includes(q)).slice(0, 8);
       suggestionBox.innerHTML = "";
       if (!filtered.length) {
         suggestionBox.style.display = "none";
         return;
       }
       filtered.forEach((n) => {
-        suggestionBox.appendChild(button(`#${n.id}${n.title ? `: ${n.title}` : ""}`, {
+        const shortHash = n.hash.slice(0, 8);
+        suggestionBox.appendChild(button(`#${shortHash}${n.title ? `: ${n.title}` : ""}`, {
           onclick: () => {
             const before = text.slice(0, hashPos);
             const after = text.slice(cursor);
-            datafield.value = `${before}#${n.id}${after}`;
-            const next = hashPos + 1 + n.id.length;
+            datafield.value = `${before}#${n.hash}${after}`;
+            const next = hashPos + 1 + n.hash.length;
             datafield.setSelectionRange(next, next);
             setText(datafield.value);
             suggestionBox.style.display = "none";

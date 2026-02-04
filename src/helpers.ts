@@ -4,7 +4,7 @@ import { query_data } from "./dbconn";
 
 export const stringify = x=>JSON.stringify(x,null,2)
 export const JsonFmt = (data:string) => stringify(JSON.parse(data))
-export type SchemaEntry = { id: string; title: string; hash: string; count?: number };
+export type SchemaEntry = { hash: string; title: string; count?: number };
 const list = div(p("loading..."));
 
 
@@ -13,16 +13,17 @@ export const noteSearch = (
   schemas: SchemaEntry[]
 )=>{
   const sorted = [...schemas].sort((a, b) =>
-    (b.count || 0) - (a.count || 0) || (Number(b.id) || 0) - (Number(a.id) || 0)
+    (b.count || 0) - (a.count || 0) || b.hash.localeCompare(a.hash)
   );
   const renderList = (items: typeof schemas) => {
     list.innerHTML = "";
     const col = div(style({ display: "flex", flexDirection: "column", gap: "0.5em" }));
     items.slice(0, 10).forEach((s) => {
       const countLabel = s.count !== undefined ? ` (${s.count})` : "";
+      const shortHash = s.hash.slice(0, 8);
       const row = div(
         style({ display: "flex", gap: "0.5em", alignItems: "center" }),
-        button(`#${s.id}${s.title ? ` : ${s.title}` : ""}${countLabel}`, {
+        button(`#${shortHash}${s.title ? ` : ${s.title}` : ""}${countLabel}`, {
           style: { textAlign: "left", width: "100%" },
           onclick: () => {
             onSelect(s);
@@ -40,12 +41,12 @@ export const noteSearch = (
   };
 
   renderList(sorted);
-  const search = input("", { placeholder: "search id, title, hash" });
+  const search = input("", { placeholder: "search hash, title" });
   search.oninput = () => {
     const q = search.value.trim().toLowerCase();
     if (!q) return renderList(sorted);
-    const byId = sorted.filter((s) => s.id.toLowerCase().includes(q));
-    if (byId.length) return renderList(byId);
+    const byHash = sorted.filter((s) => s.hash.toLowerCase().includes(q));
+    if (byHash.length) return renderList(byHash);
     const byTitle = sorted.filter((s) => s.title.toLowerCase().includes(q));
     return renderList(byTitle);
   };
@@ -143,14 +144,14 @@ export const safeInput = (
       onChange();
     };
     const fetchNotes = () =>
-      query_data("select id, data, hash from note", true, 200).then((res) =>
+      query_data("select hash, data from note", true, 200).then((res) =>
         res.rows.map((row) => {
           let title = "";
           try {
             const parsed = JSON.parse(String(row[1] ?? ""));
             title = parsed?.title ? String(parsed.title) : "";
           } catch {}
-          return { id: String(row[0]), title, hash: String(row[2] ?? "") };
+          return { hash: String(row[0] ?? ""), title };
         })
       );
     const openSearch = () => {
@@ -206,14 +207,14 @@ export const safeInput = (
     }));
 
     const fetchNotes = () =>
-      query_data("select id, data, hash from note", true, 200).then((res) =>
+      query_data("select hash, data from note", true, 200).then((res) =>
         res.rows.map((row) => {
           let title = "";
           try {
             const parsed = JSON.parse(String(row[1] ?? ""));
             title = parsed?.title ? String(parsed.title) : "";
           } catch {}
-          return { id: String(row[0]), title, hash: String(row[2] ?? "") };
+          return { hash: String(row[0] ?? ""), title };
         })
       );
 
@@ -233,7 +234,7 @@ export const safeInput = (
       fetchNotes().then((notes) => {
         const q = token.toLowerCase();
         const filtered = notes.filter((n) =>
-          n.id.toLowerCase().includes(q) || n.title.toLowerCase().includes(q)
+          n.hash.toLowerCase().includes(q) || n.title.toLowerCase().includes(q)
         ).slice(0, 8);
         suggestionBox.innerHTML = "";
         if (!filtered.length) {
@@ -241,12 +242,13 @@ export const safeInput = (
           return;
         }
         filtered.forEach((n) => {
-          suggestionBox.appendChild(button(`#${n.id}${n.title ? `: ${n.title}` : ""}`, {
+          const shortHash = n.hash.slice(0, 8);
+          suggestionBox.appendChild(button(`#${shortHash}${n.title ? `: ${n.title}` : ""}`, {
             onclick: () => {
               const before = text.slice(0, hashPos);
               const after = text.slice(cursor);
-              ta.value = `${before}#${n.id}${after}`;
-              const next = hashPos + 1 + n.id.length;
+              ta.value = `${before}#${n.hash}${after}`;
+              const next = hashPos + 1 + n.hash.length;
               ta.setSelectionRange(next, next);
               suggestionBox.style.display = "none";
               resize();

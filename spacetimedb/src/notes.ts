@@ -29,7 +29,7 @@ export const validate = (data: Jsonable, schema: Jsonable) => {
 }
 
 export type Hash = string & { length: 32 }
-export type Note = {data: string, id: number, hash: Hash, schemaId: number}
+export type Note = { data: string, hash: Hash, schemaHash: Hash }
 export type NoteData = { schemaHash: Hash, data: Jsonable }
 
 
@@ -117,7 +117,8 @@ export const schemas : NoteData[] = [
 ]
 
 
-export const isRef = (value: any) => typeof( value) == "string" && /^#([a-f0-9]+)$/.exec(value) as Ref[] | null;
+export const isRef = (value: any) =>
+  typeof value == "string" && /^#([a-f0-9]{32})$/.exec(value) as Ref[] | null;
 
 export const expandLinksSync = (
   value: Jsonable,
@@ -153,15 +154,8 @@ export const expandLinks = async (
   }
   return value;
 };
+/*** represents a note hash (optionally prefixed with #) ***/
+export type Ref = Hash | `#${Hash}`
 
-
-
-/*** represents a note id or hash ***/
-export type Ref = Hash | number | `#${number | Hash}` | `${number}`
-
-export const matchRef= <T>(ref:Ref, onid: (n:number)=>T, onhash: (h:Hash) => T) =>{
-  if (typeof ref == "number") return onid(ref)
-  if (ref[0] == "#") ref = ref.slice(1) as Hash
-  if (ref.length == 32) return onhash(ref as Hash)
-  return onid(Number(ref))
-}
+export const normalizeRef = (ref: Ref): Hash =>
+  (ref[0] === "#" ? ref.slice(1) : ref) as Hash;
