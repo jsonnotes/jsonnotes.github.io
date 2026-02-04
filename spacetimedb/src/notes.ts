@@ -122,19 +122,16 @@ export const isRef = (value: any) => typeof( value) == "string" && /^#([a-f0-9]+
 export const expandLinksSync = (
   value: Jsonable,
   resolve: (ref: Ref) => Jsonable,
-  seen = new Set<Ref>()
 ): Jsonable => {
   if (typeof value === "string") {
     const match = isRef(value);
     if (!match) return value;
     const ref = match[1];
-    if (seen.has(ref)) throw new Error(`cycle: #${ref}`);
-    seen.add(ref);
-    return expandLinksSync(resolve(ref), resolve, seen);
+    return expandLinksSync(resolve(ref), resolve);
   }
-  if (Array.isArray(value)) return value.map((v) => expandLinksSync(v, resolve, seen));
+  if (Array.isArray(value)) return value.map((v) => expandLinksSync(v, resolve));
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map( ([k, v]) => [k, expandLinksSync(v, resolve, seen)]));
+    return Object.fromEntries(Object.entries(value).map( ([k, v]) => [k, expandLinksSync(v, resolve)]));
   }
   return value;
 };
@@ -143,19 +140,16 @@ export const expandLinksSync = (
 export const expandLinks = async (
   value: Jsonable,
   resolve: (ref: Ref ) => Promise<Jsonable>,
-  seen = new Set<Ref>()
 ): Promise<Jsonable> => {
   if (typeof value === "string") {
     const match = isRef(value);
     if (!match) return value;
     const ref = match[1];
-    if (seen.has(ref)) throw new Error(`cycle: #${ref}`);
-    seen.add(ref);
-    return expandLinks(await resolve(ref), resolve, seen);
+    return expandLinks(await resolve(ref), resolve);
   }
-  if (Array.isArray(value)) return Promise.all(value.map((v) => expandLinks(v, resolve, seen)));
+  if (Array.isArray(value)) return Promise.all(value.map((v) => expandLinks(v, resolve)));
   if (value && typeof value === "object") {
-    return Object.fromEntries(await Promise.all(Object.entries(value).map(async ([k, v]) => [k, await expandLinks(v, resolve, seen)])));
+    return Object.fromEntries(await Promise.all(Object.entries(value).map(async ([k, v]) => [k, await expandLinks(v, resolve)])));
   }
   return value;
 };

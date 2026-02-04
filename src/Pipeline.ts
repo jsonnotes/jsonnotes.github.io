@@ -4,7 +4,7 @@ export type Json =  string | number | boolean | null | Json[] | { [key: string]:
 
 export type Schema = ({type: "object", properties: Record<string, Schema>, required? : string[] } | {type: "array", items: Schema} | {type: "string" | "boolean"})
 
-const ST: Schema = {type: "string"}
+const String: Schema = {type: "string"}
 
 
 type Graph = ({
@@ -29,14 +29,14 @@ type Graph = ({
 }) & {outputSchema: Schema}
 
 
-const RoleSchema : Schema = {type: "object", properties: { name: ST, description: ST }, required: ["name", "description"]}
+const RoleSchema : Schema = {type: "object", properties: { name: String, description: String }, required: ["name", "description"]}
 
 const resultSchema : Schema = {
   type: "array",
   items: RoleSchema
 }
 
-const stateSchema: Schema = {type: "object", properties: { done: resultSchema , law: ST}, required: ["done", "law"]}
+const stateSchema: Schema = {type: "object", properties: { done: resultSchema , law: String}, required: ["done", "law"]}
 
 const isDone : Graph= { // state -> bool
   $ : "Logic",
@@ -53,7 +53,7 @@ const llmCall : Graph = { // state -> result
     $ : "Logic",
     input: { state: { $: "INPUT", outputSchema: stateSchema }}, // string
     code: "return `Extract participants from the following text: ${state.law}\npreviously extracted participants: ${JSON.stringify(state.done)}``",
-    outputSchema: ST
+    outputSchema: String
   },
   outputSchema: resultSchema
 }
@@ -63,7 +63,7 @@ const llmLoop : Graph = { // string -> state
   $: "Loop",
   input: {
     $: "Logic",
-    input: {law: { $: "INPUT", outputSchema: ST }},
+    input: {law: { $: "INPUT", outputSchema: String }},
     code: "return {done: [], law: law}",
     outputSchema: stateSchema,
   },
@@ -78,6 +78,49 @@ const graph : Graph = { // string -> result
   code: "return state.done",
   outputSchema: resultSchema
 }
+
+
+
+
+const Record = (properties: {[key: string]: any}) => {
+  return {
+    type: "object",
+    properties: properties,
+    required: Object.keys(properties)
+  }
+}
+
+
+const Const = (value: any, type = "string") => ({
+  type: type,
+  const: value
+});
+
+{
+
+  const graphRef = {$ref: "graphSchema"}
+
+  const GraphSchema = {
+    title: "graphSchema",
+    $id: "graphSchema",
+    oneOf: [
+      {$: Const("Input")},
+      {$: Const("Logic"), inputs: {}, code: String},
+      {$: Const("LLMCall"), prompt: graphRef, model: String},
+      {$: Const("Loop"), input: graphRef, condition: graphRef, body: graphRef},
+    ].map(it=>Record({...it, outputSchema: {}}))
+  }
+
+  console.log(JSON.stringify(GraphSchema, null, 2))
+
+}
+
+
+
+
+
+
+
 
 
 

@@ -140,10 +140,6 @@ const plainView = ({ submit }: EditDeps) => {
   const loadNotes = () => noteIndex ? Promise.resolve(noteIndex) : fetchNotes().then((rows) => (noteIndex = rows));
 
   const updateSuggestions = () => {
-    if (!isScript()) {
-      suggestionBox.style.display = "none";
-      return;
-    }
     const cursor = datafield.selectionStart ?? 0;
     const text = datafield.value;
     const hashPos = text.lastIndexOf("#", cursor - 1);
