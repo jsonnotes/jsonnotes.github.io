@@ -4,7 +4,7 @@ import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import CssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
 import HtmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
-import { Hash, fromjson, tojson, hashData, script_schema } from "@jsonview/core";
+import { Hash, fromjson, tojson, hashData, script_schema, function_schema } from "@jsonview/core";
 import { div, button, style, input } from "./html";
 import { notePreview, query_data, validateNote } from "./dbconn";
 import { SchemaEntry } from "./helpers";
@@ -54,6 +54,7 @@ type MonacoViewDeps = {
 
 export const monacoView = ({ submit }: MonacoViewDeps) => {
   const scriptHash = hashData(script_schema);
+  const functionHash = hashData(function_schema);
   let schemaHash = "" as Hash;
   let editor: monaco.editor.IStandaloneCodeEditor | null = null;
   let linkDecorations: string[] = [];
@@ -94,12 +95,29 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
   setJsonStatus("valid", "green");
 
   const isScript = () => schemaHash === scriptHash;
+  const isFunction = () => schemaHash === functionHash;
 
   const getValue = (): string => editor?.getValue() ?? "";
 
-  const getDraft = (): Draft => isScript()
-    ? { schemaHash, text: tojson({ title: titleField.value, code: getValue() }) }
-    : { schemaHash, text: getValue() };
+  const buildFunctionData = () => {
+    const args: Record<string, { name: string; schema: any }> = {};
+    const list = argRows.map((r) => r.nameInput.value.trim()).filter(Boolean);
+    list.forEach((name, i) => {
+      const row = argRows[i];
+      let schema: any = {};
+      try { schema = row.schemaInput.value ? JSON.parse(row.schemaInput.value) : {}; } catch {}
+      args[name] = { name, schema };
+    });
+    let returnSchema: any = {};
+    try { returnSchema = returnSchemaInput.value ? JSON.parse(returnSchemaInput.value) : {}; } catch {}
+    return { title: titleField.value, args, code: getValue(), returnSchema };
+  };
+
+  const getDraft = (): Draft => {
+    if (isScript()) return { schemaHash, text: tojson({ title: titleField.value, code: getValue() }) };
+    if (isFunction()) return { schemaHash, text: tojson(buildFunctionData()) };
+    return { schemaHash, text: getValue() };
+  };
 
   const updateStatus = async () => {
     jsonStatus.innerText = "validating...";
@@ -116,9 +134,69 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
     localStorage.setItem("edit_draft", JSON.stringify(getDraft()));
   };
 
+  const argRows: { row: HTMLElement; nameInput: HTMLInputElement; schemaInput: HTMLTextAreaElement }[] = [];
+  const argsList = div(style({ display: "flex", flexDirection: "column", gap: "0.5em" }));
+  const returnSchemaInput = document.createElement("textarea");
+  returnSchemaInput.rows = 4;
+  returnSchemaInput.style.width = "100%";
+  returnSchemaInput.style.fontFamily = "monospace";
+  returnSchemaInput.oninput = () => { updateStatus(); saveDraft(); };
+
+  const addArgRow = (name = "", schemaText = "{}") => {
+    const nameInput = input(name, {
+      placeholder: "arg name",
+      style: { width: "12em" },
+    }) as HTMLInputElement;
+    const schemaInput = document.createElement("textarea");
+    schemaInput.rows = 2;
+    schemaInput.style.width = "100%";
+    schemaInput.style.fontFamily = "monospace";
+    schemaInput.value = schemaText;
+    const remove = button("-", { onclick: () => {
+      row.remove();
+      const idx = argRows.findIndex((r) => r.row === row);
+      if (idx >= 0) argRows.splice(idx, 1);
+      updateStatus();
+      saveDraft();
+    }});
+    nameInput.oninput = () => { updateStatus(); saveDraft(); };
+    schemaInput.oninput = () => { updateStatus(); saveDraft(); };
+    const row = div(
+      style({ display: "flex", gap: "0.5em", alignItems: "flex-start" }),
+      nameInput,
+      schemaInput,
+      remove
+    );
+    argRows.push({ row, nameInput, schemaInput });
+    argsList.appendChild(row);
+  };
+
+  const setArgsFromData = (args: any) => {
+    argsList.innerHTML = "";
+    argRows.splice(0, argRows.length);
+    if (Array.isArray(args)) {
+      args.forEach((name) => addArgRow(String(name || ""), "{}"));
+      return;
+    }
+    Object.entries(args || {}).forEach(([name, val]: any) => {
+      const schema = val?.schema ?? {};
+      addArgRow(name, JSON.stringify(schema, null, 2));
+    });
+  };
+
+  const functionPanel = div(
+    style({ display: "none", padding: "0.75em", border: "1px solid #ccc", borderRadius: "0.5em", background: "var(--background-color)" }),
+    div(style({ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5em" }),
+      div("Function Args"),
+      button("+ arg", { onclick: () => addArgRow() })
+    ),
+    argsList,
+    div(style({ marginTop: "0.75em" }), "Return Schema", returnSchemaInput)
+  );
+
   const formatButton = button("format json (cmd+s)", {
     onclick: () => {
-      if (!isScript() && editor) {
+      if (!isScript() && !isFunction() && editor) {
         try {
           const formatted = tojson(fromjson(getValue()));
           editor.setValue(formatted);
@@ -347,17 +425,19 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
 
   const setSchemaHash = (hash: Hash) => {
     schemaHash = hash;
-    titleField.style.display = isScript() ? "block" : "none";
+    titleField.style.display = isScript() || isFunction() ? "block" : "none";
+    functionPanel.style.display = isFunction() ? "block" : "none";
     if (editor) {
       monaco.editor.setModelLanguage(
         editor.getModel()!,
-        isScript() ? "javascript" : "json"
+        isScript() ? "javascript" : isFunction() ? "typescript" : "json"
       );
     }
   };
 
   const root = div(
     titleField,
+    functionPanel,
     editorContainer,
     div(
       style({ display: "flex", gap: "0.5em", alignItems: "center", marginTop: "0.5em" }),
@@ -387,6 +467,19 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
             titleField.value = parsed.title ?? "";
             editor?.setValue(parsed.code ?? "");
           } catch {
+            editor?.setValue(text);
+          }
+        } else if (isFunction()) {
+          try {
+            const parsed = fromjson(text) as any;
+            titleField.value = parsed.title ?? "";
+            const args = parsed.args || {};
+            setArgsFromData(args);
+            returnSchemaInput.value = parsed.returnSchema ? JSON.stringify(parsed.returnSchema, null, 2) : "{}";
+            editor?.setValue(parsed.code ?? "");
+          } catch {
+            setArgsFromData({});
+            returnSchemaInput.value = "{}";
             editor?.setValue(text);
           }
         } else {

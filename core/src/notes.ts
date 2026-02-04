@@ -40,7 +40,7 @@ export function hashData({schemaHash, data} : NoteData){
   return hash128(schemaHash, data) 
 }
 
-export function NoteData(title:string, schema: NoteData, data: any): NoteData{
+export function NoteData(title:string, schema: NoteData, data: any = {}): NoteData{
   return {
     schemaHash: hashData(schema),
     data: {
@@ -79,18 +79,16 @@ const titled2 = NoteData("titled2", has_titled_child, {child: `#${hashData(title
 
 export const function_schema = NoteData("function schema", top, object({
   title: string,
+  args: { additionalProperties: object({name: string, schema: {}}) },
   code: string,
-}, {
-  title: "function_schema",
-  required: ["code"]
-}))
+  returnSchema: {}
+}, {required: ["args", "code", "returnSchema"]  }))
 
 
-export const server_function = NoteData("function schema", top, object({
+export const server_function = NoteData("server function", top, object({
   title: string,
   code: string,
 }, {
-  title: "server_function",
   required: ["code"]
 }))
 
