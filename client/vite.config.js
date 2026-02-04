@@ -21,9 +21,6 @@ export default defineConfig(({ command, mode }) => {
           assetFileNames: 'assets/[name].[hash].[ext]'
         }
       }
-    },
-    server: {
-      origin: 'http://localhost:5173',
     }
   }
 })

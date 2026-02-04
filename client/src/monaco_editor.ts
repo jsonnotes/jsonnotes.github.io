@@ -1,4 +1,9 @@
 import * as monaco from "monaco-editor";
+import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
+import CssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
+import HtmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
+import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { Hash, fromjson, tojson, hashData, script_schema } from "@jsonview/core";
 import { div, button, style, input } from "./html";
 import { query_data, validateNote } from "./dbconn";
@@ -8,28 +13,22 @@ import { Draft } from "./main";
 // Configure Monaco workers
 self.MonacoEnvironment = {
   getWorker: function (_moduleId: string, label: string) {
-    const getWorkerModule = (moduleUrl: string, label: string) => {
-      return new Worker(self.MonacoEnvironment!.getWorkerUrl!(moduleUrl, label), {
-        name: label,
-        type: "module",
-      });
-    };
     switch (label) {
       case "json":
-        return getWorkerModule("/monaco-editor/esm/vs/language/json/json.worker?worker", label);
+        return new JsonWorker();
       case "css":
       case "scss":
       case "less":
-        return getWorkerModule("/monaco-editor/esm/vs/language/css/css.worker?worker", label);
+        return new CssWorker();
       case "html":
       case "handlebars":
       case "razor":
-        return getWorkerModule("/monaco-editor/esm/vs/language/html/html.worker?worker", label);
+        return new HtmlWorker();
       case "typescript":
       case "javascript":
-        return getWorkerModule("/monaco-editor/esm/vs/language/typescript/ts.worker?worker", label);
+        return new TsWorker();
       default:
-        return getWorkerModule("/monaco-editor/esm/vs/editor/editor.worker?worker", label);
+        return new EditorWorker();
     }
   },
 };
