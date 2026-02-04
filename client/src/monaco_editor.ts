@@ -297,6 +297,19 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
       if (window.location.search.includes("new=1"))
         history.replaceState({}, "", "/edit");
       scheduleUpdate();
+      const pos = editor?.getPosition();
+      const model = editor?.getModel();
+      if (pos && model) {
+        const textUntilPosition = model.getValueInRange({
+          startLineNumber: pos.lineNumber,
+          startColumn: 1,
+          endLineNumber: pos.lineNumber,
+          endColumn: pos.column,
+        });
+        if (/#([a-f0-9]*)$/i.test(textUntilPosition)) {
+          editor?.trigger("hash", "editor.action.triggerSuggest", {});
+        }
+      }
     });
 
     editor.onDidFocusEditorText(() => {});
