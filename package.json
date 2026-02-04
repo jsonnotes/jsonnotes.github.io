@@ -16,7 +16,10 @@
     "db:get-note": "npm run db get-note",
     "db:remote": "npm run db remote",
     "db:sql": "npm run db sql",
-    "db:run-local": "npm run db run-local"
+    "db:run-local": "npm run db run-local",
+    "db:pull": "npm run db pull",
+    "db:push": "SPACETIMEDB_PRESET=prod npm run db push",
+    "db:new": "npm run db new"
   },
   "devDependencies": {
     "@clockworklabs/spacetimedb-sdk": "^1.1.0",

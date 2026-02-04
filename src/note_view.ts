@@ -1,6 +1,5 @@
 import { Hash, hashData, NoteData, script_result_schema, script_schema, isRef, Ref, Jsonable, function_schema, server_function } from "../spacetimedb/src/notes";
 import { addNote, callProcedure, getId, getNote, getSchemaId, noteLink, noteOverview } from "./dbconn";
-import { hash128 } from "../spacetimedb/src/hash";
 
 import { stringify } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, pre, routeLink, span, style } from "./html";
@@ -9,47 +8,7 @@ import { openrouter } from "../spacetimedb/src/openrouter";
 
 import { buildins as buildinlist } from "./script_worker";
 
-
-
-const callNote = async (fn: Ref, ...args: Jsonable[]): Promise<any> => {
-  let note = await getNote(fn)
-  if (note.schemaHash != hashData(function_schema)) throw new Error("can only call Function schema notes")
-  let data = note.data as {code: string, inputs?: string[]}
-
-  // Create builtin functions available to local functions
-  const localBuiltins = {
-    getNote,
-    addNote,
-    call: callNote,
-    remote: async (ref: Ref, arg?: Jsonable) => {
-      const idOrHash = String(ref).replace(/^#/, "");
-      const id = /^\d+$/.test(idOrHash) ? Number(idOrHash) : await getId(idOrHash as Hash);
-      const argStr = arg !== undefined ? JSON.stringify(arg) : "null";
-      const raw = await callProcedure("run_note_async", { id, arg: argStr });
-      try {
-        return JSON.parse(raw);
-      } catch {
-        return raw;
-      }
-    },
-    openrouter: async (prompt: string, schema: Ref | Jsonable) => {
-      if (isRef(schema)) schema = (await getNote(schema as Ref)).data
-      return openrouter(prompt, schema)
-    },
-    hash: hash128
-  };
-
-  // If inputs field exists, use it; otherwise pass args as object
-  if (data.inputs && data.inputs.length > 0) {
-    let F = new Function(...data.inputs, ...Object.keys(localBuiltins), `return (async () => {${data.code}})()`)
-    return F(...args, ...Object.values(localBuiltins))
-  } else {
-    // Pass args as an object for new-style functions with builtins
-    let F = new Function('args', ...Object.keys(localBuiltins), `return (async () => {${data.code}})()`)
-    return F(args.length === 1 ? args[0] : args, ...Object.values(localBuiltins))
-  }
-
-}
+import { callNote } from "./call_note";
 
 
 export const buildins = {

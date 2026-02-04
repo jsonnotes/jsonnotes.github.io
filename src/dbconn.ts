@@ -24,7 +24,7 @@ const loadDbPreset = () => {
 };
 
 const DB_PRESET = loadDbPreset();
-const db_url = dbPresets[DB_PRESET];
+let db_url = dbPresets[DB_PRESET];
 
 let access_token: string | null = localStorage.getItem("access_token");
 
