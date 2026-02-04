@@ -18,6 +18,9 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
   const schemaHashScript = hashData(script_schema);
   const schemaHashScriptResult = hashData(script_result_schema);
 
+  let cachedCount: number | null = null;
+  let cachedRows: Map<string, any[][]> = new Map(); // schema -> rows
+
   const result = div();
   const schemaSelect = div(
     style({ display: "flex", gap: "0.5em", alignItems: "center", flexWrap: "wrap" }),
@@ -73,17 +76,48 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
     runQuery();
   };
 
-  const runQuery = async () => {
-
-    let maxitems = 50;
-
+  const renderRows = (rows: any[][]) => {
     result.innerHTML = "";
-    result.append(p("running..."));
-    let schemaId: number | null = null;
+    const list = div(style({ display: "flex", flexDirection: "column", gap: "0.5em" }));
+    const reversed = [...rows].reverse();
+    reversed.forEach((row) => {
+      const note = { id: row[0], data: row[1] };
+      onRow && onRow(note);
+      list.append(noteLink(note.id));
+    });
+    result.append(list);
+  };
+
+  const runQuery = async () => {
+    const maxitems = 50;
+
+    // Show cached immediately if available
+    if (cachedRows.has(currentSchema)) {
+      renderRows(cachedRows.get(currentSchema)!);
+    } else {
+      result.innerHTML = "";
+      result.append(p("running..."));
+    }
+
+    let currentCount: number | null = null;
     try {
       const countRes = await query("select count from note_count");
-      lastId = Math.max(maxitems, Number(countRes.rows[0][0]))
+      currentCount = Number(countRes.rows[0][0]);
+      lastId = Math.max(maxitems, currentCount);
     } catch {}
+
+    // Cache still valid - no need to refetch
+    if (currentCount !== null && currentCount === cachedCount && cachedRows.has(currentSchema)) {
+      return;
+    }
+
+    // Cache miss - invalidate all cached rows on count change
+    if (currentCount !== cachedCount) {
+      cachedRows.clear();
+      cachedCount = currentCount;
+    }
+
+    let schemaId: number | null = null;
     if (currentSchema !== schemaHashAny) {
       if (/^\d+$/.test(currentSchema)) schemaId = Number(currentSchema);
       else {
@@ -99,23 +133,9 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
     const range = `id >= ${(lastId - maxitems)} and id < ${lastId}`;
     const where = schemaId === null ? range : `schemaId = ${schemaId} and ${range}`;
     const sql = `select id, data from note where ${where} limit 50`;
-    query(sql).then((data) => {
-      result.innerHTML = "";
-      const list = div(style({ display: "flex", flexDirection: "column", gap: "0.5em" }));
-      const rows = [...data.rows].reverse();
-      rows.forEach((row) => {
-        const note: any = {};
-        data.names.forEach((name, index) => {
-          note[name] = row[index];
-        });
-        onRow && onRow(note);
-        let text = String(note.data ?? "");
-        text = text.replace(/[\n\r]/g, "");
-        text = text.length > 60 ? text.substring(0, 60) + "..." : text;
-        list.append(noteLink(note.id));
-      });
-      result.append(list);
-    });
+    const data = await query(sql);
+    cachedRows.set(currentSchema, data.rows);
+    renderRows(data.rows);
   };
 
   const searchButton = button("🔍 Search Notes", {

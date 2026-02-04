@@ -28,12 +28,15 @@ const db_url = dbPresets[DB_PRESET];
 
 let access_token: string | null = localStorage.getItem("access_token");
 
-const req = (path: string, method: string, body: string | null = null) =>
-  fetch(`${db_url}${path}`, {
-    method,
-    headers: { "Content-Type": "application/json", ...(access_token ? { Authorization: `Bearer ${access_token}` } : {}) },
-    body,
-  });
+const req = (path: string, method: string, body: string | null = null) : Promise<Response> =>
+  new Promise(rs=> setTimeout(() => {
+    rs(fetch(`${db_url}${path}`, {
+      method,
+      headers: { "Content-Type": "application/json", ...(access_token ? { Authorization: `Bearer ${access_token}` } : {}) },
+      body,
+    }))
+  }, 0))
+
 
 export const callProcedure = async (name: string, payload: any) => {
   const res = await req(`/v1/database/${DBNAME}/call/${name}`, "POST", JSON.stringify(payload));
