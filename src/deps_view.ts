@@ -159,7 +159,7 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
     await Promise.all(
       cols.flatMap((c) =>
         c.ids.map(async (id) => {
-          const label = await notePreview(id).then((p) => p.slice(0, 15)).catch(() => `#${id}`);
+          const label = await notePreview(id).then((p) => p.slice(0, 30)).catch(() => `#${id}`);
           labels.set(id, label);
         })
       )

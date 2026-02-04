@@ -5,27 +5,10 @@ import { hash128 } from "../spacetimedb/src/hash";
 
 const DBNAME = "jsonview"
 
-const dbPresets: Record<string, string> = {
-  local: "http://localhost:3000",
-  prod: "https://maincloud.spacetimedb.com",
-};
+const local_url= "http://localhost:3000";
+const prod_url= "https://maincloud.spacetimedb.com";
 
-const isLocalhost = () => ["localhost", "127.0.0.1"].includes(window.location.hostname);
-
-const loadDbPreset = () => {
-  const fromQuery = new URLSearchParams(window.location.search).get("db");
-  const fromStore = localStorage.getItem("db_preset");
-  if (fromQuery && dbPresets[fromQuery]) {
-    localStorage.setItem("db_preset", fromQuery);
-    return fromQuery;
-  }
-  if (fromStore && dbPresets[fromStore]) return fromStore;
-  return isLocalhost() ? "local" : "prod";
-};
-
-const DB_PRESET = loadDbPreset();
-let db_url = dbPresets[DB_PRESET];
-
+let db_url = prod_url;
 let access_token: string | null = localStorage.getItem("access_token");
 
 const req = (path: string, method: string, body: string | null = null) : Promise<Response> =>
