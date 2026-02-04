@@ -1,12 +1,11 @@
-import { Hash, hashData, NoteData, script_result_schema, script_schema, isRef, Ref, Jsonable, function_schema, server_function } from "../spacetimedb/src/notes";
-import { addNote, callProcedure, getId, getNote, getSchemaId, noteLink, noteOverview } from "./dbconn";
+import { Hash, hashData, NoteData, script_result_schema, script_schema, Ref, Jsonable, function_schema, server_function, normalizeRef } from "../spacetimedb/src/notes";
+import { addNote, callProcedure, getNote, noteLink, noteOverview } from "./dbconn";
 
 import { stringify } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, pre, routeLink, span, style } from "./html";
 
 import { openrouter } from "../spacetimedb/src/openrouter";
 
-import { buildins as buildinlist } from "./script_worker";
 
 import { callNote } from "./call_note";
 
@@ -14,8 +13,11 @@ import { callNote } from "./call_note";
 export const buildins = {
   openrouter: async (prompt: string, schema: Ref | Jsonable) => {
 
-    if (isRef(schema)){
-      schema = (await getNote(schema as Ref)).data
+    if (typeof schema === "string") {
+      const raw = schema.startsWith("#") ? schema.slice(1) : schema;
+      if (/^[a-f0-9]{32}$/.test(raw)) {
+        schema = (await getNote(raw as Ref)).data;
+      }
     }
     return openrouter(prompt, schema)
   },
@@ -23,9 +25,8 @@ export const buildins = {
   addNote,
   callNote,
   remote: async (ref: Ref, arg: Jsonable) => {
-    const idOrHash = String(ref).replace(/^#/, "");
-    const id = /^\d+$/.test(idOrHash) ? BigInt(idOrHash) : await getId(idOrHash as Hash);
-    const raw = await callProcedure("run_note_async", { id, arg: JSON.stringify(arg) });
+    const hash = normalizeRef(ref);
+    const raw = await callProcedure("run_note_async", { hash, arg: JSON.stringify(arg) });
     try {
       return JSON.parse(raw);
     } catch {
@@ -38,17 +39,17 @@ export const buildins = {
 
 
 
-for (let exp of buildinlist) if (!Object.keys(buildins).includes(exp)) throw new Error("buildin missing but expected: "+ exp)
+for (let exp of ["openrouter", "getNote", "addNote", "callNote", "remote"]) if (!Object.keys(buildins).includes(exp)) throw new Error("buildin missing but expected: "+ exp)
 
 const linkify = (text: string) => {
   const el = span(style({margin:"0.5em"}));
-  const re = /#([a-f0-9]+)/g;
+  const re = /#([a-f0-9]{32})/g;
   let last = 0;
   let match: RegExpExecArray | null;
   while ((match = re.exec(text))) {
     const start = match.index;
     const raw = match[1];
-    const token: Ref = /^\d+$/.test(raw) ? Number(raw) : raw as Ref;
+    const token = raw as Ref;
     if (start > last) el.append(document.createTextNode(text.slice(last, start)));
     el.append(noteLink(token as Ref,)),
     last = start + match[0].length;
@@ -64,8 +65,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
 
 
   getNote(hash).then(async note => {
-    const id = await getId(hash);
-    const schemaId = await getSchemaId(hash);
+    const schemaHash = note.schemaHash;
 
     const titleText = (note.data as any)?.title ?? "";
 
@@ -135,7 +135,8 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
     });
 
     overlay.innerHTML = "";
-    const title = h3(`${isScript ? "Script" : "Note"} #${id} ${titleText} `);
+    const shortHash = hash.slice(0, 8);
+    const title = h3(`${isScript ? "Script" : "Note"} #${shortHash} ${titleText} `);
     if (note.schemaHash === hashData(server_function)) {
       const runAsyncFn = button("run async", { onclick: async () => {
 
@@ -145,7 +146,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         if (argText == null) return;
         try {
           runAsyncFn.textContent = "running...";
-          const raw = await callProcedure("run_note_async", { id, arg: argText });
+          const raw = await callProcedure("run_note_async", { hash, arg: argText });
           let out: any = raw;
           try { out = JSON.parse(raw); } catch {}
           if (typeof out === "string") {
@@ -207,12 +208,12 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
 
     overlay.append(
       title,
-      isScript ? "" : p("schema: ", noteLink(schemaId)),
+      isScript ? "" : p("schema: ", noteLink(schemaHash)),
       isScript ? "" : div(style({ marginBottom: "0.5em" }), toggleViewBtn),
       contentDiv,
       div(
         style({ display: "flex", gap: "0.75em", alignItems: "center", paddingBottom: "0.5em" }),
-        routeLink(`/edit?id=${id}`, "edit" ),
+        routeLink(`/edit?hash=${hash}`, "edit" ),
         routeLink(`/deps/${hash}`, "deps" ),
         button("copy", {
           onclick: (e) =>

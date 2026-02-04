@@ -12,7 +12,7 @@ export const createSqlView = ({ query, onRow }: SqlDeps) => {
   const cachedSql = localStorage.getItem(cacheKey);
   const userinput = textarea(
     style({ fontFamily: "monospace", padding: ".5em" }),
-    cachedSql || "select id, data from note limit 50"
+    cachedSql || "select hash, data from note limit 50"
   );
 
   userinput.rows = 2;

@@ -1,5 +1,5 @@
-import { hashData, function_schema, isRef, Ref, Jsonable } from "../spacetimedb/src/notes";
-import { addNote, callProcedure, getId, getNote } from "./dbconn";
+import { hashData, function_schema, Ref, Jsonable, normalizeRef } from "../spacetimedb/src/notes";
+import { addNote, callProcedure, getNote } from "./dbconn";
 import { hash128 } from "../spacetimedb/src/hash";
 import { openrouter } from "../spacetimedb/src/openrouter";
 
@@ -13,14 +13,18 @@ export const callNote = async (fn: Ref, ...args: Jsonable[]): Promise<any> => {
     addNote,
     call: callNote,
     remote: async (ref: Ref, arg?: Jsonable) => {
-      const idOrHash = String(ref).replace(/^#/, "");
-      const id = /^\d+$/.test(idOrHash) ? Number(idOrHash) : await getId(idOrHash as any);
+      const hash = normalizeRef(ref);
       const argStr = arg !== undefined ? JSON.stringify(arg) : "null";
-      const raw = await callProcedure("run_note_async", { id, arg: argStr });
+      const raw = await callProcedure("run_note_async", { hash, arg: argStr });
       try { return JSON.parse(raw); } catch { return raw; }
     },
     openrouter: async (prompt: string, schema: Ref | Jsonable) => {
-      if (isRef(schema)) schema = (await getNote(schema as Ref)).data;
+      if (typeof schema === "string") {
+        const raw = schema.startsWith("#") ? schema.slice(1) : schema;
+        if (/^[a-f0-9]{32}$/.test(raw)) {
+          schema = (await getNote(raw as Ref)).data;
+        }
+      }
       return openrouter(prompt, schema);
     },
     hash: hash128
