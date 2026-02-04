@@ -1,31 +1,16 @@
-import { Hash, Jsonable, NoteData, Note, tojson, validate, fromjson, expandLinks, Ref, normalizeRef, hash128 } from "@jsonview/core";
+import { Hash, Jsonable, NoteData, Note, validate, fromjson, expandLinks, Ref, normalizeRef } from "@jsonview/core";
+import { hash128 } from "@jsonview/core/hash";
+import { createApi } from "@jsonview/lib";
 import { p, popup, routeLink, span } from "./html";
 
 
 const DBNAME = "jsonview"
 
-const local_url= "http://localhost:3000";
-const prod_url= "https://maincloud.spacetimedb.com";
 
-// let db_url = prod_url;
-let db_url = local_url;
 let access_token: string | null = localStorage.getItem("access_token");
+const api = createApi({ dbName: DBNAME, accessToken: access_token });
 
-const req = (path: string, method: string, body: string | null = null) : Promise<Response> =>
-  new Promise(rs=> setTimeout(() => {
-    rs(fetch(`${db_url}${path}`, {
-      method,
-      headers: { "Content-Type": "application/json", ...(access_token ? { Authorization: `Bearer ${access_token}` } : {}) },
-      body,
-    }))
-  }, 0))
-
-
-export const callProcedure = async (name: string, payload: any) => {
-  const res = await req(`/v1/database/${DBNAME}/call/${name}`, "POST", JSON.stringify(payload));
-  if (!res.ok) throw new Error(await res.text());
-  return res.text();
-};
+export const callProcedure = api.callProcedure;
 
 export const query_data = async (sql: string, desc = false, maxitems = null) : Promise<{names:string[], rows:any[]}> => {
 
@@ -33,23 +18,20 @@ export const query_data = async (sql: string, desc = false, maxitems = null) : P
     sql = `select * from (${sql}) limit ${maxitems}`;
   }
 
-  const text = await (await req(`/v1/database/${DBNAME}/sql`, "POST", sql)).text();
   try {
-    const data = JSON.parse(text);
-    if (data.length > 1) console.warn("multiple rows returned, TODO: handle this");
-    const { schema, rows } = data[0];
+    const { names, rows } = await api.sql(sql);
     const shouldReverse = desc && maxitems == null;
-    return { names: schema.elements.map((e) => e.name.some), rows: shouldReverse ? rows.reverse() : rows };
+    return { names, rows: shouldReverse ? rows.reverse() : rows };
   } catch (e: any) {
 
-    popup(p(text));
+    popup(p(String(e?.message || e)));
     return { names: ["error"], rows: [e.message] };
   }
 };
 
 const LocalCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
   const HotCache = new Map<string,Y>();
-  const fkey = hash128(fn.toString() + ":cached:" + db_url)
+  const fkey = hash128(fn.toString() + ":cached:" + api.baseUrl)
   return async (x:X) => {
     const lkey = fkey + JSON.stringify(x)
     if (HotCache.has(lkey)) return HotCache.get(lkey)!
@@ -67,18 +49,7 @@ const LocalCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
 }
 
 export const addNote = async (schema: Ref, data: Jsonable)=>{
-  const schemaHash = normalizeRef(schema);
-  const res = await req(`/v1/database/${DBNAME}/call/add_note`, "POST", JSON.stringify({
-    schemaHash,
-    data: tojson(data)
-  }));
-  if (!res.ok) throw new Error(await res.text())
-  const raw = await res.text();
-  try {
-    return JSON.parse(raw) as Hash;
-  } catch {
-    return raw as Hash;
-  }
+  return api.addNote(schema, data);
 }
 
 export const getNoteRaw = LocalCache(async (ref:Ref) => {
@@ -100,7 +71,12 @@ export const getNote = LocalCache(async (ref: Ref) =>{
   } as NoteData
 })
 
-if (access_token === null) req("/v1/identity", "POST").then((res) => res.json()).then((text) => {access_token = text.token; });
+if (access_token === null) {
+  api.req("/v1/identity", "POST").then((res) => res.json()).then((text) => {
+    access_token = text.token;
+    api.setAccessToken(access_token);
+  });
+}
 export const validateNote = async (note: NoteData) => {
   try {
     const resolve = (ref) => getNote(ref).then(n => n.data)

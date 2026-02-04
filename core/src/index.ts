@@ -1,5 +1,6 @@
 import { schema, table, t, SenderError } from 'spacetimedb/server';
-import { Hash, hashData, schemas, tojson, top, validate, expandLinksSync, fromjson, Ref, server_function, normalizeRef } from './notes';
+import { hashData, schemas, tojson, top, validate, expandLinksSync, fromjson, server_function, normalizeRef } from './notes';
+import type { Hash, Ref } from './notes';
 import { runWithFuelShared } from './parser';
 import { hash128 } from './hash';
 
@@ -44,49 +45,48 @@ spacetimedb.view({ name: 'note_count', public: true }, t.array(t.object('NoteCou
 
 
 
-const add_note = spacetimedb.procedure('add_note', {
+spacetimedb.reducer('add_note', {
   schemaHash: t.string(),
   data: t.string(),
-}, t.string(), (ctx, { schemaHash, data } ) => {
-  return ctx.withTx(ctx => {
-    const schemaRow = ctx.db.note.hash.find(schemaHash);
-    if (!schemaRow) throw new SenderError('Schema not found');
+}, (ctx, { schemaHash, data } ) => {
 
-    try{
-      const resolve = (ref: Ref) => {
-        const note = ctx.db.note.hash.find(normalizeRef(ref));
-        if (!note) throw new SenderError('Note not found');
-        return fromjson(note.data);
-      }
-      const parsed = fromjson(data)
-      const expandedJson = expandLinksSync(parsed, resolve);
-      const expandedSchema = expandLinksSync(fromjson(schemaRow.data), resolve);
-      validate(expandedJson, expandedSchema)
+  const schemaRow = ctx.db.note.hash.find(schemaHash);
+  if (!schemaRow) throw new SenderError('Schema not found');
 
-      const hash = hashData({schemaHash: schemaHash as Hash, data: parsed})
-
-      const existing = ctx.db.note.hash.find(hash);
-      if (existing) return String(existing.hash);
-
-      ctx.db.note.insert({ hash, schemaHash, data })
-
-      const targets = new Set<string>([schemaRow.hash]);
-      const re = /#([a-f0-9]{32})/g;
-      let match: RegExpExecArray | null;
-      while ((match = re.exec(data))) {
-        targets.add(match[1]);
-      }
-      for (const to of targets) {
-        const existing = ctx.db.links.to.find(to);
-        if (!existing) ctx.db.links.insert({ to, from: [hash] });
-        else if (!existing.from.some((x) => x === hash)) ctx.db.links.to.update({ ...existing, from: [...existing.from, hash] });
-      }
-
-      return String(hash);
-    }catch (e){
-      throw new SenderError( "INSERT ERROR: "+fromjson(schemaRow.data))
+  try{
+    const resolve = (ref: Ref) => {
+      const note = ctx.db.note.hash.find(normalizeRef(ref));
+      if (!note) throw new SenderError('Note not found');
+      return fromjson(note.data);
     }
-  });
+    const parsed = fromjson(data)
+    const expandedJson = expandLinksSync(parsed, resolve);
+    const expandedSchema = expandLinksSync(fromjson(schemaRow.data), resolve);
+    validate(expandedJson, expandedSchema)
+
+    const hash = hashData({schemaHash: schemaHash as Hash, data: parsed})
+
+    const existing = ctx.db.note.hash.find(hash);
+    if (existing) return;
+
+    ctx.db.note.insert({ hash, schemaHash, data })
+
+    const targets = new Set<string>([schemaRow.hash]);
+    const re = /#([a-f0-9]{32})/g;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(data))) {
+      targets.add(match[1]);
+    }
+    for (const to of targets) {
+      const existing = ctx.db.links.to.find(to);
+      if (!existing) ctx.db.links.insert({ to, from: [hash] });
+      else if (!existing.from.some((x) => x === hash)) ctx.db.links.to.update({ ...existing, from: [...existing.from, hash] });
+    }
+
+    return;
+  }catch (e){
+    throw new SenderError( "INSERT ERROR: "+fromjson(schemaRow.data))
+  }
 });
 
 
@@ -108,20 +108,6 @@ const setup = spacetimedb.reducer('setup', {}, (ctx) => {
 })
 
 spacetimedb.init(setup)
-
-// Simple reducer for migration - no validation, no return value
-spacetimedb.reducer('import_note', { schemaHash: t.string(), data: t.string() }, (ctx, { schemaHash, data }) => {
-  const schemaRow = ctx.db.note.hash.find(schemaHash);
-  if (!schemaRow) throw new SenderError('Schema not found: ' + schemaHash);
-
-  const parsed = fromjson(data);
-  const hash = hashData({ schemaHash: schemaHash as Hash, data: parsed });
-
-  if (ctx.db.note.hash.find(hash)) return; // already exists
-
-  ctx.db.note.insert({ hash, schemaHash, data });
-})
-
 
 /* this will outside of transaction allowing for fetch requests */
 spacetimedb.procedure('run_note_async', {hash: t.string(), arg: t.string()}, t.string(), (ctx, {hash, arg})=> {

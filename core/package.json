@@ -1,6 +1,7 @@
 {
   "name": "@jsonview/core",
   "version": "1.0.0",
+  "type": "module",
   "description": "SpacetimeDB backend + shared types",
   "main": "src/notes.ts",
   "exports": {

@@ -1,0 +1,25 @@
+{
+  "name": "@jsonview/lib",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Tested utilities and minimal reference client",
+  "main": "src/index.ts",
+  "bin": {
+    "jsonview": "src/cli.ts"
+  },
+  "scripts": {
+    "dev": "vite",
+    "test": "node --test --experimental-strip-types __tests__/*.test.ts",
+    "check": "tsc --noEmit",
+    "cli": "node --experimental-strip-types src/cli.ts",
+    "sql": "node --experimental-strip-types src/cli.ts sql",
+    "get-note": "node --experimental-strip-types src/cli.ts get-note",
+    "add-note": "node --experimental-strip-types src/cli.ts add-note"
+  },
+  "dependencies": {
+    "@jsonview/core": "*"
+  },
+  "devDependencies": {
+    "vite": "^3.0.7"
+  }
+}

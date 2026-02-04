@@ -13,11 +13,11 @@
   },
   "dependencies": {
     "@jsonview/core": "*",
+    "@jsonview/lib": "*",
     "@clockworklabs/spacetimedb-sdk": "^1.1.0",
     "monaco-editor": "^0.45.0"
   },
   "devDependencies": {
-    "typescript": "^4.5.4",
     "vite": "^3.0.7"
   }
 }

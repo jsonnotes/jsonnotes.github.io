@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "workspaces": [
     "core",
+    "lib",
     "client"
   ],
   "scripts": {
@@ -12,7 +13,7 @@
     "build:gh-pages": "npm run build -w @jsonview/core && npm run build:gh-pages -w @jsonview/client",
     "build:local": "npm run build -w @jsonview/core && npm run build:local -w @jsonview/client",
     "preview": "npm run preview -w @jsonview/client",
-    "test": "node scripts/test.js",
+    "test": "npm run test -w @jsonview/lib",
     "check": "npm run check -w @jsonview/core && npm run check -w @jsonview/client",
     "db": "node scripts/db-cli.js",
     "db:add-note": "npm run db add-note",
@@ -25,6 +26,6 @@
     "db:new": "npm run db new"
   },
   "devDependencies": {
-    "typescript": "^4.5.4"
+    "typescript": "^5.3.0"
   }
 }

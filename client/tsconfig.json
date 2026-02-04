@@ -4,7 +4,8 @@
     "useDefineForClassFields": true,
     "module": "esnext",
     "lib": ["ESNext", "DOM", "ESNext.BigInt"],
-    "moduleResolution": "Node",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "strict": false,
     "sourceMap": true,
     "resolveJsonModule": true,
@@ -13,5 +14,5 @@
     "noEmit": true,
     "skipLibCheck": false
   },
-  "include": ["src"]
+  "include": ["src", "../core/src"]
 }
