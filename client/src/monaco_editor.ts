@@ -186,6 +186,40 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
       },
     });
 
+    // Register #hash link provider (Cmd/Ctrl+click)
+    monaco.languages.registerLinkProvider("json", {
+      provideLinks: (model) => {
+        const text = model.getValue();
+        const links: monaco.languages.ILink[] = [];
+        const re = /#([a-f0-9]{32})/g;
+        let match: RegExpExecArray | null;
+        while ((match = re.exec(text))) {
+          const hash = match[1];
+          const start = model.getPositionAt(match.index);
+          const end = model.getPositionAt(match.index + match[0].length);
+          links.push({
+            range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+            url: monaco.Uri.parse(`jsonview:${hash}`),
+          });
+        }
+        return { links };
+      },
+    });
+
+    // Open #hash links in the same tab
+    const opener = monaco.editor.registerLinkOpener({
+      open: (uri) => {
+        if (uri.scheme === "jsonview") {
+          const raw = uri.path || uri.authority || "";
+          const hash = raw.replace(/^\/+/, "");
+          window.history.pushState({}, "", `/${hash}`);
+          window.dispatchEvent(new PopStateEvent("popstate"));
+          return true;
+        }
+        return false;
+      }
+    });
+
     // Listen for changes
     editor.onDidChangeModelContent(() => {
       updateStatus();

@@ -103,6 +103,7 @@ createApi({ baseUrl?, server?, dbName, accessToken? }) => {
 - **Schemas are notes**: Schema rows are notes with `schemaHash = "0"` (top)
 - **Validation**: JSON validated against schema on backend; links expanded for validation only
 - **Link format**: `#` followed by 32 lowercase hex chars (e.g., `#a1b2c3d4...`)
+- **add_note is a reducer**: Maincloud only exposes reducers; clients compute the hash locally
 
 ## Note Types
 - `Note`: `{ hash, schemaHash, data }` where `data` is JSON string
@@ -132,7 +133,7 @@ createApi({ baseUrl?, server?, dbName, accessToken? }) => {
 
 ## Database Procedures
 
-- `add_note({schemaHash, data})` → returns hash string
+- `add_note({schemaHash, data})` → reducer; no return value (clients compute hash)
 - `run_note_async({hash, arg})` → executes server function outside transaction
 - `setup` reducer → initializes schema notes
 
@@ -142,3 +143,8 @@ createApi({ baseUrl?, server?, dbName, accessToken? }) => {
 ❌ Assume shared storage in nested server calls → ✅ Each call has isolated storage
 ❌ Pass `undefined` to procedures → ✅ Use `"null"` string
 ❌ Import types as values → ✅ Use `import type { Hash }` for type-only imports
+
+## CLI + Dev Notes
+
+- Global CLI available via `npm link -w @jsonview/lib` → `jsonview` command
+- Monaco workers require Vite worker imports (see `client/src/monaco_editor.ts`)

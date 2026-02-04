@@ -12,7 +12,6 @@ let runQuery = () => {};
 export type Draft = {schemaHash: Hash, text: string}
 let editFill: ((d:Draft) => void) | null = null;
 let contentRoot: HTMLElement | null = null;
-let lastDraftRaw: string | null = null;
 let handleRoute = () => {};
 const body = document.body;
 
@@ -54,17 +53,19 @@ handleRoute = () => {
     if (isNew) localStorage.removeItem("edit_draft");
     if (searchhash === null){
       const raw = localStorage.getItem("edit_draft");
-      if (raw && raw !== lastDraftRaw) {
-        lastDraftRaw = raw;
+      if (raw) {
         try {
           const draft = JSON.parse(raw);
           editFill(draft)
-        } catch {}
+        } catch {
+          const schemaHash = hashData(top);
+          editFill({schemaHash, text: "{}"});
+        }
       } else {
         const schemaHash = hashData(top);
         editFill({schemaHash, text: "{}"});
       }
-    }else{
+    } else {
       getNote(searchhash as Hash)
         .then((note) => editFill({schemaHash: note.schemaHash, text: tojson(note.data)}))
         .catch((e) => popup(h2("ERROR"), p(e.message)));
