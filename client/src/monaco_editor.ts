@@ -58,9 +58,8 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
   let editor: monaco.editor.IStandaloneCodeEditor | null = null;
   let linkDecorations: string[] = [];
   const previewCache = new Map<string, string>();
-  let updateTimer: number | null = null;
+  let updatePending = false;
   let styleInjected = false;
-  let showPreviews = true;
 
   const titleField = input("", {
     placeholder: "script title",
@@ -98,10 +97,9 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
 
   const getValue = (): string => editor?.getValue() ?? "";
 
-  const getDraft = (): Draft =>
-    isScript()
-      ? { schemaHash, text: tojson({ title: titleField.value, code: getValue() }) }
-      : { schemaHash, text: getValue() };
+  const getDraft = (): Draft => isScript()
+    ? { schemaHash, text: tojson({ title: titleField.value, code: getValue() }) }
+    : { schemaHash, text: getValue() };
 
   const updateStatus = async () => {
     jsonStatus.innerText = "validating...";
@@ -182,7 +180,6 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
 
         const token = hashMatch[1].toLowerCase();
         const notes = await loadNotes();
-        const word = model.getWordUntilPosition(position);
         const range = {
           startLineNumber: position.lineNumber,
           endLineNumber: position.lineNumber,
@@ -231,7 +228,7 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
     });
 
     // Open #hash links in the same tab
-    const opener = monaco.editor.registerLinkOpener({
+    monaco.editor.registerLinkOpener({
       open: (uri) => {
         if (uri.scheme === "jsonview") {
           const raw = uri.path || uri.authority || "";
@@ -265,8 +262,12 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
     };
 
     const scheduleUpdate = () => {
-      if (updateTimer !== null) window.clearTimeout(updateTimer);
-      updateTimer = window.setTimeout(updateLinkDecorations, 50);
+      if (updatePending) return;
+      updatePending = true;
+      requestAnimationFrame(() => {
+        updatePending = false;
+        updateLinkDecorations();
+      });
     };
 
     const updateLinkDecorations = () => {
@@ -287,16 +288,13 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
         if (!preview) hashesToFetch.push(hash);
         next.push({
           range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
-          options: showPreviews ? {
+          options: {
             inlineClassName: "jv-link-dim",
             after: {
               content: `${preview ?? `#${hash.slice(0, 8)}`}`,
               inlineClassName: "jv-link-preview",
               cursorStops: monaco.editor.InjectedTextCursorStops.None,
             },
-          } : {
-            inlineClassName: undefined,
-            after: undefined,
           },
         });
       }
@@ -339,15 +337,11 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
       }
     });
 
-    editor.onDidFocusEditorText(() => {});
-    editor.onDidBlurEditorText(() => {});
-
     // Cmd+S to format
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       formatButton.click();
     });
 
-    showPreviews = true;
     scheduleUpdate();
   };
 
@@ -376,10 +370,8 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
     })
   );
 
-  // Initialize editor when container is mounted
-  requestAnimationFrame(() => {
-    initEditor();
-  });
+    // Initialize editor when container is mounted
+    requestAnimationFrame(initEditor);
 
   return {
     root,
