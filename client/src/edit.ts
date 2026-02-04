@@ -292,45 +292,13 @@ export const niceView = ({ submit }: EditDeps) => {
 };
 
 export const createEditView = (submit: EditDeps) => {
-  const plain = plainView(submit);
-  const nice = niceView(submit);
   const monacoEditor = monacoView(submit);
-
-  type ViewType = typeof plain | typeof nice | typeof monacoEditor;
-  const views: Record<string, ViewType> = { plain, nice, monaco: monacoEditor };
-  let active: ViewType = views[localStorage.editmode || "nice"] ?? nice;
+  const active = monacoEditor;
   const schemaPanel = createSchemaPanel((hash) => active.setSchemaHash(hash));
-  let data: Draft;
-
-  const cycleMode = () => {
-    data = active.getDraft();
-    const modes = ["nice", "plain", "monaco"];
-    const currentIdx = modes.indexOf(localStorage.editmode || "nice");
-    const nextIdx = (currentIdx + 1) % modes.length;
-    const nextMode = modes[nextIdx];
-    active = views[nextMode];
-    active.fill(data);
-    localStorage.editmode = nextMode;
-    mount();
-  };
-
-  const modeLabel = () => {
-    const mode = localStorage.editmode || "nice";
-    return mode === "nice" ? "nice" : mode === "plain" ? "plain" : "monaco";
-  };
-
-  const modebut = button(modeLabel(), { onclick: cycleMode });
-  const root = div();
-  const mount = () => {
-    modebut.textContent = modeLabel();
-    root.innerHTML = "";
-    root.append(modebut, active.root, schemaPanel.root);
-  };
-  mount();
+  const root = div(active.root, schemaPanel.root);
 
   return {
     fill: (newdata: Draft) => {
-      data = newdata;
       schemaPanel.setSchemaHash(newdata.schemaHash);
       active.fill(newdata);
     },
