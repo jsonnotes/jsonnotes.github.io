@@ -1,16 +1,19 @@
 {
-  "name": "frontend",
+  "name": "jsonview-workspace",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "workspaces": [
+    "core",
+    "client"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "BUILD_TARGET=gh-pages vite build --force && cp docs/index.html docs/404.html",
-    "build:gh-pages": "BUILD_TARGET=gh-pages vite build --force && cp docs/index.html docs/404.html",
-    "build:local": "BUILD_TARGET=local vite build --force",
-    "preview": "vite preview",
+    "dev": "npm run dev -w @jsonview/client",
+    "build": "npm run build -w @jsonview/core && npm run build -w @jsonview/client",
+    "build:gh-pages": "npm run build -w @jsonview/core && npm run build:gh-pages -w @jsonview/client",
+    "build:local": "npm run build -w @jsonview/core && npm run build:local -w @jsonview/client",
+    "preview": "npm run preview -w @jsonview/client",
     "test": "node scripts/test.js",
-    "check": "tsc --noEmit",
-    "build:tsc": "tsc -p tsconfig.build.json",
+    "check": "npm run check -w @jsonview/core && npm run check -w @jsonview/client",
     "db": "node scripts/db-cli.js",
     "db:add-note": "npm run db add-note",
     "db:get-note": "npm run db get-note",
@@ -22,9 +25,6 @@
     "db:new": "npm run db new"
   },
   "devDependencies": {
-    "@clockworklabs/spacetimedb-sdk": "^1.1.0",
-    "ajv": "^8.17.1",
-    "typescript": "^4.5.4",
-    "vite": "^3.0.7"
+    "typescript": "^4.5.4"
   }
 }

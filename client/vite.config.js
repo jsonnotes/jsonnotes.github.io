@@ -1,11 +1,8 @@
 import { defineConfig, loadEnv } from 'vite'
 
 export default defineConfig(({ command, mode }) => {
-
-  // Load environment variables
   const env = loadEnv(mode, process.cwd(), '');
 
-  // Determine base path
   const base = command === 'build' && env.BUILD_TARGET === 'gh-pages'
     ? '/'
     : '/';
@@ -13,7 +10,7 @@ export default defineConfig(({ command, mode }) => {
   return {
     base,
     build: {
-      outDir: 'docs',
+      outDir: '../docs',
       emptyOutDir: true,
       target: 'es2020',
       rollupOptions: {

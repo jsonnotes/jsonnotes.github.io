@@ -4,7 +4,7 @@ import { createDashboardView } from "./dashboard";
 import { createEditView } from "./edit";
 import { createSqlView } from "./sql_view";
 import { createDepsView } from "./deps_view";
-import { Hash, NoteData, Ref, tojson, hashData, top } from "../spacetimedb/src/notes"
+import { Hash, NoteData, Ref, tojson, hashData, top } from "@jsonview/core"
 import { addNote, getNote, query_data } from "./dbconn";
 
 let runQuery = () => {};
@@ -67,7 +67,7 @@ handleRoute = () => {
     }else{
       getNote(searchhash as Hash)
         .then((note) => editFill({schemaHash: note.schemaHash, text: tojson(note.data)}))
-        .catch((e) => popup(h2("ERROR"), p(e.message))); 
+        .catch((e) => popup(h2("ERROR"), p(e.message)));
     }
     if (window.location.search) {
       history.replaceState({}, "", "/edit");

@@ -1,6 +1,6 @@
 import { div, h3, popup, pre, style } from "./html";
 import { getNote, noteOverview, notePreview, query_data } from "./dbconn";
-import { Hash, Ref, hashData, top, normalizeRef } from "../spacetimedb/src/notes";
+import { Hash, Ref, hashData, top, normalizeRef } from "@jsonview/core";
 import { noteSearch } from "./helpers";
 
 type QueryResult = { names: string[]; rows: any[][] };
@@ -215,7 +215,7 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
       });
       if (schemaRect) arrowDown(svg, edgeV(schemaRect, "bottom"), edgeV(cur, "top"));
     }
-    
+
 
     noteOverview(data.currentHash as Hash).then(p=>{
       prev.innerHTML = p

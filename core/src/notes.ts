@@ -1,6 +1,7 @@
 import Ajv from "ajv"
 
 import { hash128 } from "./hash"
+export { hash128 } from "./hash"
 
 const string = {type : "string"}
 const number = {type : "number"}

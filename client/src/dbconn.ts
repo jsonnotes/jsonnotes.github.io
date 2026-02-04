@@ -1,6 +1,5 @@
-import { Hash, Jsonable, NoteData, Note, tojson, validate, fromjson, expandLinks, Ref, normalizeRef } from "../spacetimedb/src/notes";
+import { Hash, Jsonable, NoteData, Note, tojson, validate, fromjson, expandLinks, Ref, normalizeRef, hash128 } from "@jsonview/core";
 import { p, popup, routeLink, span } from "./html";
-import { hash128 } from "../spacetimedb/src/hash";
 
 
 const DBNAME = "jsonview"
@@ -48,7 +47,7 @@ export const query_data = async (sql: string, desc = false, maxitems = null) : P
   }
 };
 
-const FunCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
+const LocalCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
   const HotCache = new Map<string,Y>();
   const fkey = hash128(fn.toString() + ":cached:" + db_url)
   return async (x:X) => {
@@ -63,7 +62,7 @@ const FunCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
     const res = await fn(x)
     localStorage.setItem(lkey, JSON.stringify(res))
     HotCache.set(lkey, res)
-    return res 
+    return res
   }
 }
 
@@ -82,7 +81,7 @@ export const addNote = async (schema: Ref, data: Jsonable)=>{
   }
 }
 
-export const getNoteRaw = FunCache(async (ref:Ref) => {
+export const getNoteRaw = LocalCache(async (ref:Ref) => {
   const hash = normalizeRef(ref);
   const data = await query_data(`select * from note where hash = '${hash}'`)
   const row = data.rows[0];
@@ -93,7 +92,7 @@ export const getNoteRaw = FunCache(async (ref:Ref) => {
 export const getSchemaHash = (ref: Ref) => getNoteRaw(ref).then((n)=>n.schemaHash)
 
 
-export const getNote = FunCache(async (ref: Ref) =>{
+export const getNote = LocalCache(async (ref: Ref) =>{
   const nt = await getNoteRaw(ref)
   return {
     schemaHash: nt.schemaHash,

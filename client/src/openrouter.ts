@@ -1,6 +1,5 @@
-import { hash128 } from "./hash";
-import { h2, input, p, popup, style } from "../../src/html";
-import { validate } from "./notes";
+import { hash128, validate } from "@jsonview/core";
+import { h2, input, p, popup, style } from "./html";
 
 
 const storekey = "$"+hash128("openrouter")
@@ -15,7 +14,7 @@ export const openrouter = async (prompt: string, schema: any, model = "openai/gp
     await new Promise<void>((resolve, reject) => {
 
       let inp = input()
-      
+
       let pop = popup(
         p("Please enter your OpenRouter API key to use the LLM feature"),
         inp

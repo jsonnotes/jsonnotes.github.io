@@ -1,4 +1,4 @@
-import { fromjson, isRef, Jsonable, Schema, tojson } from "../spacetimedb/src/notes";
+import { fromjson, isRef, Jsonable, Schema, tojson } from "@jsonview/core";
 import { button, div, input, p, padding, popup, span, style, textarea } from "./html"
 import { query_data } from "./dbconn";
 
@@ -57,7 +57,7 @@ export const noteSearch = (
     list
   ));
 
-} 
+}
 
 
 export const createSchemaPicker = (

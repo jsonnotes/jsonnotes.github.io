@@ -1,6 +1,6 @@
 
 import { button, div, p, routeLink, style } from "./html";
-import { function_schema, hashData, script_result_schema, script_schema, top } from "../spacetimedb/src/notes";
+import { function_schema, hashData, script_result_schema, script_schema, top } from "@jsonview/core";
 import { createSchemaPicker, noteSearch, SchemaEntry } from "./helpers";
 import { noteLink } from "./dbconn";
 

@@ -3,12 +3,7 @@
     "target": "ES2020",
     "useDefineForClassFields": true,
     "module": "esnext",
-    "lib": [
-      // "ES2024",
-      // "DOM",
-      "ESNext", "DOM",
-      "ESNext.BigInt"
-    ],
+    "lib": ["ESNext", "DOM", "ESNext.BigInt"],
     "moduleResolution": "Node",
     "strict": false,
     "sourceMap": true,
@@ -16,12 +11,7 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "noEmit": true,
-    "skipLibCheck": false,
+    "skipLibCheck": false
   },
-  "include": [
-    "src"
-, "spacetimedb/src/openrouter.ts"  ],
-  "exclude": [
-    "src/module_bindings"
-  ]
+  "include": ["src"]
 }

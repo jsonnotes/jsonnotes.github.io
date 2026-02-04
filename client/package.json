@@ -1,0 +1,23 @@
+{
+  "name": "@jsonview/client",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "BUILD_TARGET=gh-pages vite build --force && cp ../docs/index.html ../docs/404.html",
+    "build:gh-pages": "BUILD_TARGET=gh-pages vite build --force && cp ../docs/index.html ../docs/404.html",
+    "build:local": "BUILD_TARGET=local vite build --force",
+    "preview": "vite preview",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@jsonview/core": "*",
+    "@clockworklabs/spacetimedb-sdk": "^1.1.0",
+    "monaco-editor": "^0.45.0"
+  },
+  "devDependencies": {
+    "typescript": "^4.5.4",
+    "vite": "^3.0.7"
+  }
+}

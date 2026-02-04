@@ -1,7 +1,6 @@
-import { hashData, function_schema, Ref, Jsonable, normalizeRef } from "../spacetimedb/src/notes";
+import { hashData, function_schema, Ref, Jsonable, normalizeRef, hash128 } from "@jsonview/core";
 import { addNote, callProcedure, getNote } from "./dbconn";
-import { hash128 } from "../spacetimedb/src/hash";
-import { openrouter } from "../spacetimedb/src/openrouter";
+import { openrouter } from "./openrouter";
 
 export const callNote = async (fn: Ref, ...args: Jsonable[]): Promise<any> => {
   const note = await getNote(fn);

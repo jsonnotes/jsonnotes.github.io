@@ -1,8 +1,9 @@
-import { fromjson, Hash, hashData, NoteData, script_schema, tojson, top } from "../spacetimedb/src/notes";
+import { fromjson, Hash, hashData, NoteData, script_schema, tojson, top } from "@jsonview/core";
 import { a, button, div, input, pre, style, textarea } from "./html";
 import { getNote, noteOverview, query_data, validateNote } from "./dbconn";
 import { createSchemaPicker, formfield, safeInput, SchemaEntry } from "./helpers";
 import { Draft } from "./main";
+import { monacoView } from "./monaco_editor";
 
 type EditDeps = { submit: (data: NoteData) => Promise<void> };
 
@@ -293,23 +294,37 @@ export const niceView = ({ submit }: EditDeps) => {
 export const createEditView = (submit: EditDeps) => {
   const plain = plainView(submit);
   const nice = niceView(submit);
-  let active: typeof plain | typeof nice = { plain, nice }[localStorage.editmode || "nice"] ?? nice;
+  const monacoEditor = monacoView(submit);
+
+  type ViewType = typeof plain | typeof nice | typeof monacoEditor;
+  const views: Record<string, ViewType> = { plain, nice, monaco: monacoEditor };
+  let active: ViewType = views[localStorage.editmode || "nice"] ?? nice;
   const schemaPanel = createSchemaPanel((hash) => active.setSchemaHash(hash));
   let data: Draft;
 
-  const toggleMode = () => {
+  const cycleMode = () => {
     data = active.getDraft();
-    active = active === nice ? plain : nice;
+    const modes = ["nice", "plain", "monaco"];
+    const currentIdx = modes.indexOf(localStorage.editmode || "nice");
+    const nextIdx = (currentIdx + 1) % modes.length;
+    const nextMode = modes[nextIdx];
+    active = views[nextMode];
     active.fill(data);
-    localStorage.editmode = active === nice ? "nice" : "plain";
+    localStorage.editmode = nextMode;
     mount();
   };
 
-  const nicebut = button("niceview", { onclick: toggleMode });
+  const modeLabel = () => {
+    const mode = localStorage.editmode || "nice";
+    return mode === "nice" ? "nice" : mode === "plain" ? "plain" : "monaco";
+  };
+
+  const modebut = button(modeLabel(), { onclick: cycleMode });
   const root = div();
   const mount = () => {
+    modebut.textContent = modeLabel();
     root.innerHTML = "";
-    root.append(nicebut, active.root, schemaPanel.root);
+    root.append(modebut, active.root, schemaPanel.root);
   };
   mount();
 

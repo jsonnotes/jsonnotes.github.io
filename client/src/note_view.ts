@@ -1,10 +1,10 @@
-import { Hash, hashData, NoteData, script_result_schema, script_schema, Ref, Jsonable, function_schema, server_function, normalizeRef } from "../spacetimedb/src/notes";
+import { Hash, hashData, NoteData, script_result_schema, script_schema, Ref, Jsonable, function_schema, server_function, normalizeRef } from "@jsonview/core";
 import { addNote, callProcedure, getNote, noteLink, noteOverview } from "./dbconn";
 
 import { stringify } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, pre, routeLink, span, style } from "./html";
 
-import { openrouter } from "../spacetimedb/src/openrouter";
+import { openrouter } from "./openrouter";
 
 
 import { callNote } from "./call_note";
@@ -60,7 +60,7 @@ const linkify = (text: string) => {
 
 export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise<void>): HTMLElement => {
 
-  
+
   const overlay = div(style({display: "flex", flexDirection: "column", gap: "0.75em"}));
 
 
@@ -91,8 +91,8 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         worker.terminate();
         if (msg.ok) {
 
-          
-          if (msg.result == undefined) return 
+
+          if (msg.result == undefined) return
           let result = {
             schemaHash: hashData(script_result_schema),
             data: {
