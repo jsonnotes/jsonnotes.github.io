@@ -140,7 +140,12 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
   returnSchemaInput.rows = 4;
   returnSchemaInput.style.width = "100%";
   returnSchemaInput.style.fontFamily = "monospace";
-  returnSchemaInput.oninput = () => { updateStatus(); saveDraft(); };
+  const autoResize = (ta: HTMLTextAreaElement) => {
+    ta.style.height = "0px";
+    ta.style.height = `${ta.scrollHeight}px`;
+  };
+  returnSchemaInput.oninput = () => { autoResize(returnSchemaInput); updateStatus(); saveDraft(); };
+  autoResize(returnSchemaInput);
 
   const addArgRow = (name = "", schemaText = "{}") => {
     const nameInput = input(name, {
@@ -151,6 +156,7 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
     schemaInput.rows = 2;
     schemaInput.style.width = "100%";
     schemaInput.style.fontFamily = "monospace";
+    schemaInput.style.minHeight = "2.4em";
     schemaInput.value = schemaText;
     const remove = button("-", { onclick: () => {
       row.remove();
@@ -160,7 +166,7 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
       saveDraft();
     }});
     nameInput.oninput = () => { updateStatus(); saveDraft(); };
-    schemaInput.oninput = () => { updateStatus(); saveDraft(); };
+    schemaInput.oninput = () => { autoResize(schemaInput); updateStatus(); saveDraft(); };
     const row = div(
       style({ display: "flex", gap: "0.5em", alignItems: "flex-start" }),
       nameInput,
@@ -169,6 +175,7 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
     );
     argRows.push({ row, nameInput, schemaInput });
     argsList.appendChild(row);
+    requestAnimationFrame(() => autoResize(schemaInput));
   };
 
   const setArgsFromData = (args: any) => {
@@ -182,6 +189,7 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
       const schema = val?.schema ?? {};
       addArgRow(name, JSON.stringify(schema, null, 2));
     });
+    autoResize(returnSchemaInput);
   };
 
   const functionPanel = div(
@@ -473,10 +481,12 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
             const args = parsed.args || {};
             setArgsFromData(args);
             returnSchemaInput.value = parsed.returnSchema ? JSON.stringify(parsed.returnSchema, null, 2) : "{}";
+            autoResize(returnSchemaInput);
             editor?.setValue(parsed.code ?? "");
           } catch {
             setArgsFromData({});
             returnSchemaInput.value = "{}";
+            autoResize(returnSchemaInput);
             editor?.setValue(text);
           }
         } else {

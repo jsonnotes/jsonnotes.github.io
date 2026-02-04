@@ -5,7 +5,7 @@ import { openrouter } from "./openrouter";
 export const callNote = async (fn: Ref, ...args: Jsonable[]): Promise<any> => {
   const note = await getNote(fn);
   if (note.schemaHash != hashData(function_schema)) throw new Error("can only call Function schema notes");
-  const data = note.data as { code: string; inputs?: string[] };
+  const data = note.data as { code: string; inputs?: string[]; args?: Record<string, { name?: string; schema?: any }> };
 
   const localBuiltins = {
     getNote,
@@ -29,11 +29,20 @@ export const callNote = async (fn: Ref, ...args: Jsonable[]): Promise<any> => {
     hash: hash128
   };
 
-  if (data.inputs && data.inputs.length > 0) {
-    const F = new Function(...data.inputs, ...Object.keys(localBuiltins), `return (async () => {${data.code}})()`);
-    return F(...args, ...Object.values(localBuiltins));
-  } else {
-    const F = new Function('args', ...Object.keys(localBuiltins), `return (async () => {${data.code}})()`);
-    return F(args.length === 1 ? args[0] : args, ...Object.values(localBuiltins));
+  const argNames = data.inputs && data.inputs.length > 0
+    ? data.inputs
+    : Object.keys(data.args || {});
+
+  if (argNames.length > 0) {
+    const F = new Function(...argNames, ...Object.keys(localBuiltins), `return (async () => {${data.code}})()`);
+    let callArgs = args;
+    if (args.length === 1 && args[0] && typeof args[0] === "object" && !Array.isArray(args[0])) {
+      const obj = args[0] as Record<string, Jsonable>;
+      callArgs = argNames.map((name) => obj[name]);
+    }
+    return F(...callArgs, ...Object.values(localBuiltins));
   }
+
+  const F = new Function("args", ...Object.keys(localBuiltins), `return (async () => {${data.code}})()`);
+  return F(args.length === 1 ? args[0] : args, ...Object.values(localBuiltins));
 };

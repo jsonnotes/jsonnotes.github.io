@@ -164,35 +164,40 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
     }
 
     if (note.schemaHash === hashData(function_schema)) {
-      const runLocalFn = button("run local", { onclick: async () => {
-        const fnData = note.data as {code: string};
-        const usesArgs = fnData.code.includes('args');
-        let args = {};
+      const promptArgs = (storageKey: string) => {
+        const fnData = note.data as any;
+        const argNames = Object.keys(fnData?.args || {});
+        const usesArgs = String(fnData?.code || "").includes("args");
+        const needsArgs = argNames.length > 0 || usesArgs;
+        if (!needsArgs) return { canceled: false, raw: null as string | null, parsed: undefined as any };
 
-        if (usesArgs) {
-          const defaultArgs = '{"a": 1, "b": 2}';
-          let lastarg = localStorage.getItem("local_fun_arg") ?? defaultArgs;
-          const argText = prompt("args as JSON object (e.g., {\"a\": 5, \"b\": 3})", lastarg);
-          if (argText == null) return;
-
-          const trimmed = argText.trim();
-          if (!trimmed) {
-            popup(h2("ERROR"), p("Args cannot be empty. Use {} for no arguments."));
-            return;
-          }
-
-          try {
-            args = JSON.parse(trimmed);
-            localStorage.setItem("local_fun_arg", trimmed);
-          } catch (e: any) {
-            popup(h2("ERROR"), p("Invalid JSON: " + e.message));
-            return;
-          }
+        const defaultArgs = argNames.length
+          ? JSON.stringify(Object.fromEntries(argNames.map((n: string) => [n, null])), null, 2)
+          : "{}";
+        const lastarg = localStorage.getItem(storageKey) ?? defaultArgs;
+        const argText = prompt("args as JSON object (use {} for none)", lastarg);
+        if (argText == null) return { canceled: true, raw: null, parsed: undefined };
+        const trimmed = argText.trim();
+        if (!trimmed) {
+          popup(h2("ERROR"), p("Args cannot be empty. Use {} for no arguments."));
+          return { canceled: true, raw: null, parsed: undefined };
         }
+        try {
+          const parsed = JSON.parse(trimmed);
+          localStorage.setItem(storageKey, trimmed);
+          return { canceled: false, raw: trimmed, parsed };
+        } catch (e: any) {
+          popup(h2("ERROR"), p("Invalid JSON: " + e.message));
+          return { canceled: true, raw: null, parsed: undefined };
+        }
+      };
 
+      const runLocalFn = button("run local", { onclick: async () => {
+        const { canceled, parsed } = promptArgs("local_fun_arg");
+        if (canceled) return;
+        const argsArray = parsed === undefined ? [] : (Array.isArray(parsed) ? parsed : [parsed]);
         try {
           runLocalFn.textContent = "running...";
-          const argsArray = Array.isArray(args) ? args : [args];
           const result = await callNote(hash, ...argsArray);
           popup(h2("result"), pre(JSON.stringify(result, null, 2)));
         } catch (e: any) {
@@ -201,7 +206,28 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
           runLocalFn.textContent = "run local";
         }
       }});
-      title.append(runLocalFn);
+
+      const runRemoteFn = button("run remote", { onclick: async () => {
+        const { canceled, raw, parsed } = promptArgs("remote_fun_arg");
+        if (canceled) return;
+        const argText = raw ?? (parsed === undefined ? "null" : JSON.stringify(parsed));
+        try {
+          runRemoteFn.textContent = "running...";
+          const response = await callProcedure("run_note_async", { hash, arg: argText });
+          let out: any = response;
+          try { out = JSON.parse(response); } catch {}
+          if (typeof out === "string") {
+            try { out = JSON.parse(out); } catch {}
+          }
+          popup(h2("result"), pre(JSON.stringify(out, null, 2)));
+        } catch (e: any) {
+          popup(h2("ERROR"), p(e.message || "run failed"));
+        } finally {
+          runRemoteFn.textContent = "run remote";
+        }
+      }});
+
+      title.append(runLocalFn, runRemoteFn);
     }
 
     updateContentDisplay();
