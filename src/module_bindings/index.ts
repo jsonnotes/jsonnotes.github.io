@@ -34,6 +34,8 @@ import {
 // Import and reexport all reducer arg types
 import SetupReducer from "./setup_reducer";
 export { SetupReducer };
+import ImportNoteReducer from "./import_note_reducer";
+export { ImportNoteReducer };
 
 // Import and reexport all procedure arg types
 import * as AddNoteProcedure from "./add_note_procedure";
@@ -52,6 +54,8 @@ import StoreRow from "./store_table";
 export { StoreRow };
 
 // Import and reexport all types
+import ImportNote from "./import_note_type";
+export { ImportNote };
 import Init from "./init_type";
 export { Init };
 import Links from "./links_type";
@@ -118,6 +122,7 @@ const tablesSchema = __schema(
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
   __reducerSchema("setup", SetupReducer),
+  __reducerSchema("import_note", ImportNoteReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
