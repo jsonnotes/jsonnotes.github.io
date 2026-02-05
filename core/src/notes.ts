@@ -1,8 +1,7 @@
 import Ajv from "ajv"
 
-import { hash128 } from "./hash"
-export { hash128 } from "./hash"
-
+import { hash128 } from "./hash.ts"
+export { hash128 } from "./hash.ts"
 
 const string = {type : "string"}
 const number = {type : "number"}
@@ -39,6 +38,8 @@ export function hashData({schemaHash, data} : NoteData){
   if (schemaHash === "0" && tojson(data) != "{}") throw new Error("schema hash is 0 but data is not empty :" + tojson(data))
   return hash128(schemaHash, data) 
 }
+
+export const hashCall : (fn:Hash, data:Jsonable) => Hash = hash128
 
 export function NoteData(title:string, schema: NoteData, data: any = {}): NoteData{
   return {
@@ -79,26 +80,19 @@ const titled2 = NoteData("titled2", has_titled_child, {child: `#${hashData(title
 
 export const function_schema = NoteData("function schema", top, object({
   title: string,
-  args: { additionalProperties: object({name: string, schema: {}}) },
+  args: { additionalProperties: {} },
   code: string,
   returnSchema: {}
 }, {required: ["args", "code", "returnSchema"]  }))
-
-
-export const server_function = NoteData("server function", top, object({
-  title: string,
-  code: string,
-}, {
-  required: ["code"]
-}))
 
 
 
 
 const example_function = NoteData("example function", function_schema, {
   title: "example function",
-  inputs: ["a", "b"],
+  args: {a:{}, b:{}},
   code: "return a + b",
+  returnSchema: {}
 })
 
 
@@ -113,7 +107,6 @@ export const schemas : NoteData[] = [
   titled,
   titled1, titled2,
   function_schema, example_function,
-  server_function,  
 ]
 
 
@@ -154,6 +147,8 @@ export const expandLinks = async (
   }
   return value;
 };
+
+
 /*** represents a note hash (optionally prefixed with #) ***/
 export type Ref = Hash | `#${Hash}`
 

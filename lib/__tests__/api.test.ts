@@ -1,10 +1,13 @@
+
 import { describe, it, mock } from "node:test";
 import assert from "node:assert";
 import { createApi } from "../src/api.ts";
+import { server } from "../src/cli.ts";
+
 
 describe("createApi", () => {
   it("creates an api instance with required methods", () => {
-    const api = createApi({ baseUrl: "http://localhost:3000", dbName: "test" });
+    const api = createApi({ server });
     assert.strictEqual(typeof api.req, "function");
     assert.strictEqual(typeof api.callProcedure, "function");
     assert.strictEqual(typeof api.sql, "function");
@@ -23,10 +26,10 @@ describe("createApi", () => {
     });
     globalThis.fetch = mockFetch as unknown as typeof fetch;
 
-    const api = createApi({ baseUrl: "http://test.com", dbName: "mydb" });
+    const api = createApi({server });
     await api.sql("select 1");
 
-    assert.strictEqual(capturedUrl, "http://test.com/v1/database/mydb/sql");
+    assert.strictEqual(capturedUrl, "http://localhost:3000/v1/database/jsonview/sql");
   });
 
   it("includes auth header when token is set", async () => {
@@ -37,7 +40,7 @@ describe("createApi", () => {
     });
     globalThis.fetch = mockFetch as unknown as typeof fetch;
 
-    const api = createApi({ baseUrl: "http://test.com", dbName: "mydb", accessToken: "tok123" });
+    const api = createApi({ server, accessToken: "tok123" });
     await api.sql("select 1");
 
     assert.strictEqual(capturedHeaders["Authorization"], "Bearer tok123");
@@ -51,7 +54,7 @@ describe("createApi", () => {
     });
     globalThis.fetch = mockFetch as unknown as typeof fetch;
 
-    const api = createApi({ baseUrl: "http://test.com", dbName: "mydb" });
+    const api = createApi({ server });
     await api.sql("select 1");
 
     assert.strictEqual(capturedHeaders["Authorization"], undefined);

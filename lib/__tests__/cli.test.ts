@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runCli } from "../src/cli";
+import { runCli } from "../src/cli.ts";
 
 const makeIo = () => {
   let out = "";

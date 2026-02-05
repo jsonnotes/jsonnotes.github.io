@@ -14,7 +14,8 @@
     "cli": "node --experimental-strip-types src/cli.ts",
     "sql": "node --experimental-strip-types src/cli.ts sql",
     "get-note": "node --experimental-strip-types src/cli.ts get-note",
-    "add-note": "node --experimental-strip-types src/cli.ts add-note"
+    "add-note": "node --experimental-strip-types src/cli.ts add-note",
+    "example": "node --experimental-strip-types example.ts"
   },
   "dependencies": {
     "@jsonview/core": "*"

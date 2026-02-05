@@ -1,6 +1,6 @@
 import { Hash, Jsonable, NoteData, Note, validate, fromjson, expandLinks, Ref, normalizeRef } from "@jsonview/core";
 import { hash128 } from "@jsonview/core/hash";
-import { createApi } from "@jsonview/lib";
+import { createApi, server } from "@jsonview/lib";
 import { p, popup, routeLink, span } from "./html";
 
 
@@ -8,7 +8,7 @@ const DBNAME = "jsonview"
 
 
 let access_token: string | null = localStorage.getItem("access_token");
-const api = createApi({ dbName: DBNAME, accessToken: access_token });
+const api = createApi({ server, accessToken: access_token });
 
 export const callProcedure = api.callProcedure;
 
@@ -51,6 +51,8 @@ const LocalCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
 export const addNote = async (schema: Ref, data: Jsonable)=>{
   return api.addNote(schema, data);
 }
+
+export const callNoteRemote = api.callNote;
 
 export const getNoteRaw = LocalCache(async (ref:Ref) => {
   const hash = normalizeRef(ref);

@@ -1,5 +1,5 @@
-import { Hash, hashData, NoteData, script_result_schema, script_schema, Ref, Jsonable, function_schema, server_function, normalizeRef } from "@jsonview/core";
-import { addNote, callProcedure, getNote, noteLink, noteOverview } from "./dbconn";
+import { Hash, hashData, NoteData, script_result_schema, script_schema, Ref, Jsonable, function_schema, normalizeRef } from "@jsonview/core";
+import { addNote, callProcedure, callNoteRemote, getNote, noteLink, noteOverview } from "./dbconn";
 
 import { stringify } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, pre, routeLink, span, style } from "./html";
@@ -24,15 +24,7 @@ export const buildins = {
   getNote,
   addNote,
   callNote,
-  remote: async (ref: Ref, arg: Jsonable) => {
-    const hash = normalizeRef(ref);
-    const raw = await callProcedure("run_note_async", { hash, arg: JSON.stringify(arg) });
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return raw;
-    }
-  }
+  remote: callNoteRemote
 
 }
 
@@ -137,31 +129,31 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
     overlay.innerHTML = "";
     const shortHash = hash.slice(0, 8);
     const title = h3(`${isScript ? "Script" : "Note"} #${shortHash} ${titleText} `);
-    if (note.schemaHash === hashData(server_function)) {
-      const runAsyncFn = button("run async", { onclick: async () => {
+    // if (note.schemaHash === hashData(server_function)) {
+    //   const runAsyncFn = button("run async", { onclick: async () => {
 
-        let lastarg = localStorage.getItem("server_fun_arg") ?? "{}";
-        const argText = prompt("args as JSON (array or value)", lastarg);
-        localStorage.setItem("server_fun_arg", argText)
-        if (argText == null) return;
-        try {
-          runAsyncFn.textContent = "running...";
-          const raw = await callProcedure("run_note_async", { hash, arg: argText });
-          let out: any = raw;
-          try { out = JSON.parse(raw); } catch {}
-          if (typeof out === "string") {
-            try { out = JSON.parse(out); } catch {}
-          }
-          popup(h2("result"), pre(JSON.stringify(out, null, 2)));
-        } catch (e: any) {
-          popup(h2("ERROR"), p(e.message || "run failed"));
-        } finally {
-          runAsyncFn.textContent = "run async";
-        }
-      }});
+    //     let lastarg = localStorage.getItem("server_fun_arg") ?? "{}";
+    //     const argText = prompt("args as JSON (array or value)", lastarg);
+    //     localStorage.setItem("server_fun_arg", argText)
+    //     if (argText == null) return;
+    //     try {
+    //       runAsyncFn.textContent = "running...";
+    //       const raw = await callProcedure("run_note_async", { hash, arg: argText });
+    //       let out: any = raw;
+    //       try { out = JSON.parse(raw); } catch {}
+    //       if (typeof out === "string") {
+    //         try { out = JSON.parse(out); } catch {}
+    //       }
+    //       popup(h2("result"), pre(JSON.stringify(out, null, 2)));
+    //     } catch (e: any) {
+    //       popup(h2("ERROR"), p(e.message || "run failed"));
+    //     } finally {
+    //       runAsyncFn.textContent = "run async";
+    //     }
+    //   }});
 
-      title.append(runAsyncFn);
-    }
+    //   title.append(runAsyncFn);
+    // }
 
     if (note.schemaHash === hashData(function_schema)) {
       const promptArgs = (storageKey: string) => {
@@ -208,18 +200,12 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
       }});
 
       const runRemoteFn = button("run remote", { onclick: async () => {
-        const { canceled, raw, parsed } = promptArgs("remote_fun_arg");
+        const { canceled, parsed } = promptArgs("remote_fun_arg");
         if (canceled) return;
-        const argText = raw ?? (parsed === undefined ? "null" : JSON.stringify(parsed));
         try {
           runRemoteFn.textContent = "running...";
-          const response = await callProcedure("run_note_async", { hash, arg: argText });
-          let out: any = response;
-          try { out = JSON.parse(response); } catch {}
-          if (typeof out === "string") {
-            try { out = JSON.parse(out); } catch {}
-          }
-          popup(h2("result"), pre(JSON.stringify(out, null, 2)));
+          const result = await callNoteRemote(hash, parsed);
+          popup(h2("result"), pre(JSON.stringify(result, null, 2)));
         } catch (e: any) {
           popup(h2("ERROR"), p(e.message || "run failed"));
         } finally {

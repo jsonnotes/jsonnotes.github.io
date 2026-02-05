@@ -1,5 +1,5 @@
-import { hashData, function_schema, Ref, Jsonable, normalizeRef, hash128 } from "@jsonview/core";
-import { addNote, callProcedure, getNote } from "./dbconn";
+import { hashData, function_schema, Ref, Jsonable, hash128 } from "@jsonview/core";
+import { addNote, callNoteRemote, getNote } from "./dbconn";
 import { openrouter } from "./openrouter";
 
 export const callNote = async (fn: Ref, ...args: Jsonable[]): Promise<any> => {
@@ -11,12 +11,7 @@ export const callNote = async (fn: Ref, ...args: Jsonable[]): Promise<any> => {
     getNote,
     addNote,
     call: callNote,
-    remote: async (ref: Ref, arg?: Jsonable) => {
-      const hash = normalizeRef(ref);
-      const argStr = arg !== undefined ? JSON.stringify(arg) : "null";
-      const raw = await callProcedure("run_note_async", { hash, arg: argStr });
-      try { return JSON.parse(raw); } catch { return raw; }
-    },
+    remote: callNoteRemote,
     openrouter: async (prompt: string, schema: Ref | Jsonable) => {
       if (typeof schema === "string") {
         const raw = schema.startsWith("#") ? schema.slice(1) : schema;

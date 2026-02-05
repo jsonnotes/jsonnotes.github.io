@@ -1,4 +1,5 @@
-import { hash128, validate } from "@jsonview/core";
+import { validate } from "@jsonview/core";
+import { hash128 } from "@jsonview/core/hash";
 import { h2, input, p, popup, style } from "./html";
 
 

@@ -1,17 +1,18 @@
 import { schema, table, t, SenderError } from 'spacetimedb/server';
-import { hashData, schemas, tojson, top, validate, expandLinksSync, fromjson, server_function, normalizeRef } from './notes';
-import type { Hash, Ref } from './notes';
+import { hashData, schemas, tojson, top, validate, expandLinksSync, fromjson, normalizeRef, hashCall, function_schema } from './notes';
+import type { Hash, Jsonable, Ref } from './notes';
 import { runWithFuelShared } from './parser';
 import { hash128 } from './hash';
 
+const HashT = t.string()
 
 const JsonNotes = table(
   {
     name: 'note',
     public: true,
   }, {
-    hash: t.string().primaryKey(),
-    schemaHash: t.string(),
+    hash: HashT.primaryKey(),
+    schemaHash: HashT,
     data: t.string(),
   }
 );
@@ -31,18 +32,18 @@ const Links = table(
     name: "links",
     public: true
   }, {
-    to: t.string().primaryKey(),
-    from: t.array(t.string()),
+    to: HashT.primaryKey(),
+    from: t.array(HashT),
   }
 )
+
+
 
 export const spacetimedb = schema(JsonNotes, Links, Store);
 
 spacetimedb.view({ name: 'note_count', public: true }, t.array(t.object('NoteCountRow', { count: t.u64() })),
   (ctx) => [{ count: ctx.db.note.count() }]
 );
-
-
 
 
 spacetimedb.reducer('add_note', {
@@ -60,9 +61,7 @@ spacetimedb.reducer('add_note', {
       return fromjson(note.data);
     }
     const parsed = fromjson(data)
-    const expandedJson = expandLinksSync(parsed, resolve);
-    const expandedSchema = expandLinksSync(fromjson(schemaRow.data), resolve);
-    validate(expandedJson, expandedSchema)
+    validate(expandLinksSync(parsed, resolve), expandLinksSync(fromjson(schemaRow.data), resolve))
 
     const hash = hashData({schemaHash: schemaHash as Hash, data: parsed})
 
@@ -109,16 +108,14 @@ const setup = spacetimedb.reducer('setup', {}, (ctx) => {
 
 spacetimedb.init(setup)
 
-/* this will outside of transaction allowing for fetch requests */
-spacetimedb.procedure('run_note_async', {hash: t.string(), arg: t.string()}, t.string(), (ctx, {hash, arg})=> {
+spacetimedb.procedure('call_note', {fn: t.string(), arg: t.string()}, t.string(), (ctx, {fn, arg})=> {
 
-  const getNote = (ref : Ref) => ctx.withTx(c=> c.db.note.hash.find(normalizeRef(ref)))
   const fuelRef = { value: 10000 };
-  const fnSchemaHash = hashData(server_function);
+  const fnSchemaHash = hashData(function_schema);
 
   const call = (ref: Ref, arg:string) => {
 
-    const fn = getNote(ref);
+    const fn = ctx.withTx(c=> c.db.note.hash.find(normalizeRef(ref)))
     if (fn == null) throw new SenderError("fn not found")
     if (fn.schemaHash != fnSchemaHash) throw new SenderError("not a server function")
 
@@ -132,11 +129,17 @@ spacetimedb.procedure('run_note_async', {hash: t.string(), arg: t.string()}, t.s
       })
     };
 
-    let ret = runWithFuelShared(`let args = ${arg}; ${(fromjson(fn.data) as {code: string}).code}`, fuelRef, {storage, call, hash: hash128})
+    let {code, args, returnSchema} = fromjson(fn.data) as {code: string, args: {[key: string]: Jsonable}, returnSchema: Jsonable};
+    console.log(tojson(args))
+    let data = fromjson(arg) as {[key: string]: Jsonable};
+    code = Object.keys(args).map(k=>`let ${k} = ${tojson(data[k])}`).join(";\n") + code;
+    console.log(code)
+    let ret = runWithFuelShared(code, fuelRef, {storage, call, hash: hash128})
     if ("err" in ret) throw new SenderError(String(ret.err));
     return (ret as any).ok;
+    
   }
 
-  return tojson(call(hash as Hash, arg))
+  return tojson(call(fn as Hash, arg))
 
 })

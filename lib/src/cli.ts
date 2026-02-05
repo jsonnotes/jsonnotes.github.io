@@ -1,5 +1,10 @@
 #!/usr/bin/env node
-import { createApi } from "./api";
+import type { Ref } from "@jsonview/core";
+import { createApi } from "./api.ts";
+
+
+export const dbname = "jsonview"
+export const server = "local"
 
 export type CliIo = {
   stdout: (text: string) => void;
@@ -19,10 +24,9 @@ const usage = () =>
     "  SPACETIMEDB_ACCESS_TOKEN (optional)",
   ].join("\n");
 
-const defaultIo: CliIo = {
-  stdout: (text) => process.stdout.write(text),
-  stderr: (text) => process.stderr.write(text),
-};
+const defaultIo: CliIo = typeof process !== "undefined"
+  ? { stdout: (text) => process.stdout.write(text), stderr: (text) => process.stderr.write(text) }
+  : { stdout: console.log, stderr: console.error };
 
 export const runCli = async (argv: string[], io: CliIo = defaultIo): Promise<number> => {
   const [, , cmd, ...args] = argv;
@@ -31,10 +35,10 @@ export const runCli = async (argv: string[], io: CliIo = defaultIo): Promise<num
     return 1;
   }
 
-  const baseUrl = process.env.SPACETIMEDB_HOST || "http://localhost:3000";
+
   const dbName = process.env.SPACETIMEDB_NAME || "jsonview";
   const accessToken = process.env.SPACETIMEDB_ACCESS_TOKEN || null;
-  const api = createApi({ baseUrl, dbName, accessToken });
+  const api = createApi({ server, accessToken });
 
   try {
     if (cmd === "sql") {
@@ -48,7 +52,7 @@ export const runCli = async (argv: string[], io: CliIo = defaultIo): Promise<num
     if (cmd === "get-note") {
       const hash = args[0];
       if (!hash) throw new Error("hash is required");
-      const note = await api.getNote(hash);
+      const note = await api.getNote(hash as Ref);
       io.stdout(JSON.stringify(note, null, 2) + "\n");
       return 0;
     }
@@ -58,7 +62,7 @@ export const runCli = async (argv: string[], io: CliIo = defaultIo): Promise<num
       const raw = args[1];
       if (!schemaHash || raw == null) throw new Error("schemaHash and json are required");
       const data = JSON.parse(raw);
-      const hash = await api.addNote(schemaHash, data);
+      const hash = await api.addNote(schemaHash as Ref, data);
       io.stdout(String(hash) + "\n");
       return 0;
     }
@@ -72,6 +76,6 @@ export const runCli = async (argv: string[], io: CliIo = defaultIo): Promise<num
   }
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (typeof process !== "undefined" && import.meta.url === `file://${process.argv[1]}`) {
   runCli(process.argv).then((code) => process.exit(code));
 }
