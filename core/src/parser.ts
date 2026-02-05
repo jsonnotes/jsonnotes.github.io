@@ -568,6 +568,8 @@ export const runWithFuel = (
     const program = parse(src);
     const protoErrs = validateNoPrototype(program);
     if (protoErrs.length) return { err: "prototype access", fuel };
+    const scopeErrs = validateScopes(program, Object.keys(env));
+    if (scopeErrs.length) return { err: scopeErrs.join(", "), fuel };
     return (new Function(...Object.keys(env),renderRunnerWithFuel(program, fuel)) as (...args:unknown[]) => runRes)(...Object.values(env));
   } catch (err) {
     console.log("run with Fuel error: ",err)
@@ -585,6 +587,8 @@ export const runWithFuelShared = (
     const program = parse(src);
     const protoErrs = validateNoPrototype(program);
     if (protoErrs.length) return { err: "prototype access", fuel: fuelRef.value };
+    const scopeErrs = validateScopes(program, [...Object.keys(env), fuelRefName]);
+    if (scopeErrs.length) return { err: scopeErrs.join(", "), fuel: fuelRef.value };
     const code = renderRunnerWithFuelShared(program, fuelRefName);
     const fullEnv = { ...env, [fuelRefName]: fuelRef };
     return (new Function(...Object.keys(fullEnv), code) as (...args:unknown[]) => runRes)(...Object.values(fullEnv));
@@ -602,6 +606,8 @@ export const runWithFuelAsync = async (
     const program = parse(src);
     const protoErrs = validateNoPrototype(program);
     if (protoErrs.length) return { err: "prototype access", fuel };
+    const scopeErrs = validateScopes(program, Object.keys(env));
+    if (scopeErrs.length) return { err: scopeErrs.join(", "), fuel };
     const code = renderRunnerWithFuelAsync(program, fuel);
     const fn = new Function(...Object.keys(env), code) as (...args:unknown[]) => Promise<runRes>;
     return await fn(...Object.values(env));

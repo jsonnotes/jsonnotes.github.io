@@ -4,7 +4,7 @@ import { createApi } from "./api.ts";
 
 
 export const dbname = "jsonview"
-export const server = "local"
+export const server = "maincloud"
 
 export type CliIo = {
   stdout: (text: string) => void;
