@@ -117,17 +117,17 @@ export const schemas : NoteData[] = [
 
 
 export const isRef = (value: any) =>
-  typeof value == "string" && /^#([a-f0-9]{32})$/.exec(value) as Ref[] | null;
+  typeof value == "string" && /^#([a-f0-9]{32})$/.exec(value) as `#${Hash}`[] | null;
 
 export const expandLinksSync = (
   value: Jsonable,
-  resolve: (ref: Ref) => Jsonable,
+  resolve: (ref: Hash) => Jsonable,
 ): Jsonable => {
   if (typeof value === "string") {
     const match = isRef(value);
     if (!match) return value;
     const ref = match[1];
-    return expandLinksSync(resolve(ref), resolve);
+    return expandLinksSync(resolve(ref.slice(1) as Hash), resolve);
   }
   if (Array.isArray(value)) return value.map((v) => expandLinksSync(v, resolve));
   if (value && typeof value === "object") {
@@ -139,13 +139,13 @@ export const expandLinksSync = (
 
 export const expandLinks = async (
   value: Jsonable,
-  resolve: (ref: Ref ) => Promise<Jsonable>,
+  resolve: (ref: Hash ) => Promise<Jsonable>,
 ): Promise<Jsonable> => {
   if (typeof value === "string") {
     const match = isRef(value);
     if (!match) return value;
     const ref = match[1];
-    return expandLinks(await resolve(ref), resolve);
+    return expandLinks(await resolve(ref.slice(1) as Hash), resolve);
   }
   if (Array.isArray(value)) return Promise.all(value.map((v) => expandLinks(v, resolve)));
   if (value && typeof value === "object") {
@@ -153,10 +153,3 @@ export const expandLinks = async (
   }
   return value;
 };
-
-
-/*** represents a note hash (optionally prefixed with #) ***/
-export type Ref = Hash | `#${Hash}`
-
-export const normalizeRef = (ref: Ref): Hash =>
-  (ref[0] === "#" ? ref.slice(1) : ref) as Hash;

@@ -1,4 +1,4 @@
-import { Hash, hashData, NoteData, script_result_schema, script_schema, Ref, Jsonable, function_schema, page_schema, normalizeRef } from "@jsonview/core";
+import { Hash, hashData, NoteData, script_result_schema, script_schema, Jsonable, function_schema, page_schema } from "@jsonview/core";
 import { addNote, callProcedure, callNoteRemote, getNote, noteLink, noteOverview } from "./dbconn";
 
 import { stringify } from "./helpers";
@@ -11,12 +11,12 @@ import { callNote } from "./call_note";
 
 
 export const buildins = {
-  openrouter: async (prompt: string, schema: Ref | Jsonable) => {
+  openrouter: async (prompt: string, schema: Hash | Jsonable) => {
 
     if (typeof schema === "string") {
       const raw = schema.startsWith("#") ? schema.slice(1) : schema;
       if (/^[a-f0-9]{32}$/.test(raw)) {
-        schema = (await getNote(raw as Ref)).data;
+        schema = (await getNote(raw as Hash)).data;
       }
     }
     return openrouter(prompt, schema)
@@ -41,9 +41,9 @@ const linkify = (text: string) => {
   while ((match = re.exec(text))) {
     const start = match.index;
     const raw = match[1];
-    const token = raw as Ref;
+    const token = raw as Hash;
     if (start > last) el.append(document.createTextNode(text.slice(last, start)));
-    el.append(noteLink(token as Ref,)),
+    el.append(noteLink(token as Hash,)),
     last = start + match[0].length;
   }
   if (last < text.length) el.append(document.createTextNode(text.slice(last)));

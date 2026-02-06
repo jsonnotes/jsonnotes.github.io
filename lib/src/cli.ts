@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import type { Ref } from "@jsonview/core";
+import type { Hash } from "@jsonview/core";
 import { createApi } from "./api.ts";
 
 
@@ -52,7 +52,7 @@ export const runCli = async (argv: string[], io: CliIo = defaultIo): Promise<num
     if (cmd === "get-note") {
       const hash = args[0];
       if (!hash) throw new Error("hash is required");
-      const note = await api.getNote(hash as Ref);
+      const note = await api.getNote(hash as Hash);
       io.stdout(JSON.stringify(note, null, 2) + "\n");
       return 0;
     }
@@ -62,7 +62,7 @@ export const runCli = async (argv: string[], io: CliIo = defaultIo): Promise<num
       const raw = args[1];
       if (!schemaHash || raw == null) throw new Error("schemaHash and json are required");
       const data = JSON.parse(raw);
-      const hash = await api.addNote(schemaHash as Ref, data);
+      const hash = await api.addNote(schemaHash as Hash, data);
       io.stdout(String(hash) + "\n");
       return 0;
     }

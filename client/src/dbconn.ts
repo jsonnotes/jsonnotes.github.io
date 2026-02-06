@@ -1,4 +1,4 @@
-import { Hash, Jsonable, NoteData, Note, validate, fromjson, expandLinks, Ref, normalizeRef } from "@jsonview/core";
+import { Hash, Jsonable, NoteData, Note, validate, fromjson, expandLinks } from "@jsonview/core";
 import { hash128 } from "@jsonview/core/hash";
 import { createApi, server } from "@jsonview/lib";
 import { p, popup, routeLink, span } from "./html";
@@ -48,24 +48,24 @@ const LocalCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
   }
 }
 
-export const addNote = async (schema: Ref, data: Jsonable)=>{
+export const addNote = async (schema: Hash, data: Jsonable)=>{
   return api.addNote(schema, data);
 }
 
 export const callNoteRemote = api.callNote;
 
-export const getNoteRaw = LocalCache(async (ref:Ref) => {
-  const hash = normalizeRef(ref);
+export const getNoteRaw = LocalCache(async (hash:Hash) => {
+
   const data = await query_data(`select * from note where hash = '${hash}'`)
   const row = data.rows[0];
   if (!row) throw new Error("note not found")
   return Object.fromEntries(data.names.map((n,i)=>[n, row[i]])) as Note
 })
 
-export const getSchemaHash = (ref: Ref) => getNoteRaw(ref).then((n)=>n.schemaHash)
+export const getSchemaHash = (ref: Hash) => getNoteRaw(ref).then((n)=>n.schemaHash)
 
 
-export const getNote = LocalCache(async (ref: Ref) =>{
+export const getNote = LocalCache(async (ref: Hash) =>{
   const nt = await getNoteRaw(ref)
   return {
     schemaHash: nt.schemaHash,
@@ -91,11 +91,11 @@ export const validateNote = async (note: NoteData) => {
 }
 
 
-export const notePreview = (ref) => getNote(ref).then(async note=>{
+export const notePreview = (hash) => getNote(hash).then(async note=>{
   let data :any = note.data
   let preview = typeof data === "string" ? data : JSON.stringify(data);
   preview = preview.replace(/\n/g, " ");
-  const hash = normalizeRef(ref);
+
   const short = hash.slice(0, 8);
   if (data?.title) return String(data.title);
   if (typeof data == "string" || typeof data == "number") return preview.slice(0, 20);
@@ -136,12 +136,12 @@ export const noteOverview = (ref) => getNote(ref).then(async note=>{
 })
 
 export const noteLink = (
-  ref: Ref,
+  hash: Hash,
   label?: string,
   args = {},
 ) => {
-  let el = span(label ?? `#${normalizeRef(ref)}`)
-  const hrefRef = normalizeRef(ref);
-  if (label === undefined) notePreview(ref).then(pr => el.innerHTML = pr)
-  return routeLink(`/${hrefRef}`, el, args)
+  let el = span(label ?? `#${hash}`)
+
+  if (label === undefined) notePreview(hash).then(pr => el.innerHTML = pr)
+  return routeLink(`/${hash}`, el, args)
 }

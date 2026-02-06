@@ -4,7 +4,7 @@ import { createDashboardView } from "./dashboard";
 import { createEditView } from "./edit";
 import { createSqlView } from "./sql_view";
 import { createDepsView } from "./deps_view";
-import { Hash, NoteData, Ref, tojson, hashData, top } from "@jsonview/core"
+import { Hash, NoteData, tojson, hashData, top } from "@jsonview/core"
 import { renderPage } from "./call_note"
 import { addNote, getNote, query_data } from "./dbconn";
 
@@ -90,7 +90,7 @@ handleRoute = () => {
     return;
   } else if (path.startsWith("deps")) {
     render(depsView.root);
-    depsView.render((path.slice(5) || lastNoteRef) as Ref);
+    depsView.render((path.slice(5) || lastNoteRef) as Hash);
   } else {
     lastNoteRef = path;
     showNote(path as Hash);

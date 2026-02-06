@@ -1,5 +1,5 @@
-import type { Hash, Jsonable, NoteData, Note, Ref } from "@jsonview/core";
-import { tojson, fromjson, normalizeRef, hashData } from "@jsonview/core";
+import type { Hash, Jsonable, NoteData, Note } from "@jsonview/core";
+import { tojson, fromjson, hashData } from "@jsonview/core";
 import { dbname } from "./cli.ts";
 
 const url_presets = {
@@ -7,7 +7,7 @@ const url_presets = {
   "maincloud": "https://maincloud.spacetimedb.com"
 }
 
-export type { Hash, Jsonable, NoteData, Note, Ref }
+export type { Jsonable, NoteData, Note, Hash }
 
 
 export type ApiConfig = {
@@ -50,8 +50,8 @@ export const createApi = (config: ApiConfig) => {
     return { names: schema.elements.map((e: { name: { some: string } }) => e.name.some), rows };
   };
 
-  const getNote = async (ref: Ref): Promise<NoteData> => {
-    const hash = normalizeRef(ref);
+  const getNote = async (hash: Hash): Promise<NoteData> => {
+
     const data = await sql(`select * from note where hash = '${hash}'`);
     const row = data.rows[0];
     if (!row) throw new Error("note not found");
@@ -59,8 +59,7 @@ export const createApi = (config: ApiConfig) => {
     return { schemaHash: note.schemaHash, data: fromjson(note.data) };
   };
 
-  const addNote = async (schemaRef: Ref, data: Jsonable): Promise<Hash> => {
-    const schemaHash = normalizeRef(schemaRef);
+  const addNote = async (schemaHash: Hash, data: Jsonable): Promise<Hash> => {
     const res = await req(`/v1/database/${dbname}/call/add_note`, "POST", JSON.stringify({
       schemaHash,
       data: tojson(data),
@@ -69,10 +68,8 @@ export const createApi = (config: ApiConfig) => {
     return hashData({ schemaHash, data });
   };
 
-  const callNote = async (fn: Ref, arg?: Jsonable): Promise<Jsonable> => {
-    const hash = normalizeRef(fn);
-    const result = await callProcedure("call_note", { fn: hash, arg: arg !== undefined ? tojson(arg) : "null" });
-    return fromjson(result);
+  const callNote = async (fn: Hash, arg?: Jsonable): Promise<Jsonable> => {
+    return fromjson(await callProcedure("call_note", { fn, arg: arg !== undefined ? tojson(arg) : "null" }))
   };
 
   const setAccessToken = (token: string | null) => {

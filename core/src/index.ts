@@ -1,6 +1,6 @@
 import { schema, table, t, SenderError } from 'spacetimedb/server';
-import { hashData, schemas, tojson, top, validate, expandLinksSync, fromjson, normalizeRef, hashCall, function_schema } from './notes';
-import type { Hash, Jsonable, Ref } from './notes';
+import { hashData, schemas, tojson, top, validate, expandLinksSync, fromjson, hashCall, function_schema } from './notes';
+import type { Hash, Jsonable } from './notes';
 import { runWithFuelShared } from './parser';
 import { hash128 } from './hash';
 
@@ -55,8 +55,8 @@ spacetimedb.reducer('add_note', {
   if (!schemaRow) throw new SenderError('Schema not found');
 
   try{
-    const resolve = (ref: Ref) => {
-      const note = ctx.db.note.hash.find(normalizeRef(ref));
+    const resolve = (hash: Hash) => {
+      const note = ctx.db.note.hash.find(hash);
       if (!note) throw new SenderError('Note not found');
       return fromjson(note.data);
     }
@@ -113,9 +113,9 @@ spacetimedb.procedure('call_note', {fn: t.string(), arg: t.string()}, t.string()
   const fuelRef = { value: 10000 };
   const fnSchemaHash = hashData(function_schema);
 
-  const call = (ref: Ref, arg:string) => {
+  const call = (hash: Hash, arg:string) => {
 
-    const fn = ctx.withTx(c=> c.db.note.hash.find(normalizeRef(ref)))
+    const fn = ctx.withTx(c=> c.db.note.hash.find(hash))
     if (fn == null) throw new SenderError("fn not found")
     if (fn.schemaHash != fnSchemaHash) throw new SenderError("not a server function")
 
@@ -137,9 +137,8 @@ spacetimedb.procedure('call_note', {fn: t.string(), arg: t.string()}, t.string()
     let ret = runWithFuelShared(code, fuelRef, {storage, call, hash: hash128})
     if ("err" in ret) throw new SenderError(String(ret.err));
     return (ret as any).ok;
-    
   }
 
-  return tojson(call(fn as Hash, arg))
+  return call(fn as Hash, arg)
 
 })

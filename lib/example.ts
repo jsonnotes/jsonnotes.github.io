@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { function_schema, hashData } from "@jsonview/core";
-import { createApi, type Ref } from "./src/api.ts";
+import { createApi, type Hash } from "./src/api.ts";
 
 const api = createApi({ server: "maincloud" });
 

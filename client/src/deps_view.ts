@@ -1,13 +1,13 @@
 import { div, h3, popup, pre, style } from "./html";
 import { getNote, noteOverview, notePreview, query_data } from "./dbconn";
-import { Hash, Ref, hashData, top, normalizeRef } from "@jsonview/core";
+import { Hash, hashData, top } from "@jsonview/core";
 import { noteSearch } from "./helpers";
 
 type QueryResult = { names: string[]; rows: any[][] };
 type DepsDeps = { query: (sql: string) => Promise<QueryResult>, navigate: (ref:string) => void};
 
 export type DepsData = { currentHash: string; inputs: string[]; outputs: string[] };
-export type DepsRefs = { current: Ref[]; inputs: Ref[]; outputs: Ref[] };
+export type DepsRefs = { current: Hash[]; inputs: Hash[]; outputs: Hash[] };
 const appendSvg = (svg: SVGSVGElement, html: string) => {
   svg.insertAdjacentHTML("beforeend", html);
   return svg.lastElementChild as SVGElement | null;
@@ -133,19 +133,19 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
       });
     });
   root.append(h3("Dependencies"), panel);
-  const render = async (ref?: Ref) => {
+  const render = async (hash?: Hash) => {
     svg.innerHTML = "";
-    if (!ref) {
+    if (!hash) {
       fetchSchemas().then((schemas) =>
         noteSearch((s) => {
           window.history.pushState({}, "", `/deps/${s.hash}`);
-          render(s.hash as Ref);
+          render(s.hash as Hash);
         }, schemas)
       );
       return;
     }
-    const currentHash = normalizeRef(ref);
-    const schemaHash = (await getNote(ref)).schemaHash;
+    const currentHash = hash
+    const schemaHash = (await getNote(hash)).schemaHash;
     const links = await query("select to, from from links");
     const data = depsDataFromRows(links.rows, currentHash);
 
@@ -180,7 +180,7 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
             navigate(`/${hash}`);
           } else {
             window.history.pushState({}, "", `/deps/${hash}`);
-            render(hash as Ref);
+            render(hash as Hash);
           }
         };
         boxes.set(hash, tag.rect);
@@ -189,7 +189,7 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
     const schemaTag = svgText(svg, { x: 0.5, y: 0.1 }, labels.get(schemaHash) || `#${schemaHash}`);
     schemaTag.node.onclick = () => {
       window.history.pushState({}, "", `/deps/${schemaHash}`);
-      render(schemaHash as Ref);
+      render(schemaHash as Hash);
     };
     const schemaRect = schemaTag.rect;
 
