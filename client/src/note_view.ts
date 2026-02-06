@@ -1,4 +1,4 @@
-import { Hash, hashData, NoteData, script_result_schema, script_schema, Ref, Jsonable, function_schema, normalizeRef } from "@jsonview/core";
+import { Hash, hashData, NoteData, script_result_schema, script_schema, Ref, Jsonable, function_schema, page_schema, normalizeRef } from "@jsonview/core";
 import { addNote, callProcedure, callNoteRemote, getNote, noteLink, noteOverview } from "./dbconn";
 
 import { stringify } from "./helpers";
@@ -128,7 +128,8 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
 
     overlay.innerHTML = "";
     const shortHash = hash.slice(0, 8);
-    const title = h3(`${isScript ? "Script" : "Note"} #${shortHash} ${titleText} `);
+    const isPage = note.schemaHash === hashData(page_schema);
+    const title = h3(`${isScript ? "Script" : isPage ? "Page" : "Note"} #${shortHash} ${titleText} `);
     // if (note.schemaHash === hashData(server_function)) {
     //   const runAsyncFn = button("run async", { onclick: async () => {
 
@@ -214,6 +215,12 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
       }});
 
       title.append(runLocalFn, runRemoteFn);
+    }
+
+    if (note.schemaHash === hashData(page_schema)) {
+      title.append(button("view", {
+        onclick: () => window.open(`/view/${hash}`, "_blank")
+      }));
     }
 
     updateContentDisplay();

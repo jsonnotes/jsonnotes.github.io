@@ -85,6 +85,11 @@ export const function_schema = NoteData("function schema", top, object({
   returnSchema: {}
 }, {required: ["args", "code", "returnSchema"]  }))
 
+export const page_schema = NoteData("page_schema", top, object({
+  title: string,
+  code: string,
+}, { title: "page_schema", required: ["code"] }))
+
 
 
 
@@ -107,6 +112,7 @@ export const schemas : NoteData[] = [
   titled,
   titled1, titled2,
   function_schema, example_function,
+  page_schema,
 ]
 
 

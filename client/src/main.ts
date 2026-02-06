@@ -5,6 +5,7 @@ import { createEditView } from "./edit";
 import { createSqlView } from "./sql_view";
 import { createDepsView } from "./deps_view";
 import { Hash, NoteData, Ref, tojson, hashData, top } from "@jsonview/core"
+import { renderPage } from "./call_note"
 import { addNote, getNote, query_data } from "./dbconn";
 
 let runQuery = () => {};
@@ -78,6 +79,15 @@ handleRoute = () => {
     runQuery();
   } else if (path === "sql") {
     render(sqlView.root);
+  } else if (path.startsWith("view/")) {
+    const hash = path.slice(5) as Hash;
+    document.body.innerHTML = "";
+    const container = div();
+    document.body.appendChild(container);
+    renderPage(hash).then(el => container.append(el)).catch(err => {
+      container.append(h2("Error"), p(err.message || "Failed to render page"));
+    });
+    return;
   } else if (path.startsWith("deps")) {
     render(depsView.root);
     depsView.render((path.slice(5) || lastNoteRef) as Ref);

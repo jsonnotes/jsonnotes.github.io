@@ -1,7 +1,8 @@
-import { hashData, function_schema, Ref, Jsonable, hash128, normalizeRef } from "@jsonview/core";
+import { hashData, function_schema, page_schema, Ref, Jsonable, hash128, normalizeRef } from "@jsonview/core";
 import { runWithFuelAsync } from "@jsonview/core/parser";
 import { addNote, callNoteRemote, getNote } from "./dbconn";
 import { openrouter } from "./openrouter";
+import { div, h1, h2, h3, h4, p, span, a, pre, button, input, textarea, table, tr, td, th, canvas, style, margin, padding, width, height, color } from "./html";
 
 const makeOpenrouter = () => async (prompt: string, schema: Ref | Jsonable) => {
   if (typeof schema === "string") {
@@ -52,4 +53,22 @@ export const callNote = async (fn: Ref, ...args: Jsonable[]): Promise<any> => {
   const result = await runWithFuelAsync(data.code, 10000, env);
   if ("err" in result) throw new Error(result.err);
   return result.ok;
+};
+
+export const renderPage = async (ref: Ref): Promise<HTMLElement> => {
+  const fnHash = normalizeRef(ref);
+  const note = await getNote(ref);
+  if (note.schemaHash !== hashData(page_schema)) throw new Error("can only render Page schema notes");
+  const data = note.data as { code: string };
+
+  const env: Record<string, unknown> = {
+    getNote, addNote, call: callNote, remote: callNoteRemote,
+    openrouter: makeOpenrouter(), hash: hash128, storage: makeStorage(fnHash),
+    div, h1, h2, h3, h4, p, span, a, pre, button, input, textarea,
+    table, tr, td, th, canvas, style, margin, padding, width, height, color,
+  };
+
+  const result = await runWithFuelAsync(data.code, 10000, env);
+  if ("err" in result) throw new Error(result.err);
+  return result.ok as HTMLElement;
 };
