@@ -1,54 +1,41 @@
-# Lexxtract Database
+# JSON Notes
 
-View, validate, and edit JSON notes stored in SpacetimeDB. Notes are immutable and deduplicated by a content hash that includes the schema hash. Schemas live as notes too, referenced by hash.
-
-## Project Layout
-- `src/` — Vite + TypeScript client (dashboard, editor, note view).
-- `spacetimedb/` — SpacetimeDB module (schema, reducers, validation).
-- `docs/` — GitHub Pages build output.
-
-## Local Development
-Frontend:
-```bash
-npm install
-npm run dev
-```
-
-Backend (SpacetimeDB module):
-```bash
-cd spacetimedb
-npm install
-npm run build
-spacetime publish -c jsonview
-```
-
-## URLs
-- Local API: `http://localhost:3000`
-- Live module: `https://spacetimedb.com/@DKormann/lexxtract`
-- Live dashboard: `https://lexxtract.github.io/dashboard`
+Content-addressed JSON notes stored in [SpacetimeDB](https://spacetimedb.com). Notes are immutable, deduplicated by hash, and validated against schemas that are themselves notes.
 
 ## How It Works
-- Notes are rows in a single `note` table with `hash`, `schemaHash`, and `data`.
-- `hash` is a hex string derived from note data + schema hash; it drives deduplication.
-- The module seeds the top schema note (`schemaHash = "0"`) and inserts default schemas at init.
 
-## Contributing
-See `AGENTS.md` for contributor guidelines and design goals (minimal logic + dependencies).
+- Every note is a row with `hash`, `schemaHash`, and `data` (JSON string).
+- `hash` is derived from the data + schema hash — identical content produces the same hash.
+- Schemas are notes with `schemaHash = "0"` (the built-in "top" schema).
+- Notes can link to other notes via `#<hash>` references.
+- Notes can be executable: scripts (Web Worker), local functions, or server functions.
 
-## Global CLI
+## Project Structure
 
-From the repo root:
+npm workspaces monorepo:
+
+- **`core/`** — SpacetimeDB backend module + shared types (`@jsonview/core`)
+- **`lib/`** — API client, utilities, and tests (`@jsonview/lib`)
+- **`client/`** — Full Vite + TypeScript UI (`@jsonview/client`)
+- **`scripts/`** — CLI tools
+- **`docs/`** — GitHub Pages build output
+
+## Development
 
 ```bash
-npm link -w @jsonview/lib
+npm install
+npm run dev          # Client dev server
+npm test             # Run lib tests
+npm run check        # Type-check all packages
+npm run build        # Build for GitHub Pages
 ```
 
-Then use:
+## CLI
 
 ```bash
-jsonview sql "select hash, data from note limit 10"
-jsonview get-note <hash>
-jsonview add-note <schemaHash> '{"title":"Hello"}'
+npm run db sql <query>
+npm run db get-note <hash>
+npm run db add-note <schemaHash> '<json>'
+npm run db remote <hash> [args]
+npm run db run-local <hash> [args]
 ```
-
-
