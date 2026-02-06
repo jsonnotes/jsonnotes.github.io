@@ -6,7 +6,8 @@
   "main": "src/notes.ts",
   "exports": {
     ".": "./src/notes.ts",
-    "./hash": "./src/hash.ts"
+    "./hash": "./src/hash.ts",
+    "./parser": "./src/parser.ts"
   },
   "scripts": {
     "build": "spacetime build",
