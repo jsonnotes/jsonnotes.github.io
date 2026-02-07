@@ -1,4 +1,4 @@
-# Lexxtract Database
+# JSON View Database
 
 View, validate, and edit JSON notes stored in SpacetimeDB. Notes are immutable and deduplicated by a content hash that includes the schema hash. Schemas live as notes too, referenced by hash.
 
@@ -30,7 +30,6 @@ spacetime publish -c jsonview
 ## How It Works
 - Notes are rows in a single `note` table with `hash`, `schemaHash`, and `data`.
 - `hash` is a hex string derived from note data + schema hash; it drives deduplication.
-- The module seeds the top schema note (`schemaHash = "0"`) and inserts default schemas at init.
 
 ## Contributing
 See `AGENTS.md` for contributor guidelines and design goals (minimal logic + dependencies).
@@ -50,5 +49,14 @@ jsonview sql "select hash, data from note limit 10"
 jsonview get-note <hash>
 jsonview add-note <schemaHash> '{"title":"Hello"}'
 ```
+## Architecture
+![Architecture Diagram](image.png)
 
+### core
+the core is a minimal cleanest logic and data layer. everything here has to be perfect and well thought through.
 
+### lib
+more utilities. these thing depend only on core and provide additional client functionality
+
+### client
+this is a fully featured client UI. here we can do more experimentation and vibe coding.

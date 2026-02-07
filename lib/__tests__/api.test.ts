@@ -45,6 +45,14 @@ test("API: callNote", async () => {
 })
 
 
+test("API: callNoteLocal", async () => {
+  await api.addNote(testfn.schemaHash, testfn.data)
+  const res = await api.callNoteLocal(hashData(testfn), [{x: "world"}])
+  assertEq(res, "hello world")
+})
+
+
+
 test("API: nested call", async ()=>{
   await api.addNote(testfn.schemaHash, testfn.data)
 

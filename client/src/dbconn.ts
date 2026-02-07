@@ -52,6 +52,7 @@ export const addNote = api.addNote
 
 
 export const callNoteRemote = api.callNote;
+export const callNoteLocal = api.callNoteLocal;
 
 export const getNoteRaw = LocalCache(async (hash:Hash) => {
 
