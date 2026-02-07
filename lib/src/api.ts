@@ -59,7 +59,14 @@ export const createApi = (config: ApiConfig) => {
     return { schemaHash: note.schemaHash, data: fromjson(note.data) };
   };
 
-  const addNote = async (schemaHash: Hash, data: Jsonable): Promise<Hash> => {
+
+  async function addNote (note: NoteData): Promise<Hash>;
+  async function addNote (schema: Hash, data: Jsonable): Promise<Hash>;
+
+  async function addNote (schema: Hash| NoteData, data: Jsonable | undefined = undefined): Promise<Hash> {
+    let schemaHash: Hash = schema as Hash
+    if (data == undefined) ({schemaHash, data} = schema as NoteData)
+
     const res = await req(`/v1/database/${dbname}/call/add_note`, "POST", JSON.stringify({
       schemaHash,
       data: tojson(data),

@@ -22,7 +22,7 @@ const navigate = (path: string) => (history.pushState({}, "", path), handleRoute
 
 const submitNote = async (data: NoteData) => {
   try {
-    const hash = await addNote(data.schemaHash, data.data);
+    const hash = await addNote(data)
     navigate(`/${hash}`);
   } catch (e: any) {
     popup(h2("ERROR"), p(e.message || "failed to add note"));

@@ -48,9 +48,8 @@ const LocalCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
   }
 }
 
-export const addNote = async (schema: Hash, data: Jsonable)=>{
-  return api.addNote(schema, data);
-}
+export const addNote = api.addNote
+
 
 export const callNoteRemote = api.callNote;
 

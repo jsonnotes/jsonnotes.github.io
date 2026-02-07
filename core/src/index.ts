@@ -113,9 +113,10 @@ spacetimedb.procedure('call_note', {fn: t.string(), arg: t.string()}, t.string()
   const fuelRef = { value: 10000 };
   const fnSchemaHash = hashData(function_schema);
 
-  const call = (hash: Hash, arg:string) => {
-
-    const fn = ctx.withTx(c=> c.db.note.hash.find(hash))
+  const call = (hash: string, arg:string) => {
+    let x = hash == "e";
+    const clean = (hash.startsWith("#") ? hash.slice(1) : hash) as Hash;
+    const fn = ctx.withTx(c=> c.db.note.hash.find(clean))
     if (fn == null) throw new SenderError("fn not found")
     if (fn.schemaHash != fnSchemaHash) throw new SenderError("not a server function")
 
@@ -139,6 +140,6 @@ spacetimedb.procedure('call_note', {fn: t.string(), arg: t.string()}, t.string()
     return (ret as any).ok;
   }
 
-  return call(fn as Hash, arg)
+  return call(fn, arg)
 
 })

@@ -7,7 +7,7 @@ const api = createApi({ server: "maincloud" });
 
 let schr = hashData(function_schema);
 
-await api.addNote(function_schema.schemaHash, function_schema.data)
+await api.addNote(function_schema)
 
 await api.getNote(schr).then(nt=>{
   console.log("schema:", nt.data.required);

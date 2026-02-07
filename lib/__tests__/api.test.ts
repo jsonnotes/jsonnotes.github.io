@@ -7,11 +7,8 @@ import { function_schema, hashData, NoteData, top } from "@jsonview/core";
 import type { Jsonable } from "@jsonview/core";
 
 const assert = (t:boolean, message?: string)=> {if (!t) throw new Error(message || "Assertion failed");}
-
 const assertEq = <T extends Jsonable> (a:T, b:T) => assert(JSON.stringify(a) === JSON.stringify(b), `${JSON.stringify(a)} != ${JSON.stringify(b)}`)
-
 const api = createApi({server})
-
 const test = it
 
 test("API: get top", async () => {
@@ -53,7 +50,7 @@ test("API: nested call", async ()=>{
 
   let caller = NoteData("caller", function_schema, {
     args: {},
-    code: `return call(${hashData(testfn)}, '{x: "world2"}')`,
+    code: `return call('#${hashData(testfn)}', '{"x": "world2"}')`,
     returnSchema: {type: "string"},
   })
 
