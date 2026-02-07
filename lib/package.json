@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vite",
     "test": "node --test --experimental-strip-types __tests__/*.test.ts",
+    "test:file": "node --test --experimental-strip-types",
     "check": "tsc --noEmit",
     "cli": "node --experimental-strip-types src/cli.ts",
     "sql": "node --experimental-strip-types src/cli.ts sql",

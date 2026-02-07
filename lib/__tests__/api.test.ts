@@ -1,5 +1,3 @@
-
-
 import { it } from "node:test";
 import { createApi } from "../src/api.ts";
 import { server } from "../src/cli.ts";
@@ -46,7 +44,7 @@ it("API: callNote", async () => {
 
 it("API: callNoteLocal", async () => {
   await api.addNote(testfn.schemaHash, testfn.data)
-  const res = await api.callNoteLocal(hashData(testfn), [{x: "world"}])
+  const res = await api.callNoteLocal(hashData(testfn), {x: "world"})
   assertEq(res, "hello world")
 })
 

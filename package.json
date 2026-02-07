@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "dev": "npm run dev -w @jsonview/client",
-    "build": "npm run build -w @jsonview/core && npm run build -w @jsonview/client",
+    "build": "npm run build -w @jsonview/core",
     "build:gh-pages": "npm run build -w @jsonview/core && npm run build:gh-pages -w @jsonview/client",
     "build:local": "npm run build -w @jsonview/core && npm run build:local -w @jsonview/client",
     "preview": "npm run preview -w @jsonview/client",

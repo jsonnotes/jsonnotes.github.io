@@ -19,6 +19,15 @@
 
   <button id = "toggle-server" onclick = "toggleServer()">toggle server</button>
 
+
+  <div class="section">
+    <h3>custom view</h3>
+
+    <div id="customview"></div>
+
+
+  </div>
+
   <div class="section">
     <h3>sql</h3>
     <input type="text" id="sql-query" placeholder="select * from note limit 10" value="select hash, schemaHash from note limit 10">
@@ -51,12 +60,18 @@
 
   <script type="module">
     import { createApi } from './src/api.ts';
+    import { showView, exampleView } from './src/views.ts';
+
+
+    document.getElementById("customview").append(exampleView)
 
     let server = "local";
     let api = createApi({
       server,
       dbName: 'jsonview',
     });
+
+
 
 
     window.toggleServer = ()=>{

@@ -80,7 +80,7 @@ export const createApi = (config: ApiConfig) => {
     return fromjson(await callProcedure("call_note", { fn, arg: arg !== undefined ? tojson(arg) : "null" }))
   };
 
-  const callNoteLocal = async (fn: Hash, args: Jsonable[] = [], extras: Record<string, unknown> = {}): Promise<any> => {
+  const callNoteLocal = async (fn: Hash, arg: Record<string, Jsonable>, extras: Record<string, unknown> = {}): Promise<any> => {
     const note = await getNote(fn);
     if (note.schemaHash !== hashData(function_schema)) throw new Error("can only call Function schema notes");
     const data = note.data as { code: string; inputs?: string[]; args?: Record<string, any> };
@@ -88,19 +88,13 @@ export const createApi = (config: ApiConfig) => {
 
     const env: Record<string, unknown> = {
       getNote, addNote, hash: hash128,
-      call: (h: Hash, ...a: Jsonable[]) => callNoteLocal(h, a, extras),
+      call: (h: Hash, a: Record<string,Jsonable>) => callNoteLocal(h, a, extras),
       ...extras,
     };
 
-    if (argNames.length > 0) {
-      let callArgs = args;
-      if (args.length === 1 && args[0] && typeof args[0] === "object" && !Array.isArray(args[0])) {
-        callArgs = argNames.map(name => (args[0] as any)[name]);
-      }
-      argNames.forEach((name, i) => { env[name] = callArgs[i]; });
-    } else {
-      env.args = args.length === 1 ? args[0] : args;
-    }
+    argNames.forEach(nm=>env[nm] = arg[nm])
+
+
 
     const result = await runWithFuelAsync(data.code, 10000, env);
     if ("err" in result) throw new Error(result.err);

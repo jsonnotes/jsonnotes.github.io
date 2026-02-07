@@ -29,6 +29,8 @@ export const query_data = async (sql: string, desc = false, maxitems = null) : P
   }
 };
 
+
+
 const LocalCache = <X,Y> (fn: (x:X) => Promise<Y>) : ((x:X)=>Promise<Y>) => {
   const HotCache = new Map<string,Y>();
   const fkey = hash128(fn.toString() + ":cached:" + api.baseUrl)
