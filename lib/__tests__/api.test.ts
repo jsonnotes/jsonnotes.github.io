@@ -9,21 +9,20 @@ import type { Jsonable } from "@jsonview/core";
 const assert = (t:boolean, message?: string)=> {if (!t) throw new Error(message || "Assertion failed");}
 const assertEq = <T extends Jsonable> (a:T, b:T) => assert(JSON.stringify(a) === JSON.stringify(b), `${JSON.stringify(a)} != ${JSON.stringify(b)}`)
 const api = createApi({server})
-const test = it
 
-test("API: get top", async () => {
+it("API: get top", async () => {
   const result = await api.getNote(hashData(top));
   assertEq(result, top)
 })
 
-test("API: insertNote", async ()=>{
+it("API: insertNote", async ()=>{
   const note = NoteData("insert test", top, {content: "this is a test"})
   const result = await api.addNote(note.schemaHash, note.data)
   assertEq(result, hashData(note))
 })
 
 
-test("API: getNote", async () => {
+it("API: getNote", async () => {
   const note = NoteData("get test", top, {content: "this is a test"});
   const result = await api.addNote(note.schemaHash, note.data);
   const getResult = await api.getNote(result);
@@ -37,7 +36,7 @@ const testfn = NoteData("call test", function_schema, {
   returnSchema: {type: "string"}
 })
 
-test("API: callNote", async () => {
+it("API: callNote", async () => {
 
   await api.addNote(testfn.schemaHash, testfn.data)
   const res = await api.callNote(hashData(testfn), {x: "world"})
@@ -45,7 +44,7 @@ test("API: callNote", async () => {
 })
 
 
-test("API: callNoteLocal", async () => {
+it("API: callNoteLocal", async () => {
   await api.addNote(testfn.schemaHash, testfn.data)
   const res = await api.callNoteLocal(hashData(testfn), [{x: "world"}])
   assertEq(res, "hello world")
@@ -53,7 +52,7 @@ test("API: callNoteLocal", async () => {
 
 
 
-test("API: nested call", async ()=>{
+it("API: nested call", async ()=>{
   await api.addNote(testfn.schemaHash, testfn.data)
 
   let caller = NoteData("caller", function_schema, {
