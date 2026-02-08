@@ -5,7 +5,7 @@ import { function_schema, hashData, NoteData, top } from "@jsonview/core";
 import type { Jsonable } from "@jsonview/core";
 
 const assert = (t:boolean, message?: string)=> {if (!t) throw new Error(message || "Assertion failed");}
-const assertEq = <T extends Jsonable> (a:T, b:T) => assert(JSON.stringify(a) === JSON.stringify(b), `${JSON.stringify(a)} != ${JSON.stringify(b)}`)
+const assertEq = <T extends Jsonable> (a:T, b:T) =>{ let [x,y] = [a,b].map(x=>JSON.stringify(x)); assert(x == y, `${x} != ${y}`);}
 const api = createApi({server})
 
 it("API: get top", async () => {
@@ -33,6 +33,8 @@ const testfn = NoteData("call test", function_schema, {
   code: "return \"hello \" + x",
   returnSchema: {type: "string"}
 })
+
+
 
 it("API: callNote", async () => {
 

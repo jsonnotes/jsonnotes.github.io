@@ -4,7 +4,7 @@ type MouseEventType = "click"| "mousemove" | "mouseup" | "mousedown" | "drag"
 type KeyboardEventType = "keydown" | "keyup"
 type DomEventType = MouseEventType | KeyboardEventType;
 
-const mouseEvents : MouseEventType[] = ["click", "mousemove", "mouseup", "mousedown", "drag"];
+const mouseEvents : MouseEventType[] = ["click", "mouseup", "mousedown", "drag"];
 const keyboardEvents : KeyboardEventType[] = ["keydown", "keyup"];
 
 
@@ -19,14 +19,19 @@ type KeyboardEvent = {
   key: string,
   metaKey: boolean,
   shiftKey: boolean,
-  value: string,
   target: VDom,
 }
 
 export type DomEvent = MouseEvent | KeyboardEvent
 
 
-type Listener = (e: DomEvent) => DomUpdate[] | void
+type Listener = (e: DomEvent) => void
+
+export type UPPER = {
+  add: (parent: VDom, ...el: VDom[])=> void,
+  del: (el: VDom) => void,
+  update: (el: VDom) => void,
+}
 
 export type VDom = {
   tag: string
@@ -35,6 +40,7 @@ export type VDom = {
   style: Record<string, string>
   children: VDom[]
   onEvent?: Listener
+  value? : string
 }
 
 type DomUpdate = { op: "DEL", el: VDom } | { op: "ADD", parent: VDom, el: VDom[]} | { op: "UPDATE", el: VDom }
@@ -43,52 +49,51 @@ type DomUpdate = { op: "DEL", el: VDom } | { op: "ADD", parent: VDom, el: VDom[]
 let doms = new WeakMap<HTMLElement, VDom>();
 let elements = new WeakMap<VDom, HTMLElement>();
 
-export const renderDom = (dom: VDom) => {
 
-  let el = document.createElement(dom.tag)
-  el.textContent = dom.textContent
-  elements.set(dom, el)
-  doms.set(el, dom)
-  el.append(...dom.children.map(c=>renderDom(c)))
-  Object.entries(dom.style).forEach(st=>el.style.setProperty(...st))
-  
-  const mkupdate = (update: DomUpdate) =>{
-    if (update.op == "ADD") {
-      elements.get(update.parent)?.append(...update.el.map(e=>renderDom(e)))
-    }else if (update.op == "DEL"){
-      doms.delete(elements.get(update.el)!)
-      elements.get(update.el)?.remove()
-      elements.delete(update.el)
-    }else if (update.op == "UPDATE"){
-      let oldel = elements.get(update.el)!
-      oldel.replaceWith(renderDom(update.el))
+
+export const renderDom = (mker: (ufn: UPPER) => VDom): HTMLElement => {
+
+  const render = (dom:VDom) : HTMLElement=>{
+    let el = document.createElement(dom.tag)
+    el.textContent = dom.textContent
+    if ((el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && dom.value) el.value = dom.value
+    elements.set(dom, el)
+    doms.set(el, dom)
+    el.append(...dom.children.map(c=>render(c)))
+    Object.entries(dom.style).forEach(st=>el.style.setProperty(...st))
+    mouseEvents.forEach((type) => el.addEventListener(type, (e) => {
+      if (dom.onEvent!= undefined) dom.onEvent!( { type, target: doms.get(e.target as HTMLElement) ! })
+    }));
+    keyboardEvents.forEach((type) => el.addEventListener(type, (e) =>{
+      let {key, metaKey, shiftKey} = e as globalThis.KeyboardEvent;
+      if (["INPUT" , "TEXTAREA"].includes((e.target as HTMLElement).tagName)) dom.value = (e.target as HTMLInputElement).value
+      if (dom.onEvent!=undefined) dom.onEvent({ type, key, metaKey, shiftKey, target: doms.get(e.target as HTMLElement)!})
+    }))
+    return el
+
+  }
+  return render(mker({
+    add: (parent: VDom, ...el: VDom[]) => {
+      elements.get(parent)?.append(...el.map(e=>render(e)))
+    },
+    del: (el: VDom) => {
+      doms.delete(elements.get(el)!)
+      elements.get(el)?.remove()
+      elements.delete(el)
+    },
+    update: (el: VDom) => {
+      let oldel = elements.get(el)!
+      oldel.replaceWith(render(el))
       doms.delete(oldel)
     }
-  }
-
-  mouseEvents.forEach((type) => el.addEventListener(type, (e) => {
-    if (dom.onEvent!= undefined) {
-      (dom.onEvent!( { type, target: doms.get(e.target as HTMLElement) ! })|| []).forEach(mkupdate);
-    }
-  }));
-
-  keyboardEvents.forEach((type) => el.addEventListener(type, (e) =>{
-    let {key, metaKey, shiftKey} = e as globalThis.KeyboardEvent;
-    let value = ""
-    if (["INPUT" , "textarea"].includes((e.target as HTMLElement).tagName)) value = (e.target as HTMLInputElement).value
-    if (dom.onEvent!=undefined) (dom.onEvent({ type, key, metaKey, shiftKey, value, target: doms.get(e.target as HTMLElement)!})||[]).forEach(mkupdate)
   }))
-
-  return el
 }
 
 
 
 
-// type Subscriber <key extends DomEventType> = Record<key, Listener<key>>
-type KeyListener = (e:KeyboardEvent) => (DomUpdate[] | void)
-type MouseListener = (e:MouseEvent) => (DomUpdate[] | void)
-
+type KeyListener = (e:KeyboardEvent) => void
+type MouseListener = (e:MouseEvent) => void
 type Subscriber = {
   "onkeyup"? : KeyListener
   "onkeydown"? : KeyListener
@@ -97,7 +102,7 @@ type Subscriber = {
   "onclick"? :MouseListener
 };
 
-type Content = string | VDom | Content[] | {id: string} | {style: Record<string, string>} | Subscriber
+type Content = string | VDom | Content[] | {id: string} | {style: Record<string, string>} | Subscriber | {value: string}
 
 
 const mkDom = (tag: string) => (...content:Content[]) =>{
@@ -114,6 +119,7 @@ const mkDom = (tag: string) => (...content:Content[]) =>{
     else if (c instanceof Object) {
       if ("tag" in c) return dm.children.push(c as VDom)
       if ("id" in c) dm.id = c.id as string;
+      if ("value" in c) dm.value = c.value;
       if ("style" in c) Object.entries(c.style).forEach(s=> dm.style[s[0].replace(/([A-Z])/g, '-$1')] = s[1])
       Object.entries(c).forEach(([k,v])=>{
 
@@ -130,8 +136,67 @@ const mkDom = (tag: string) => (...content:Content[]) =>{
   return dm
 }
 
+let div= mkDom("div")
+
+
+
+
+const popup = (...cs:VDom[])=>{
+
+  const dialogfield = div(
+    {
+      style: {
+        background: "var(--background-color)",
+        color: "var(--color)",
+        padding: "1em",
+        paddingBottom: "2em",
+        borderRadius: "1em",
+        zIndex: "2000",
+        overflowY: "scroll",
+      }
+    },
+    ...cs)
+
+  const popupbackground = div(
+    {style:{
+      position: "fixed",
+      top: "0",
+      left: "0",
+      width: "100%",
+      height: "100%",
+      background: "rgba(166, 166, 166, 0.5)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: "2000",
+    }},
+    dialogfield
+  )
+
+  // const closePopup = () => {
+  //   popupbackground.remove();
+  //   document.removeEventListener("keydown", handleKeydown);
+  // };
+
+  // const handleKeydown = (e: KeyboardEvent) => {
+  //   if (e.key === "Escape") {
+  //     closePopup();
+  //   }
+  // };
+
+  // popupbackground.onclick = closePopup;
+  // document.addEventListener("keydown", handleKeydown);
+
+  // dialogfield.onclick = (e) => {
+  //   e.stopPropagation();
+  // }
+  return popupbackground
+
+}
+
+
 export const HTML = {
-  div: mkDom("div"),
+  div,
   span: mkDom("span"),
   p: mkDom("p"),
   h1: mkDom("h1"),
@@ -144,29 +209,6 @@ export const HTML = {
   button: mkDom("button"),
   input: mkDom("input"),
   textarea: mkDom("textarea"),
+  pre: mkDom("pre"),
+  popup
 }
-
-
-let but = HTML.button("climme");
-
-let parent = HTML.div(
-  HTML.p("hello", {style: { color: "red" }}),
-  but
-)
-
-
-let onEvent = (ev: DomEvent) : DomUpdate[] => {
-
-  if (ev.type != "click") return[]
-  if (ev.target == but && ev.type == "click"){
-    let res: DomUpdate[] = [{op: "DEL", el: but}]
-    but = HTML.button("clicked", {style: { backgroundColor: "red" }});
-    res.push({op: "ADD", parent: parent, el: [but]});
-    return res
-  }
-  return []
-  
-};
-
-
-export const exampleView = renderDom(parent)

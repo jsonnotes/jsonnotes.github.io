@@ -4,8 +4,6 @@ import { createApi, server } from "@jsonview/lib";
 import { p, popup, routeLink, span } from "./html";
 
 
-const DBNAME = "jsonview"
-
 
 let access_token: string | null = localStorage.getItem("access_token");
 const api = createApi({ server, accessToken: access_token });

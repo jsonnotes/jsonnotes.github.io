@@ -1,4 +1,74 @@
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // <!DOCTYPE html>
 // <html>
 // <head>
@@ -126,63 +196,81 @@
 //   </script>
 // </body>
 // </html>
+// <-!- 130 -->
 
-
+import { example_function, fromjson, function_schema, Hash, hashData, NoteData, tojson, top } from "@jsonview/core";
+import { createApi, Jsonable } from "./api";
 import { HTML, renderDom, VDom } from "./views";
 
 const body = document.body;
-let butclicked = false;
+const api = createApi({server:"local"})
 
-let but = HTML.button("climme",{
-  style: {
-    all: "unset",
-    background: "white",
-    border: "1px solid black",
-    borderRadius: ".5em",
-    padding: ".5em",
-  },
-  onclick: ()=> {
-    butclicked = !butclicked;
-    but.style.background = butclicked? "red" : "white"
-    return [{op:"UPDATE", el:but}]
-  }})
+body.append(renderDom(({add, del, update})=>{
 
-body.append(renderDom(HTML.div(
-  HTML.p("OKOK"),
-  but
-)))
-
-
-const page = HTML.div()
-
-
-const section = (title:string, ...items: VDom[]) => {
-  page.children.push(
-    HTML.div(
-      HTML.h3(title),
-      {
-        style:{
-          textAlign: "left",
-          width: "20em",
-          border: "2px solid black",
-          margin: "auto",
+  const page = HTML.div();
+  const section = (title:string, defval :string,  onclick: (value:string)=>Promise<any>) => {
+    let inp = HTML.textarea({value:defval})
+    let but = HTML.button("go", {
+      onclick:async ()=>{
+        try{
+          await onclick(inp.value!)
+        }catch (e){
+          setRes(String(e))
         }
-      },
-      items
+      }
+    });
+    let res = HTML.pre()
+    page.children.push(
+      HTML.div(
+        HTML.h3(title), inp, but, res,
+        {
+          style:{
+            padding:"1em",
+            minWidth: "20em",
+            border: "2px solid var(--color)",
+            margin: "1em auto",
+          }
+        },
+      )
     )
+
+    let setRes = (s:string)=>{res.textContent = s; update(res)}
+    return setRes
+  }
+
+  let sqlres = section("sql", "select * from note", v=> api.sql(v).then(res=>sqlres(JSON.stringify(res, null, 2))))
+  let getNote = section("get note", hashData(top), v=> api.getNote(v as Hash).then(r=>getNote(JSON.stringify(r, null, 2))) )
+  let addNote = section("add note", tojson(NoteData("example", top, {})), v=> api.addNote(JSON.parse(v) as NoteData).then(res=>addNote(res)))
+  let callNote = section(
+    "call note",
+    hashData(example_function),
+    v=> new Promise((res, rej)=>{
+      let inp = HTML.input({
+        value: tojson({a:2, b:4}),
+        onkeyup: e=>{
+          if (e.key == "Enter"){
+            api.callNote(v as Hash, fromjson(inp.value as string))
+            .then(res=>{
+              
+              console.log({res})
+              callNote(res as string)
+            }).catch(rej)
+            del(pop)
+          }
+        }
+      })
+      let pop = HTML.popup(
+        HTML.h3("enter args"),
+        inp
+      )
+      pop.onEvent = (e) => {
+        if (e.type == "click" && e.target == pop){
+          del(pop)
+        }
+      }
+      add(page, pop)
+    })
   )
-}
 
-
-console.log(renderDom(HTML.input()))
-section("sql", 
-  HTML.input({onkeydown:e=>{
-    console.log(e.value)
-  }})
-)
-
-console.log(page)
-body.append(renderDom(page))
-
-
-
+  return page
+}))

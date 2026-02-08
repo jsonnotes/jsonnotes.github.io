@@ -93,7 +93,7 @@ export const page_schema = NoteData("page_schema", top, object({
 
 
 
-const example_function = NoteData("example function", function_schema, {
+export const example_function = NoteData("example function", function_schema, {
   title: "example function",
   args: {a:{}, b:{}},
   code: "return a + b",
