@@ -128,29 +128,61 @@
 // </html>
 
 
-
-import { HTML, renderDom } from "./views";
+import { HTML, renderDom, VDom } from "./views";
 
 const body = document.body;
+let butclicked = false;
 
+let but = HTML.button("climme",{
+  style: {
+    all: "unset",
+    background: "white",
+    border: "1px solid black",
+    borderRadius: ".5em",
+    padding: ".5em",
+  },
+  onclick: ()=> {
+    butclicked = !butclicked;
+    but.style.background = butclicked? "red" : "white"
+    return [{op:"UPDATE", el:but}]
+  }})
 
-
-let but = HTML.button("climme", {"onclick": e=>{
-  console.log("Button clicked!")
-  but.style = {"background":"red"}
-  console.log(but)
-  return [
-    {op:"DEL", el:but},
-    {op:"ADD", parent, el:[but]}
-  ]
-}})
-
-let parent = HTML.div(
+body.append(renderDom(HTML.div(
   HTML.p("OKOK"),
   but
+)))
+
+
+const page = HTML.div()
+
+
+const section = (title:string, ...items: VDom[]) => {
+  page.children.push(
+    HTML.div(
+      HTML.h3(title),
+      {
+        style:{
+          textAlign: "left",
+          width: "20em",
+          border: "2px solid black",
+          margin: "auto",
+        }
+      },
+      items
+    )
+  )
+}
+
+
+console.log(renderDom(HTML.input()))
+section("sql", 
+  HTML.input({onkeydown:e=>{
+    console.log(e.value)
+  }})
 )
 
+console.log(page)
+body.append(renderDom(page))
 
-console.log(but)
-body.append(renderDom(parent))
+
 

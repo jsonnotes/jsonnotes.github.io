@@ -1,22 +1,29 @@
 // page view
 
-type VMouseEvent = "click"| "mousemove" | "mouseup" | "mousedown" | "drag"
-type VKeyboardEvent = "keydown" | "keyup"
+type MouseEventType = "click"| "mousemove" | "mouseup" | "mousedown" | "drag"
+type KeyboardEventType = "keydown" | "keyup"
+type DomEventType = MouseEventType | KeyboardEventType;
 
-const mouseEvents : VMouseEvent[] = ["click", "mousemove", "mouseup", "mousedown", "drag"];
-const keyboardEvents : VKeyboardEvent[] = ["keydown", "keyup"];
+const mouseEvents : MouseEventType[] = ["click", "mousemove", "mouseup", "mousedown", "drag"];
+const keyboardEvents : KeyboardEventType[] = ["keydown", "keyup"];
 
-export type DomEvent = {
-  type: VMouseEvent
+
+
+type MouseEvent = {
+  type: MouseEventType
   target: VDom
-} | {
-  type: VKeyboardEvent
+};
+
+type KeyboardEvent = {
+  type: KeyboardEventType
   key: string,
   metaKey: boolean,
   shiftKey: boolean,
   value: string,
   target: VDom,
 }
+
+export type DomEvent = MouseEvent | KeyboardEvent
 
 
 type Listener = (e: DomEvent) => DomUpdate[] | void
@@ -66,9 +73,9 @@ export const renderDom = (dom: VDom) => {
   }));
 
   keyboardEvents.forEach((type) => el.addEventListener(type, (e) =>{
-    let {key, metaKey, shiftKey} = e as KeyboardEvent;
+    let {key, metaKey, shiftKey} = e as globalThis.KeyboardEvent;
     let value = ""
-    if ((e.target as HTMLElement).tagName in ["input" , "textarea"]) value = (e.target as HTMLInputElement).value
+    if (["INPUT" , "textarea"].includes((e.target as HTMLElement).tagName)) value = (e.target as HTMLInputElement).value
     if (dom.onEvent!=undefined) (dom.onEvent({ type, key, metaKey, shiftKey, value, target: doms.get(e.target as HTMLElement)!})||[]).forEach(mkupdate)
   }))
 
@@ -76,12 +83,26 @@ export const renderDom = (dom: VDom) => {
 }
 
 
-type Content = string | VDom | Content[] | {id: string} | {style: Record<string, string>} | Record<string, Listener>
+
+
+// type Subscriber <key extends DomEventType> = Record<key, Listener<key>>
+type KeyListener = (e:KeyboardEvent) => (DomUpdate[] | void)
+type MouseListener = (e:MouseEvent) => (DomUpdate[] | void)
+
+type Subscriber = {
+  "onkeyup"? : KeyListener
+  "onkeydown"? : KeyListener
+  "onmouseup"? : MouseListener
+  "onmousedown"? : MouseListener
+  "onclick"? :MouseListener
+};
+
+type Content = string | VDom | Content[] | {id: string} | {style: Record<string, string>} | Subscriber
 
 
 const mkDom = (tag: string) => (...content:Content[]) =>{
 
-  let listeners = new Map<VKeyboardEvent | VMouseEvent, Listener>();
+  let listeners = new Map<KeyboardEventType | MouseEventType, Listener>();
   let dm : VDom = {tag: tag, style: {}, textContent: "", id: "", children: [], onEvent: e=> {
     let fn = listeners.get(e.type);
     if (fn) return fn(e)
@@ -98,7 +119,7 @@ const mkDom = (tag: string) => (...content:Content[]) =>{
 
         if (k.startsWith("on")){
           console.log(k,v)
-          listeners.set(k.slice(2) as VKeyboardEvent, v as Listener)
+          listeners.set(k.slice(2) as KeyboardEventType, v as Listener)
         }
       })
     }
