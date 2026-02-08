@@ -117,7 +117,7 @@ it("arrays", () => {
 it("objects", () => {
   testRun("return {a: 1, b: 2}", {result: {a: 1, b: 2}})
   testRun("let o = {x: 5}; return o.x", {result: 5})
-  testRun("let o = {x: 5}; return o['x']", {result: 5})
+  testRun("let o = {x: 5}; return o['x']", {shouldError: true})
   testRun("let x = 1; let y = 2; return {x, y}", {result: {x: 1, y: 2}})
 })
 
@@ -170,8 +170,14 @@ it("scope: allows globals", () => {
 
 it("prototype: rejected", () => {
   assert(validateNoPrototype(parse("x.prototype")).length > 0)
-  assert(validateNoPrototype(parse("x['prototype']")).length > 0)
 })
+
+it("bracket indexing: only numeric literals", () => {
+
+  testRun("{a:22}[\"a\"]", {shouldError: true})
+})
+
+
 
 it("async: returns promise result", async () => {
   let res = await runWithFuelAsync("return f()", 1000, {f: () => Promise.resolve(99)})

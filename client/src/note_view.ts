@@ -188,10 +188,10 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
       const runLocalFn = button("run local", { onclick: async () => {
         const { canceled, parsed } = promptArgs("local_fun_arg");
         if (canceled) return;
-        const argsArray = parsed === undefined ? [] : (Array.isArray(parsed) ? parsed : [parsed]);
+        const arg = parsed === undefined ? {} : parsed
         try {
           runLocalFn.textContent = "running...";
-          const result = await callNote(hash, ...argsArray);
+          const result = await callNote(hash, arg);
           popup(h2("result"), pre(JSON.stringify(result, null, 2)));
         } catch (e: any) {
           popup(h2("ERROR"), p(e.message || "run failed"));

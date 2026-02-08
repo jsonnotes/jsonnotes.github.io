@@ -301,8 +301,8 @@ export const validateNoPrototype = (program: Program) => {
         if (!e.computed && e.property.type === "Identifier" && e.property.name === "prototype") {
           errors.push("prototype access");
         }
-        if (e.computed && e.property.type === "Literal" && e.property.value === "prototype") {
-          errors.push("prototype access");
+        if (e.computed && !(e.property.type === "Literal" && typeof e.property.value === "number")) {
+          errors.push("only numeric literal indexing allowed");
         }
         visitExpr(e.object);
         if (e.computed) visitExpr(e.property);
@@ -572,7 +572,6 @@ export const runWithFuel = (
     if (scopeErrs.length) return { err: scopeErrs.join(", "), fuel };
     return (new Function(...Object.keys(env),renderRunnerWithFuel(program, fuel)) as (...args:unknown[]) => runRes)(...Object.values(env));
   } catch (err) {
-    console.log("run with Fuel error: ",err)
     return {err: stringifyError(err), fuel };
   }
 };

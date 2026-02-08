@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -16,16 +16,11 @@
 </head>
 <body>
   <h1>jsonview minimal</h1>
-
   <button id = "toggle-server" onclick = "toggleServer()">toggle server</button>
-
 
   <div class="section">
     <h3>custom view</h3>
-
     <div id="customview"></div>
-
-
   </div>
 
   <div class="section">
@@ -60,7 +55,7 @@
 
   <script type="module">
     import { createApi } from './src/api.ts';
-    import { showView, exampleView } from './src/views.ts';
+    import { showView, exampleView, HTML } from './src/views.ts';
 
 
     document.getElementById("customview").append(exampleView)
@@ -71,21 +66,14 @@
       dbName: 'jsonview',
     });
 
-
-
-
     window.toggleServer = ()=>{
-
       server = server == "local" ? "maincloud" : "local"
-
       document.querySelector("#toggle-server").innerHTML = server
-
       api = createApi({
       server,
       dbName: 'jsonview',
     });
     }
-
 
     window.doSql = async () => {
       const query = document.getElementById('sql-query').value;
@@ -136,4 +124,16 @@
     };
   </script>
 </body>
+</html> -->
+
+
+<html>
+  <style>
+    body{
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif
+    }
+  </style>
+  <body></body>
+  <script type="module" src="./src/example.ts"></script>
 </html>
+

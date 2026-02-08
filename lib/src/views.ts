@@ -1,10 +1,16 @@
 // page view
 
+type VMouseEvent = "click"| "mousemove" | "mouseup" | "mousedown" | "drag"
+type VKeyboardEvent = "keydown" | "keyup"
+
+const mouseEvents : VMouseEvent[] = ["click", "mousemove", "mouseup", "mousedown", "drag"];
+const keyboardEvents : VKeyboardEvent[] = ["keydown", "keyup"];
+
 export type DomEvent = {
-  type: "click"| "mousemove" | "mouseup" | "mousedown" | "drag",
+  type: VMouseEvent
   target: VDom
 } | {
-  type: "keydown" | "keyup"
+  type: VKeyboardEvent
   key: string,
   metaKey: boolean,
   shiftKey: boolean,
@@ -12,82 +18,92 @@ export type DomEvent = {
   target: VDom,
 }
 
+
+type Listener = (e: DomEvent) => DomUpdate[] | void
+
 export type VDom = {
   tag: string
   textContent: string
   id: string
   style: Record<string, string>
   children: VDom[]
+  onEvent?: Listener
 }
 
-type DomUpdate = { op: "DEL", el: VDom } | { op: "ADD", parent: VDom, el: VDom[]}
+type DomUpdate = { op: "DEL", el: VDom } | { op: "ADD", parent: VDom, el: VDom[]} | { op: "UPDATE", el: VDom }
 
-export type View = {
-  dom: VDom,
-  onEvent: (event: DomEvent) => DomUpdate[]
-}
 
-export const showView = (view: View) => {
+let doms = new WeakMap<HTMLElement, VDom>();
+let elements = new WeakMap<VDom, HTMLElement>();
 
+export const renderDom = (dom: VDom) => {
+
+  let el = document.createElement(dom.tag)
+  el.textContent = dom.textContent
+  elements.set(dom, el)
+  doms.set(el, dom)
+  el.append(...dom.children.map(c=>renderDom(c)))
+  Object.entries(dom.style).forEach(st=>el.style.setProperty(...st))
   
-
-  let elements = new Map<VDom, HTMLElement>();
-  let doms = new Map<HTMLElement, VDom>()
-  const render = (dom: VDom) : HTMLElement => {
-    let el = document.createElement(dom.tag)
-    el.textContent = dom.textContent
-    elements.set(dom, el)
-    doms.set(el, dom)
-    el.append(...dom.children.map(c=>render(c)))
-    Object.entries(dom.style).forEach(st=>el.style.setProperty(...st))
-    return el
-  }
-
-  let root = render(view.dom)
-
   const mkupdate = (update: DomUpdate) =>{
     if (update.op == "ADD") {
-      elements.get(update.parent)?.append(...update.el.map(e=>render(e)))
+      elements.get(update.parent)?.append(...update.el.map(e=>renderDom(e)))
     }else if (update.op == "DEL"){
       doms.delete(elements.get(update.el)!)
       elements.get(update.el)?.remove()
       elements.delete(update.el)
+    }else if (update.op == "UPDATE"){
+      let oldel = elements.get(update.el)!
+      oldel.replaceWith(renderDom(update.el))
+      doms.delete(oldel)
     }
   }
 
-  (["click", "mousedown", "mouseup", "drag", "mousemove"] as ("click" ) [])
-  .forEach((type) => root.addEventListener(type, (e) =>
-    view.onEvent( { type, target: doms.get(e.target as HTMLElement) ! }).forEach(mkupdate)));
+  mouseEvents.forEach((type) => el.addEventListener(type, (e) => {
+    if (dom.onEvent!= undefined) {
+      (dom.onEvent!( { type, target: doms.get(e.target as HTMLElement) ! })|| []).forEach(mkupdate);
+    }
+  }));
 
-  (["keyup", "keydown"] as "keyup"[]).forEach((type) => root.addEventListener(type, (e) =>{
+  keyboardEvents.forEach((type) => el.addEventListener(type, (e) =>{
     let {key, metaKey, shiftKey} = e as KeyboardEvent;
     let value = ""
     if ((e.target as HTMLElement).tagName in ["input" , "textarea"]) value = (e.target as HTMLInputElement).value
-    view.onEvent({ type, key, metaKey, shiftKey, value, target: doms.get(e.target as HTMLElement)!}).forEach(mkupdate)
+    if (dom.onEvent!=undefined) (dom.onEvent({ type, key, metaKey, shiftKey, value, target: doms.get(e.target as HTMLElement)!})||[]).forEach(mkupdate)
   }))
 
-
-  
-
-  return root
-  
+  return el
 }
 
 
-type Content = string | VDom | Content[] | {id: string} | {style: Record<string, string>}
+type Content = string | VDom | Content[] | {id: string} | {style: Record<string, string>} | Record<string, Listener>
 
 
 const mkDom = (tag: string) => (...content:Content[]) =>{
-  let dm : VDom = {tag: tag, style: {}, textContent: "", id: "", children: []};
+
+  let listeners = new Map<VKeyboardEvent | VMouseEvent, Listener>();
+  let dm : VDom = {tag: tag, style: {}, textContent: "", id: "", children: [], onEvent: e=> {
+    let fn = listeners.get(e.type);
+    if (fn) return fn(e)
+    }
+  };
   let addcontent = (c: Content) => {
     if (c instanceof Array) c.forEach(addcontent);
     else if (typeof c == "string") dm.textContent = c;
     else if (c instanceof Object) {
-      if ("tag" in c) return dm.children.push(c)
-      if ("id" in c) dm.id = c.id;
+      if ("tag" in c) return dm.children.push(c as VDom)
+      if ("id" in c) dm.id = c.id as string;
       if ("style" in c) Object.entries(c.style).forEach(s=> dm.style[s[0].replace(/([A-Z])/g, '-$1')] = s[1])
+      Object.entries(c).forEach(([k,v])=>{
+
+        if (k.startsWith("on")){
+          console.log(k,v)
+          listeners.set(k.slice(2) as VKeyboardEvent, v as Listener)
+        }
+      })
     }
   }
+
   addcontent(content)
 
   return dm
@@ -110,9 +126,6 @@ export const HTML = {
 }
 
 
-
-
-
 let but = HTML.button("climme");
 
 let parent = HTML.div(
@@ -124,8 +137,6 @@ let parent = HTML.div(
 let onEvent = (ev: DomEvent) : DomUpdate[] => {
 
   if (ev.type != "click") return[]
-
-
   if (ev.target == but && ev.type == "click"){
     let res: DomUpdate[] = [{op: "DEL", el: but}]
     but = HTML.button("clicked", {style: { backgroundColor: "red" }});
@@ -137,7 +148,4 @@ let onEvent = (ev: DomEvent) : DomUpdate[] => {
 };
 
 
-export const exampleView = showView({
-  dom: parent,
-  onEvent
-})
+export const exampleView = renderDom(parent)

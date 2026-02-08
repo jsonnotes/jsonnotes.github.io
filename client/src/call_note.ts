@@ -22,8 +22,8 @@ const browserExtras = (fn: Hash) => ({
   storage: makeStorage(fn),
 });
 
-export const callNote = async (fn: Hash, ...args: Jsonable[]): Promise<any> =>
-  callNoteLocal(fn, args, browserExtras(fn));
+export const callNote = async (fn: Hash, arg: Record<string, string>): Promise<any> =>
+  callNoteLocal(fn, arg, browserExtras(fn));
 
 export const renderPage = async (ref: Hash): Promise<HTMLElement> => {
   const note = await getNote(ref);

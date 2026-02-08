@@ -1,0 +1,156 @@
+
+// <!DOCTYPE html>
+// <html>
+// <head>
+//   <meta charset="UTF-8">
+//   <title>jsonview minimal</title>
+//   <style>
+//     body { font-family: monospace; max-width: 600px; margin: 2em auto; padding: 1em; }
+//     input, textarea, button { font-family: inherit; font-size: inherit; }
+//     textarea { width: 100%; height: 100px; }
+//     input { width: 100%; padding: 0.3em; }
+//     button { padding: 0.5em 1em; margin-top: 0.5em; }
+//     pre { background: #f5f5f5; padding: 1em; overflow: auto; }
+//     .section { margin-bottom: 2em; border: 1px solid #ccc; padding: 1em; }
+//     h3 { margin-top: 0; }
+//   </style>
+// </head>
+// <body>
+//   <h1>jsonview minimal</h1>
+//   <button id = "toggle-server" onclick = "toggleServer()">toggle server</button>
+
+//   <div class="section">
+//     <h3>custom view</h3>
+//     <div id="customview"></div>
+//   </div>
+
+//   <div class="section">
+//     <h3>sql</h3>
+//     <input type="text" id="sql-query" placeholder="select * from note limit 10" value="select hash, schemaHash from note limit 10">
+//     <button onclick="doSql()">run</button>
+//     <pre id="sql-result"></pre>
+//   </div>
+
+//   <div class="section">
+//     <h3>get_note</h3>
+//     <input type="text" id="get-hash" placeholder="hash (32 hex chars)">
+//     <button onclick="doGetNote()">get</button>
+//     <pre id="get-result"></pre>
+//   </div>
+
+//   <div class="section">
+//     <h3>add_note</h3>
+//     <input type="text" id="add-schema" placeholder="schema hash">
+//     <textarea id="add-data" placeholder='{"key": "value"}'>{}</textarea>
+//     <button onclick="doAddNote()">add</button>
+//     <pre id="add-result"></pre>
+//   </div>
+
+//   <div class="section">
+//     <h3>call_note</h3>
+//     <input type="text" id="call-hash" placeholder="function hash (32 hex chars)">
+//     <textarea id="call-arg" placeholder="argument (JSON)">null</textarea>
+//     <button onclick="doCallNote()">call</button>
+//     <pre id="call-result"></pre>
+//   </div>
+
+//   <script type="module">
+//     import { createApi } from './src/api.ts';
+//     import { showView, exampleView, HTML } from './src/views.ts';
+
+
+//     document.getElementById("customview").append(exampleView)
+
+//     let server = "local";
+//     let api = createApi({
+//       server,
+//       dbName: 'jsonview',
+//     });
+
+//     window.toggleServer = ()=>{
+//       server = server == "local" ? "maincloud" : "local"
+//       document.querySelector("#toggle-server").innerHTML = server
+//       api = createApi({
+//       server,
+//       dbName: 'jsonview',
+//     });
+//     }
+
+//     window.doSql = async () => {
+//       const query = document.getElementById('sql-query').value;
+//       const result = document.getElementById('sql-result');
+//       try {
+//         const data = await api.sql(query);
+//         result.textContent = JSON.stringify(data, null, 2);
+//       } catch (e) {
+//         result.textContent = 'Error: ' + e.message;
+//       }
+//     };
+
+//     window.doGetNote = async () => {
+//       const hash = document.getElementById('get-hash').value.trim();
+//       const result = document.getElementById('get-result');
+//       try {
+//         const note = await api.getNote(hash);
+//         result.textContent = JSON.stringify(note, null, 2);
+//       } catch (e) {
+//         result.textContent = 'Error: ' + e.message;
+//       }
+//     };
+
+//     window.doAddNote = async () => {
+//       const schema = document.getElementById('add-schema').value.trim();
+//       const dataStr = document.getElementById('add-data').value;
+//       const result = document.getElementById('add-result');
+//       try {
+//         const data = JSON.parse(dataStr);
+//         const hash = await api.addNote(schema, data);
+//         result.textContent = 'Created: ' + hash;
+//       } catch (e) {
+//         result.textContent = 'Error: ' + e.message;
+//       }
+//     };
+
+//     window.doCallNote = async () => {
+//       const hash = document.getElementById('call-hash').value.trim();
+//       const argStr = document.getElementById('call-arg').value;
+//       const result = document.getElementById('call-result');
+//       try {
+//         const arg = JSON.parse(argStr);
+//         const response = await api.callNote(hash, arg);
+//         result.textContent = JSON.stringify(response, null, 2);
+//       } catch (e) {
+//         result.textContent = 'Error: ' + e.message;
+//       }
+//     };
+//   </script>
+// </body>
+// </html>
+
+
+
+import { HTML, renderDom } from "./views";
+
+const body = document.body;
+
+
+
+let but = HTML.button("climme", {"onclick": e=>{
+  console.log("Button clicked!")
+  but.style = {"background":"red"}
+  console.log(but)
+  return [
+    {op:"DEL", el:but},
+    {op:"ADD", parent, el:[but]}
+  ]
+}})
+
+let parent = HTML.div(
+  HTML.p("OKOK"),
+  but
+)
+
+
+console.log(but)
+body.append(renderDom(parent))
+
