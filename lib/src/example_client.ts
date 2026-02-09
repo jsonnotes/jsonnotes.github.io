@@ -91,7 +91,12 @@ body.append(renderDom(({add, del, update})=>{
   ))
 
   {
-    let inp = HTML.textarea({value:"return HTML.div('hello')"})
+    let inp = HTML.textarea({value:`return HTML.div(
+      HTML.h3("hello"),
+      HTML.svgPath(
+    ["M3 12h18", "M12 3v18"],
+    { viewBox: "0 0 24 24", stroke: "var(--color)", strokeWidth: "2", fill: "none", width: "24", height: "24" }
+    ))`})
     let res = HTML.div()
     let setRes = (s:VDom)=>{res.children = [s]; update(res)}
 

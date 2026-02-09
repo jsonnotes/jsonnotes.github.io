@@ -8,35 +8,7 @@ const mouseEvents : MouseEventType[] = ["click", "mouseup", "mousedown", "drag"]
 const keyboardEvents : KeyboardEventType[] = ["keydown", "keyup"];
 const svgNamespace = "http://www.w3.org/2000/svg";
 const svgTags = new Set(["svg", "path", "g", "line", "polyline", "polygon", "circle", "ellipse", "rect"]);
-const allowedAttributeNames = new Set([
-  "viewBox",
-  "width",
-  "height",
-  "xmlns",
-  "d",
-  "fill",
-  "stroke",
-  "stroke-width",
-  "stroke-linecap",
-  "stroke-linejoin",
-  "stroke-dasharray",
-  "stroke-dashoffset",
-  "x",
-  "y",
-  "x1",
-  "y1",
-  "x2",
-  "y2",
-  "cx",
-  "cy",
-  "r",
-  "rx",
-  "ry",
-  "points",
-  "transform",
-  "opacity"
-]);
-
+const allowedAttributeNames = new Set(["viewBox","width","height","xmlns","d","fill","stroke","stroke-width","stroke-linecap","stroke-linejoin","stroke-dasharray","stroke-dashoffset","x","y","x1","y1","x2","y2","cx","cy","r","rx","ry","points","transform","opacity"]);
 
 
 type MouseEvent = {
@@ -209,23 +181,6 @@ const popup = (...cs:VDom[])=>{
     dialogfield
   )
 
-  // const closePopup = () => {
-  //   popupbackground.remove();
-  //   document.removeEventListener("keydown", handleKeydown);
-  // };
-
-  // const handleKeydown = (e: KeyboardEvent) => {
-  //   if (e.key === "Escape") {
-  //     closePopup();
-  //   }
-  // };
-
-  // popupbackground.onclick = closePopup;
-  // document.addEventListener("keydown", handleKeydown);
-
-  // dialogfield.onclick = (e) => {
-  //   e.stopPropagation();
-  // }
   return popupbackground
 
 }

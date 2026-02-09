@@ -131,24 +131,6 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         );
       };
 
-      const vdomToggle = document.createElement("input");
-      vdomToggle.type = "checkbox";
-      vdomToggle.id = "render-vdom-toggle";
-      vdomToggle.style.marginLeft = "0.75em";
-      const vdomLabel = document.createElement("label");
-      vdomLabel.htmlFor = vdomToggle.id;
-      vdomLabel.style.marginLeft = "0.25em";
-      vdomLabel.textContent = "render VDom";
-      const vdomWrap = span(style({ marginLeft: "0.75em", fontSize: "0.9em" }), vdomToggle, vdomLabel);
-
-      const showResult = (result: unknown) => {
-        if (vdomToggle.checked && isVDom(result)) {
-          popup(h2("result"), renderDom(() => result));
-          return;
-        }
-        popup(h2("result"), pre(JSON.stringify(result, null, 2)));
-      };
-
       const promptArgs = (storageKey: string) => {
         const fnData = note.data as any;
         const argNames = Object.keys(fnData?.args || {});
