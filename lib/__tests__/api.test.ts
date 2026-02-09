@@ -1,6 +1,6 @@
 import { it } from "node:test";
-import { createApi } from "../src/api.ts";
-import { server } from "../src/cli.ts";
+import { createApi } from "../src/dbconn.ts";
+import { server } from "../src/helpers.ts";
 import { function_schema, hashData, NoteData, top } from "@jsonview/core";
 import type { Jsonable } from "@jsonview/core";
 

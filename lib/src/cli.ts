@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 import type { Hash } from "@jsonview/core";
-import { createApi } from "./api.ts";
-
-
-export const dbname = "jsonview"
-export const server = "maincloud"
+import { createApi } from "./dbconn.ts";
+import { dbname, server } from "./helpers.ts";
 
 export type CliIo = {
   stdout: (text: string) => void;

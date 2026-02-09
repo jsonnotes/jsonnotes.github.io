@@ -1,4 +1,4 @@
-import { Hash, hashData, NoteData, script_result_schema, script_schema, Jsonable, function_schema, page_schema } from "@jsonview/core";
+import { Hash, hashData, NoteData, script_schema, Jsonable, function_schema, page_schema } from "@jsonview/core";
 import { addNote, callProcedure, callNoteRemote, getNote, noteLink, noteOverview } from "./dbconn";
 
 import { stringify } from "./helpers";
@@ -60,44 +60,6 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
     const schemaHash = note.schemaHash;
 
     const titleText = (note.data as any)?.title ?? "";
-
-    const runScriptFromNote = (noteData: NoteData) =>  new Promise <NoteData>(async (rs, rj)=>{
-
-
-      let code = String((noteData.data as any)?.code || "")
-
-      console.info({code})
-
-      const worker = new Worker(new URL("./script_worker.ts", import.meta.url), { type: "module" });
-
-      worker.onmessage = (e) => {
-
-        const msg = e.data || {};
-        if (msg.type === "call") {
-          Promise.resolve(buildins[msg.name](...JSON.parse(msg.args)))
-            .then((result) => {console.log("responding", result) ; worker.postMessage({ type: "response", id:msg.id, result: result })})
-            .catch((err) => worker.postMessage({ type: "response", id:msg.id, error: String(err) }));
-          return;
-        }
-        if (msg.type !== "run_result") return;
-        worker.terminate();
-        if (msg.ok) {
-
-
-          if (msg.result == undefined) return
-          let result = {
-            schemaHash: hashData(script_result_schema),
-            data: {
-              title: "result",
-              script: `#${hash}`,
-              content: msg.result
-            }
-          } as NoteData
-          rs(result)
-        }else popup(h2("ERROR"), pre(msg.error || "script error"))
-      };
-      worker.postMessage({ type: "run", code, input: {}});
-    })
 
     const isScript = note.schemaHash === hashData(script_schema)
 

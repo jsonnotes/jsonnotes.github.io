@@ -68,7 +68,7 @@ spacetimedb.reducer('add_note', {
     const existing = ctx.db.note.hash.find(hash);
     if (existing) return;
 
-    ctx.db.note.insert({ hash, schemaHash, data })
+    ctx.db.note.insert({ hash, schemaHash, data})
 
     const targets = new Set<string>([schemaRow.hash]);
     const re = /#([a-f0-9]{32})/g;
@@ -107,6 +107,29 @@ const setup = spacetimedb.reducer('setup', {}, (ctx) => {
 })
 
 spacetimedb.init(setup)
+
+spacetimedb.procedure('search_note', {query: t.string()}, t.array(t.object(
+  "search_result",
+  {
+    title: t.string(),
+    count: t.number(),
+    hash: t.string()
+  }
+)), (ctx, {query})=> {
+  return ctx.withTx(ctx=>{
+    let lc =  Array.from(ctx.db.links.iter(), (row)=>({hash:row.to, c:row.from.length}))
+    .sort((a,b)=> a.c - b.c)
+    let reps = []
+    for (let ct of lc){
+      let dat = fromjson(ctx.db.note.hash.find(ct.hash)!.data) 
+      if (typeof dat == "object" && "title" in dat && typeof dat.title == "string" && dat.title.startsWith(query)){
+        reps.push({title: dat.title, count: ct.c, hash: ct.hash})
+        if (reps.length >= 100) return reps
+      } 
+    }
+  })!
+})
+
 
 spacetimedb.procedure('call_note', {fn: t.string(), arg: t.string()}, t.string(), (ctx, {fn, arg})=> {
 
