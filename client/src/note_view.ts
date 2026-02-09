@@ -1,4 +1,5 @@
-import { Hash, hashData, NoteData, script_schema, Jsonable, function_schema, page_schema } from "@jsonview/core";
+import { Hash, hashData, NoteData, script_schema, Jsonable, function_schema } from "@jsonview/core";
+import { renderDom, type VDom } from "@jsonview/lib";
 import { addNote, callProcedure, callNoteRemote, getNote, noteLink, noteOverview } from "./dbconn";
 
 import { stringify } from "./helpers";
@@ -90,8 +91,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
 
     overlay.innerHTML = "";
     const shortHash = hash.slice(0, 8);
-    const isPage = note.schemaHash === hashData(page_schema);
-    const title = h3(`${isScript ? "Script" : isPage ? "Page" : "Note"} #${shortHash} ${titleText} `);
+    const title = h3(`${isScript ? "Script" : "Note"} #${shortHash} ${titleText} `);
     // if (note.schemaHash === hashData(server_function)) {
     //   const runAsyncFn = button("run async", { onclick: async () => {
 
@@ -119,6 +119,36 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
     // }
 
     if (note.schemaHash === hashData(function_schema)) {
+      const isVDom = (value: unknown): value is VDom => {
+        if (!value || typeof value !== "object") return false;
+        const v = value as VDom;
+        return (
+          typeof v.tag === "string" &&
+          typeof v.textContent === "string" &&
+          typeof v.id === "string" &&
+          typeof v.style === "object" &&
+          Array.isArray(v.children)
+        );
+      };
+
+      const vdomToggle = document.createElement("input");
+      vdomToggle.type = "checkbox";
+      vdomToggle.id = "render-vdom-toggle";
+      vdomToggle.style.marginLeft = "0.75em";
+      const vdomLabel = document.createElement("label");
+      vdomLabel.htmlFor = vdomToggle.id;
+      vdomLabel.style.marginLeft = "0.25em";
+      vdomLabel.textContent = "render VDom";
+      const vdomWrap = span(style({ marginLeft: "0.75em", fontSize: "0.9em" }), vdomToggle, vdomLabel);
+
+      const showResult = (result: unknown) => {
+        if (vdomToggle.checked && isVDom(result)) {
+          popup(h2("result"), renderDom(() => result));
+          return;
+        }
+        popup(h2("result"), pre(JSON.stringify(result, null, 2)));
+      };
+
       const promptArgs = (storageKey: string) => {
         const fnData = note.data as any;
         const argNames = Object.keys(fnData?.args || {});
@@ -154,7 +184,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         try {
           runLocalFn.textContent = "running...";
           const result = await callNote(hash, arg);
-          popup(h2("result"), pre(JSON.stringify(result, null, 2)));
+          showResult(result);
         } catch (e: any) {
           popup(h2("ERROR"), p(e.message || "run failed"));
         } finally {
@@ -168,7 +198,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         try {
           runRemoteFn.textContent = "running...";
           const result = await callNoteRemote(hash, parsed);
-          popup(h2("result"), pre(JSON.stringify(result, null, 2)));
+          showResult(result);
         } catch (e: any) {
           popup(h2("ERROR"), p(e.message || "run failed"));
         } finally {
@@ -176,13 +206,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         }
       }});
 
-      title.append(runLocalFn, runRemoteFn);
-    }
-
-    if (note.schemaHash === hashData(page_schema)) {
-      title.append(button("view", {
-        onclick: () => window.open(`/view/${hash}`, "_blank")
-      }));
+      title.append(runLocalFn, runRemoteFn, vdomWrap);
     }
 
     updateContentDisplay();

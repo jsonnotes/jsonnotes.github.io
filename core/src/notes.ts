@@ -85,14 +85,6 @@ export const function_schema = NoteData("function schema", top, object({
   returnSchema: {}
 }, {required: ["args", "code", "returnSchema"]  }))
 
-export const page_schema = NoteData("page_schema", top, object({
-  title: string,
-  code: string,
-}, { title: "page_schema", required: ["code"] }))
-
-
-
-
 export const example_function = NoteData("example function", function_schema, {
   title: "example function",
   args: {a:{}, b:{}},
@@ -100,21 +92,17 @@ export const example_function = NoteData("example function", function_schema, {
   returnSchema: {}
 })
 
-
-
 export const schemas : NoteData[] = [
   script_schema,
   script_result_schema,
-  NoteData("", top, string),
-  NoteData("", top, number),
+  NoteData("string", top, string),
+  NoteData("number", top, number),
   titled_schema,
   has_titled_child,
   titled,
   titled1, titled2,
   function_schema, example_function,
-  page_schema,
 ]
-
 
 export const isRef = (value: any) =>
   typeof value == "string" && /^#([a-f0-9]{32})$/.exec(value) as `#${Hash}`[] | null;

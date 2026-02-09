@@ -3,8 +3,8 @@ import { fromjson, tojson } from "@jsonview/core";
 import type { Api, Hash } from "./dbconn.ts";
 
 export { createApi, type Api, type ApiConfig, type Hash } from "./dbconn.ts";
-export { server, dbname } from "./helpers.ts";
-export { jsonOverview } from "./helpers.ts"
+export { server, dbname, jsonOverview, fetchSchemas, fetchNotes, validateNote, notePreview, noteOverview, openrouterCall, type SchemaEntry } from "./helpers.ts";
+export { renderDom, type VDom, HTML } from "./views.ts";
 
 export type SearchRes = { title: string, hash: Hash, count: number }
 

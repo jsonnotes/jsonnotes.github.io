@@ -1,13 +1,32 @@
 import { fromjson, function_schema, Hash, hashData, NoteData, tojson, top } from "@jsonview/core";
 import { createApi } from "./dbconn";
 import { noteSearch } from "./index";
-import { HTML, renderDom } from "./views";
+import { HTML, renderDom, VDom } from "./views";
 
 const body = document.body;
 const api = createApi({server:"maincloud"})
 
 body.append(renderDom(({add, del, update})=>{
   const page = HTML.div();
+
+
+  const box = (title: string, ...content: VDom[]) =>{
+    page.children.push(
+      HTML.div(
+        HTML.h3(title),
+        ...content,
+        {
+          style:{
+            padding:"1em",
+            minWidth: "20em",
+            border: "2px solid var(--color)",
+            margin: "1em auto",
+          }
+        },
+      )
+    )
+  }
+
   const section = (title:string, defval :string,  onclick: (value:string)=>Promise<any>) => {
     let inp = HTML.textarea({value:defval})
     let but = HTML.button("go", {
@@ -20,19 +39,7 @@ body.append(renderDom(({add, del, update})=>{
       }
     });
     let res = HTML.pre()
-    page.children.push(
-      HTML.div(
-        HTML.h3(title), inp, but, res,
-        {
-          style:{
-            padding:"1em",
-            minWidth: "20em",
-            border: "2px solid var(--color)",
-            margin: "1em auto",
-          }
-        },
-      )
-    )
+    box(title, inp, but, res)
     let setRes = (s:string)=>{res.textContent = s; update(res)}
     return setRes
   }
@@ -78,7 +85,33 @@ body.append(renderDom(({add, del, update})=>{
 
   let search = noteSearch(api, results=> searchres(JSON.stringify(results, null, 2)));
   const searchres = section("search Note", "title", async query=> await search(query))
+  box("examle svg", HTML.svgPath(
+    ["M3 12h18", "M12 3v18"],
+    { viewBox: "0 0 24 24", stroke: "var(--color)", strokeWidth: "2", fill: "none", width: "24", height: "24" }
+  ))
+
+  {
+    let inp = HTML.textarea({value:"return HTML.div('hello')"})
+    let res = HTML.div()
+    let setRes = (s:VDom)=>{res.children = [s]; update(res)}
+
+    let but = HTML.button("go", {
+      onclick: async ()=>{
+        try{
+          setRes(new Function("HTML", inp.value!) (HTML))
+        }catch (e){
+          setRes(HTML.pre(String(e)))
+        }
+      }
+    })
+
+    box("VDom example",
+      inp,but,res
+
+    )
+  }
   return page
+
 
 
 }))

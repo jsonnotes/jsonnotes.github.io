@@ -52,15 +52,13 @@ export const createApi = (config: ApiConfig) => {
     return { names: schema.elements.map((e: { name: { some: string } }) => e.name.some), rows };
   };
 
-  const getNote = funCache(async (hash: Hash) : Promise<NoteData> => {
+  const {get: getNote, has: hasNote, set: setCacheNote} = funCache(async (hash: Hash) : Promise<NoteData> => {
     const data = await sql(`select * from note where hash = '${hash}'`);
     const row = data.rows[0];
     if (!row) throw new Error("note note found")
     const note = Object.fromEntries(data.names.map((n, i) => [n, row[i]])) as Note;
     return {schemaHash: note.schemaHash, data: fromjson(note.data)}
   })
-
-  const added = new Set<Hash>();
 
   async function addNote (note: NoteData): Promise<Hash>;
   async function addNote (schema: Hash, data: Jsonable): Promise<Hash>;
@@ -70,14 +68,12 @@ export const createApi = (config: ApiConfig) => {
     if (data == undefined) ({schemaHash, data} = schema as NoteData)
 
     const hash = hashData({ schemaHash, data });
-    if (added.has(hash)) return hash;
-
+    setCacheNote(hash, {schemaHash, data})
     const res = await req(`/v1/database/${dbname}/call/add_note`, "POST", JSON.stringify({
       schemaHash,
       data: tojson(data),
     }));
     if (!res.ok) throw new Error(await res.text());
-    added.add(hash);
     return hash;
   };
 
