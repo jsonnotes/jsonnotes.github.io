@@ -1,5 +1,6 @@
 import { it } from "node:test";
 import { createApi } from "../src/dbconn.ts";
+import { noteSearch } from "../src/index.ts";
 import { server } from "../src/helpers.ts";
 import { function_schema, hashData, NoteData, top } from "@jsonview/core";
 import type { Jsonable } from "@jsonview/core";
@@ -78,5 +79,38 @@ it("API: nested call", async ()=>{
   let res = await api.callNote(hashData(caller), {})
 
   assertEq(res, "hello world2")
+})
 
+it("API: search", async () => {
+  let calls = 0
+  const results = await new Promise<any[]>(resolve => {
+    const search = noteSearch(api, res => { if (++calls === 2) resolve(res) })
+    search("test")
+  })
+  assert(Array.isArray(results), "search should return array")
+  assert(results.length > 0, "search should find results")
+  assert(results[0].title.startsWith("test"), "result title should match query")
+  assert(typeof results[0].hash === "string", "result should have hash")
+})
+
+it("API: search by hash", async () => {
+  const hash = hashData(testfn)
+  let calls = 0
+  const results = await new Promise<any[]>(resolve => {
+    const search = noteSearch(api, res => { if (++calls === 2) resolve(res) })
+    search(hash)
+  })
+  assert(results.length === 1, "hash search should find exactly one result")
+  assertEq(results[0].hash, hash)
+})
+
+it("API: search by #hash", async () => {
+  const hash = hashData(testfn)
+  let calls = 0
+  const results = await new Promise<any[]>(resolve => {
+    const search = noteSearch(api, res => { if (++calls === 2) resolve(res) })
+    search("#" + hash)
+  })
+  assert(results.length === 1, "#hash search should find exactly one result")
+  assertEq(results[0].hash, hash)
 })

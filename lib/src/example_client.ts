@@ -1,9 +1,10 @@
 import { fromjson, function_schema, Hash, hashData, NoteData, tojson, top } from "@jsonview/core";
 import { createApi } from "./dbconn";
+import { noteSearch } from "./index";
 import { HTML, renderDom } from "./views";
 
 const body = document.body;
-const api = createApi({server:"local"})
+const api = createApi({server:"maincloud"})
 
 body.append(renderDom(({add, del, update})=>{
   const page = HTML.div();
@@ -75,5 +76,9 @@ body.append(renderDom(({add, del, update})=>{
     })
   )
 
+  let search = noteSearch(api, results=> searchres(JSON.stringify(results, null, 2)));
+  const searchres = section("search Note", "title", async query=> await search(query))
   return page
+
+
 }))

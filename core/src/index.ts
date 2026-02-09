@@ -125,8 +125,9 @@ spacetimedb.procedure('search_note', {query: t.string()}, t.array(t.object(
       if (typeof dat == "object" && "title" in dat && typeof dat.title == "string" && dat.title.startsWith(query)){
         reps.push({title: dat.title, count: ct.c, hash: ct.hash})
         if (reps.length >= 100) return reps
-      } 
+      }
     }
+    return reps
   })!
 })
 
