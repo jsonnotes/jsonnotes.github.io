@@ -140,6 +140,6 @@ spacetimedb.procedure('call_note', {fn: t.string(), arg: t.string()}, t.string()
     return (ret as any).ok;
   }
 
-  return call(fn, arg)
+  return tojson(call(fn, arg))
 
 })

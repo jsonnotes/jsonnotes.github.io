@@ -123,10 +123,7 @@ const mkDom = (tag: string) => (...content:Content[]) =>{
       if ("style" in c) Object.entries(c.style).forEach(s=> dm.style[s[0].replace(/([A-Z])/g, '-$1')] = s[1])
       Object.entries(c).forEach(([k,v])=>{
 
-        if (k.startsWith("on")){
-          console.log(k,v)
-          listeners.set(k.slice(2) as KeyboardEventType, v as Listener)
-        }
+        if (k.startsWith("on")) listeners.set(k.slice(2) as KeyboardEventType, v as Listener)
       })
     }
   }

@@ -77,7 +77,7 @@ export const createApi = (config: ApiConfig) => {
   };
 
   const callNote = async (fn: Hash, arg?: Jsonable): Promise<Jsonable> => {
-    return fromjson(await callProcedure("call_note", { fn, arg: arg !== undefined ? tojson(arg) : "null" }))
+    return fromjson(fromjson(await callProcedure("call_note", { fn, arg: arg !== undefined ? tojson(arg) : "null" })) as string)
   };
 
   const callNoteLocal = async (fn: Hash, arg: Record<string, Jsonable>, extras: Record<string, unknown> = {}): Promise<any> => {

@@ -35,12 +35,25 @@ const testfn = NoteData("call test", function_schema, {
 })
 
 
+const testfn2 = NoteData("call test", function_schema, {
+  title: "test function",
+  args: {},
+  code: "return [1,2,3]",
+  returnSchema: {type: "array", items: {type: "number"}}
+})
 
 it("API: callNote", async () => {
 
   await api.addNote(testfn.schemaHash, testfn.data)
   const res = await api.callNote(hashData(testfn), {x: "world"})
   assertEq(res, "hello world")
+})
+
+
+it ("API: callnote2", async ()=>{
+  await api.addNote(testfn2.schemaHash, testfn2.data)
+  const res = await api.callNote(hashData(testfn2), {})
+  assertEq(res, [1,2,3])
 })
 
 
