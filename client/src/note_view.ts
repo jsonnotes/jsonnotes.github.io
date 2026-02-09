@@ -6,8 +6,6 @@ import { stringify } from "./helpers";
 import { a, button, div, h2, h3, p, padding, popup, pre, routeLink, span, style } from "./html";
 
 import { openrouter } from "./openrouter";
-
-
 import { callNote } from "./call_note";
 
 
@@ -28,8 +26,6 @@ export const buildins = {
   remote: callNoteRemote
 
 }
-
-
 
 
 for (let exp of ["openrouter", "getNote", "addNote", "callNote", "remote"]) if (!Object.keys(buildins).includes(exp)) throw new Error("buildin missing but expected: "+ exp)
@@ -92,31 +88,6 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
     overlay.innerHTML = "";
     const shortHash = hash.slice(0, 8);
     const title = h3(`${isScript ? "Script" : "Note"} #${shortHash} ${titleText} `);
-    // if (note.schemaHash === hashData(server_function)) {
-    //   const runAsyncFn = button("run async", { onclick: async () => {
-
-    //     let lastarg = localStorage.getItem("server_fun_arg") ?? "{}";
-    //     const argText = prompt("args as JSON (array or value)", lastarg);
-    //     localStorage.setItem("server_fun_arg", argText)
-    //     if (argText == null) return;
-    //     try {
-    //       runAsyncFn.textContent = "running...";
-    //       const raw = await callProcedure("run_note_async", { hash, arg: argText });
-    //       let out: any = raw;
-    //       try { out = JSON.parse(raw); } catch {}
-    //       if (typeof out === "string") {
-    //         try { out = JSON.parse(out); } catch {}
-    //       }
-    //       popup(h2("result"), pre(JSON.stringify(out, null, 2)));
-    //     } catch (e: any) {
-    //       popup(h2("ERROR"), p(e.message || "run failed"));
-    //     } finally {
-    //       runAsyncFn.textContent = "run async";
-    //     }
-    //   }});
-
-    //   title.append(runAsyncFn);
-    // }
 
     if (note.schemaHash === hashData(function_schema)) {
       const isVDom = (value: unknown): value is VDom => {
@@ -165,22 +136,25 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         const arg = parsed === undefined ? {} : parsed
         try {
           runLocalFn.textContent = "running...";
-          const result = await callNote(hash, arg);
-          showResult(result);
+          const res = await callNote(hash, arg);
+          if (isVDom(res)) popup(h2("result"), renderDom(() => res));
+          else popup(h2("result"), pre(typeof res === "string" ? res : JSON.stringify(res, null, 2)));
         } catch (e: any) {
           popup(h2("ERROR"), p(e.message || "run failed"));
         } finally {
           runLocalFn.textContent = "run local";
         }
+
       }});
 
       const runRemoteFn = button("run remote", { onclick: async () => {
         const { canceled, parsed } = promptArgs("remote_fun_arg");
         if (canceled) return;
+        const arg = parsed === undefined ? {} : parsed
         try {
           runRemoteFn.textContent = "running...";
-          const result = await callNoteRemote(hash, parsed);
-          showResult(result);
+          const res = await callNoteRemote(hash, arg);
+          popup(h2("result"), pre(typeof res === "string" ? res : JSON.stringify(res, null, 2)));
         } catch (e: any) {
           popup(h2("ERROR"), p(e.message || "run failed"));
         } finally {
@@ -188,7 +162,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         }
       }});
 
-      title.append(runLocalFn, runRemoteFn, vdomWrap);
+      title.append(runLocalFn, runRemoteFn);
     }
 
     updateContentDisplay();
@@ -210,9 +184,6 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         })
       )
     );
-
-
-
   });
 
   return overlay;
