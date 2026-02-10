@@ -1,5 +1,6 @@
 import { Jsonable, Hash } from "@jsonview/core";
-import { HTML, callNote as callNoteRemote, callNoteLocal, getNote, renderDom, type VDom } from "@jsonview/lib";
+import { HTML, renderDom, type VDom } from "@jsonview/lib";
+import { callNote as callNoteRemote, callNoteLocal, getNote } from "@jsonview/lib/src/dbconn";
 import { h2, popup } from "./html";
 import { openrouter } from "./openrouter";
 

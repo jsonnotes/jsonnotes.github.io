@@ -1,5 +1,6 @@
 import { Hash, hashData, NoteData, script_schema, function_schema } from "@jsonview/core";
-import { callNote as callNoteRemote, getNote, jsonOverview, renderDom, type VDom } from "@jsonview/lib";
+import { jsonOverview, renderDom, type VDom } from "@jsonview/lib";
+import { getNote, callNote as callNoteRemote } from "@jsonview/lib/src/dbconn";
 import { graph_schema } from "@jsonview/lib/src/example/pipeline";
 import { noteLink } from "./helpers";
 

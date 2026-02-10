@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import type { Hash } from "@jsonview/core";
-import { createApi } from "./dbconn.ts";
-import { dbname, server } from "./helpers.ts";
+import { sql, getNote, addNote } from "./dbconn.ts";
 
 export type CliIo = {
   stdout: (text: string) => void;
@@ -32,14 +31,11 @@ export const runCli = async (argv: string[], io: CliIo = defaultIo): Promise<num
     return 1;
   }
 
-  const accessToken = process.env.SPACETIMEDB_ACCESS_TOKEN || null;
-  const api = createApi({ server, accessToken });
-
   try {
     if (cmd === "sql") {
       const query = args.join(" ").trim();
       if (!query) throw new Error("SQL query is required");
-      const res = await api.sql(query);
+      const res = await sql(query);
       io.stdout(JSON.stringify(res, null, 2) + "\n");
       return 0;
     }
@@ -47,7 +43,7 @@ export const runCli = async (argv: string[], io: CliIo = defaultIo): Promise<num
     if (cmd === "get-note") {
       const hash = args[0];
       if (!hash) throw new Error("hash is required");
-      const note = await api.getNote(hash as Hash);
+      const note = await getNote(hash as Hash);
       io.stdout(JSON.stringify(note, null, 2) + "\n");
       return 0;
     }
@@ -57,7 +53,7 @@ export const runCli = async (argv: string[], io: CliIo = defaultIo): Promise<num
       const raw = args[1];
       if (!schemaHash || raw == null) throw new Error("schemaHash and json are required");
       const data = JSON.parse(raw);
-      const hash = await api.addNote(schemaHash as Hash, data);
+      const hash = await addNote(schemaHash as Hash, data);
       io.stdout(String(hash) + "\n");
       return 0;
     }

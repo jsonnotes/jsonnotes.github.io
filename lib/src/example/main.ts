@@ -29,16 +29,16 @@ document.body.append(renderDom(({update}) => {
     schemaHash: hashData(function_schema),
     data: {title: "example func", args: {}, code: "return [33]", returnSchema: {type: "array", items: {type: "number"}}}
   }
-  api.addNote(exfunc)
+  addNote(exfunc)
 
   const sqlres = section("sql", "select * from note",
-    v => api.sql(v).then(r => sqlres(JSON.stringify(r, null, 2))))
+    v => sql(v).then(r => sqlres(JSON.stringify(r, null, 2))))
   const getNote = section("get note", hashData(exfunc),
-    v => api.getNote(v as Hash).then(r => getNote(JSON.stringify(r, null, 2))))
+    v => getNote(v as Hash).then(r => getNote(JSON.stringify(r, null, 2))))
   const addNote = section("add note", tojson(exfunc),
-    v => api.addNote(JSON.parse(v) as NoteData).then(r => addNote(r)))
+    v => addNote(JSON.parse(v) as NoteData).then(r => addNote(r)))
   const callNote = section("call note", hashData(exfunc),
-    v => api.callNote(v as Hash, fromjson('{}')).then(r => callNote(tojson(r))))
+    v => callNote(v as Hash, fromjson('{}')).then(r => callNote(tojson(r))))
 
   const search = noteSearch(results => searchres(JSON.stringify(results, null, 2)))
   const searchres = section("search", "title", async query => await search(query))

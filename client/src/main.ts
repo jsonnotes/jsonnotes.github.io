@@ -5,10 +5,12 @@ import { createEditView } from "./edit";
 import { createSqlView } from "./sql_view";
 import { createDepsView } from "./deps_view";
 import { Hash, NoteData, tojson, hashData, top } from "@jsonview/core"
-import { addNote, ensureAccessToken, getNote, renderDom, sql, type VDom } from "@jsonview/lib";
+import { renderDom, type VDom } from "@jsonview/lib";
+
 import { drawPipeline } from "./pipeline_view";
 import { llmcall } from "@jsonview/lib/src/example/pipeline";
 import { callNote, mountView } from "./call_note";
+import { addNote, getNote, sql } from "@jsonview/lib/src/dbconn";
 
 let runQuery = () => {};
 
@@ -169,7 +171,7 @@ body.appendChild(contentRoot);
 
 runQuery = dashboard.runQuery;
 render(dashboard.root);
-ensureAccessToken().catch(() => {});
+// ensureAccessToken().catch(() => {});
 handleRoute();
 
 window.addEventListener("popstate", handleRoute);

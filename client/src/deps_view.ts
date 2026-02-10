@@ -1,5 +1,6 @@
 import { div, h3, popup, pre, style } from "./html";
-import { getNote, jsonOverview, sql } from "@jsonview/lib";
+import { jsonOverview } from "@jsonview/lib";
+import { getNote, sql } from "@jsonview/lib/src/dbconn";
 import { notePreview } from "./helpers";
 import { Hash, hashData, top } from "@jsonview/core";
 import { noteSearch } from "./helpers";

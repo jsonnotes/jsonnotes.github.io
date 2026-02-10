@@ -134,7 +134,7 @@ export const expandLinksSync = (
     const match = isRef(value);
     if (!match) return value;
     const ref = match[1];
-    return expandLinksSync(resolve(ref.slice(1) as Hash), resolve);
+    return expandLinksSync(resolve(ref as Hash), resolve);
   }
   if (Array.isArray(value)) return value.map((v) => expandLinksSync(v, resolve));
   if (value && typeof value === "object") {
@@ -152,7 +152,7 @@ export const expandLinks = async (
     const match = isRef(value);
     if (!match) return value;
     const ref = match[1];
-    return expandLinks(await resolve(ref.slice(1) as Hash), resolve);
+    return expandLinks(await resolve(ref as Hash), resolve);
   }
   if (Array.isArray(value)) return Promise.all(value.map((v) => expandLinks(v, resolve)));
   if (value && typeof value === "object") {

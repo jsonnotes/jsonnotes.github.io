@@ -1,31 +1,30 @@
 import { it } from "node:test";
-import { createApi } from "../src/dbconn.ts";
+import { addNote, callNote, callNoteLocal, getNote } from "../src/dbconn.ts";
 import { noteSearch } from "../src/index.ts";
-import { server } from "../src/helpers.ts";
 import { function_schema, hashData, NoteData, top } from "@jsonview/core";
 import { graph_schema } from "../src/example/pipeline.ts";
 import type { Jsonable } from "@jsonview/core";
 
 const assert = (t:boolean, message?: string)=> {if (!t) throw new Error(message || "Assertion failed");}
 const assertEq = <T extends Jsonable> (a:T, b:T) =>{ let [x,y] = [a,b].map(x=>JSON.stringify(x)); assert(x == y, `${x} != ${y}`);}
-const api = createApi({server})
+
 
 it("API: get top", async () => {
-  const result = await api.getNote(hashData(top));
+  const result = await getNote(hashData(top));
   assertEq(result, top)
 })
 
 it("API: insertNote", async ()=>{
   const note = NoteData("insert test", top, {content: "this is a test"})
-  const result = await api.addNote(note.schemaHash, note.data)
+  const result = await addNote(note.schemaHash, note.data)
   assertEq(result, hashData(note))
 })
 
 
 it("API: getNote", async () => {
   const note = NoteData("get test", top, {content: "this is a test"});
-  const result = await api.addNote(note.schemaHash, note.data);
-  const getResult = await api.getNote(result);
+  const result = await addNote(note.schemaHash, note.data);
+  const getResult = await getNote(result);
   assertEq(getResult, note);
 })
 
@@ -46,29 +45,29 @@ const testfn2 = NoteData("call test", function_schema, {
 
 it("API: callNote", async () => {
 
-  await api.addNote(testfn.schemaHash, testfn.data)
-  const res = await api.callNote(hashData(testfn), {x: "world"})
+  await addNote(testfn.schemaHash, testfn.data)
+  const res = await callNote(hashData(testfn), {x: "world"})
   assertEq(res, "hello world")
 })
 
 
 it ("API: callnote2", async ()=>{
-  await api.addNote(testfn2.schemaHash, testfn2.data)
-  const res = await api.callNote(hashData(testfn2), {})
+  await addNote(testfn2.schemaHash, testfn2.data)
+  const res = await callNote(hashData(testfn2), {})
   assertEq(res, [1,2,3])
 })
 
 
 it("API: callNoteLocal", async () => {
-  await api.addNote(testfn.schemaHash, testfn.data)
-  const res = await api.callNoteLocal(hashData(testfn), {x: "world"})
+  await addNote(testfn.schemaHash, testfn.data)
+  const res = await callNoteLocal(hashData(testfn), {x: "world"})
   assertEq(res, "hello world")
 })
 
 
 
 it("API: nested call", async ()=>{
-  await api.addNote(testfn.schemaHash, testfn.data)
+  await addNote(testfn.schemaHash, testfn.data)
 
   let caller = NoteData("caller", function_schema, {
     args: {},
@@ -76,8 +75,8 @@ it("API: nested call", async ()=>{
     returnSchema: {type: "string"},
   })
 
-  await api.addNote(caller.schemaHash, caller.data)
-  let res = await api.callNote(hashData(caller), {})
+  await addNote(caller.schemaHash, caller.data)
+  let res = await callNote(hashData(caller), {})
 
   assertEq(res, "hello world2")
 })
@@ -118,7 +117,7 @@ it("API: search by #hash", async () => {
 
 it("API: insert graph note with referenced input", async () => {
   // Ensure graph schema note exists before inserting notes that use it.
-  await api.addNote(graph_schema);
+  await addNote(graph_schema);
   const graphSchemaHash = hashData(graph_schema);
 
   const inputNode = {
@@ -126,7 +125,7 @@ it("API: insert graph note with referenced input", async () => {
     outputSchema: { type: "string" },
   };
 
-  const inputHash = await api.addNote(graphSchemaHash, inputNode);
+  const inputHash = await addNote(graphSchemaHash, inputNode);
 
   
 
@@ -150,8 +149,8 @@ it("API: insert graph note with referenced input", async () => {
     },
   };
 
-  const hash = await api.addNote(graphSchemaHash, graphNote);
-  const saved = await api.getNote(hash);
+  const hash = await addNote(graphSchemaHash, graphNote);
+  const saved = await getNote(hash);
   assertEq(saved.schemaHash, graphSchemaHash);
   assertEq(saved.data as Jsonable, graphNote as Jsonable);
 })

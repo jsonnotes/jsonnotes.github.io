@@ -1,7 +1,7 @@
 import { fromjson, Hash, hashData, NoteData, script_schema, tojson, top } from "@jsonview/core";
 import { a, button, div, input, pre, style, textarea } from "./html";
-import { getNote, jsonOverview, sql } from "@jsonview/lib";
-import { validateNote } from "./helpers";
+import { jsonOverview, validateNote } from "@jsonview/lib";
+import { getNote, sql } from "@jsonview/lib/src/dbconn";
 import { createSchemaPicker, formfield, safeInput, SchemaEntry } from "./helpers";
 import { Draft } from "./main";
 import { monacoView } from "./monaco_editor";
