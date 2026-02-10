@@ -1,21 +1,14 @@
 import { type Hash, type NoteData, fromjson, isRef, Jsonable, Schema, tojson } from "@jsonview/core";
-import { getNote, sql } from "@jsonview/lib/src/dbconn";
+import { getNote, searchNotes } from "@jsonview/lib/src/dbconn";
 import { button, div, input, p, popup, routeLink, span, style, textarea } from "./html"
 
 export const stringify = x=>JSON.stringify(x,null,2)
 export const JsonFmt = (data:string) => stringify(JSON.parse(data))
 export type SchemaEntry = { hash: string; title: string; count?: number };
-const list = div(p("loading..."));
 
-
-export const noteSearch = (
-  onSelect: (schema: SchemaEntry) => void,
-  schemas: SchemaEntry[]
-)=>{
-  const sorted = [...schemas].sort((a, b) =>
-    (b.count || 0) - (a.count || 0) || b.hash.localeCompare(a.hash)
-  );
-  const renderList = (items: typeof schemas) => {
+export const noteSearch = (onSelect: (schema: SchemaEntry) => void) => {
+  const list = div(p("loading..."));
+  const renderList = (items: SchemaEntry[]) => {
     list.innerHTML = "";
     const col = div(style({ display: "flex", flexDirection: "column", gap: "0.5em" }));
     items.slice(0, 10).forEach((s) => {
@@ -25,10 +18,7 @@ export const noteSearch = (
         style({ display: "flex", gap: "0.5em", alignItems: "center" }),
         button(`#${shortHash}${s.title ? ` : ${s.title}` : ""}${countLabel}`, {
           style: { textAlign: "left", width: "100%" },
-          onclick: () => {
-            onSelect(s);
-            pop.remove();
-          },
+          onclick: () => { onSelect(s); pop.remove(); },
         }),
         button("preview", {
           onclick: () => window.open(`/${s.hash}`, "_blank", "noopener"),
@@ -40,44 +30,39 @@ export const noteSearch = (
     list.appendChild(col);
   };
 
-  renderList(sorted);
-  const search = input("", { placeholder: "search hash, title" });
-  search.oninput = () => {
-    const q = search.value.trim().toLowerCase();
-    if (!q) return renderList(sorted);
-    const byHash = sorted.filter((s) => s.hash.toLowerCase().includes(q));
-    if (byHash.length) return renderList(byHash);
-    const byTitle = sorted.filter((s) => s.title.toLowerCase().includes(q));
-    return renderList(byTitle);
+  const doSearch = (q: string) => {
+    const bare = q.startsWith("#") ? q.slice(1) : q;
+    const isHash = /^[a-f0-9]{8,32}$/.test(bare);
+    if (isHash && bare.length === 32) {
+      getNote(bare as Hash).then(note => {
+        const title = (note.data as any)?.title ?? "";
+        renderList([{ title, hash: bare, count: 1 }]);
+      }).catch(() => renderList([]));
+    } else {
+      searchNotes(isHash ? "" : q).then(results => {
+        if (isHash) results = results.filter(r => r.hash.includes(bare));
+        renderList(results);
+      }).catch(() => renderList([]));
+    }
   };
+
+  doSearch("");
+  const search = input("", { placeholder: "search hash, title" });
+  search.oninput = () => doSearch(search.value.trim());
 
   let pop = popup(div(
     style({ display: "flex", flexDirection: "column", gap: "0.5em" }),
     search,
     list
   ));
-
 }
 
 
 export const createSchemaPicker = (
-  fetchSchemas: () => Promise<SchemaEntry[]>,
   onSelect: (schema: SchemaEntry) => void,
   label = "change schema"
 ) =>
-  button(label, {
-    onclick: () => {
-
-      fetchSchemas()
-        .then((schemas) => {
-          noteSearch(onSelect, schemas);
-        })
-        .catch((e) => {
-          list.innerHTML = "";
-          list.appendChild(p(e.message || "failed to load schemas"));
-        });
-    },
-  });
+  button(label, { onclick: () => noteSearch(onSelect) });
 
 
 export type formfield = {
@@ -143,27 +128,7 @@ export const safeInput = (
       }
       onChange();
     };
-    const fetchNotes = () =>
-      sql("select hash, data from note limit 200").then((res) =>
-        res.rows.map((row) => {
-          let title = "";
-          try {
-            const parsed = JSON.parse(String(row[1] ?? ""));
-            title = parsed?.title ? String(parsed.title) : "";
-          } catch {}
-          return { hash: String(row[0] ?? ""), title };
-        })
-      );
-    const openSearch = () => {
-      fetchNotes()
-        .then((items) => {
-          noteSearch((s) => setRef(`#${s.hash}`), items);
-        })
-        .catch((e) => {
-          list.innerHTML = "";
-          list.appendChild(p(e.message || "failed to load notes"));
-        });
-    };
+    const openSearch = () => noteSearch((s) => setRef(`#${s.hash}`));
     const btn = button("🔗", {
       onclick: openSearch,
       style: { background: "transparent", border: "none", padding: "0 0.1em", cursor: "pointer" }
@@ -206,18 +171,6 @@ export const safeInput = (
       overflowY: "auto"
     }));
 
-    const fetchNotes = () =>
-      sql("select hash, data from note limit 200").then((res) =>
-        res.rows.map((row) => {
-          let title = "";
-          try {
-            const parsed = JSON.parse(String(row[1] ?? ""));
-            title = parsed?.title ? String(parsed.title) : "";
-          } catch {}
-          return { hash: String(row[0] ?? ""), title };
-        })
-      );
-
     const updateSuggestions = () => {
       const cursor = ta.selectionStart ?? 0;
       const text = ta.value;
@@ -231,17 +184,13 @@ export const safeInput = (
         suggestionBox.style.display = "none";
         return;
       }
-      fetchNotes().then((notes) => {
-        const q = token.toLowerCase();
-        const filtered = notes.filter((n) =>
-          n.hash.toLowerCase().includes(q) || n.title.toLowerCase().includes(q)
-        ).slice(0, 8);
+      searchNotes(token).then((notes) => {
         suggestionBox.innerHTML = "";
-        if (!filtered.length) {
+        if (!notes.length) {
           suggestionBox.style.display = "none";
           return;
         }
-        filtered.forEach((n) => {
+        notes.slice(0, 8).forEach((n) => {
           const shortHash = n.hash.slice(0, 8);
           suggestionBox.appendChild(button(`#${shortHash}${n.title ? `: ${n.title}` : ""}`, {
             onclick: () => {

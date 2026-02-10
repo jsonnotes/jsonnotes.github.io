@@ -23,9 +23,12 @@ export const SERVER = {
     ls?.setItem("db_preset", value);
     baseUrl = url_presets[value];
     await getToken()
+    console.log("changed server to", value)
     return value;
   },
 };
+
+console.log("server: ", SERVER.get());
 
 
 let accessToken: string | null;
@@ -60,6 +63,13 @@ export const callProcedure = async (name: string, payload: unknown): Promise<str
   const res = await req(`/v1/database/${dbname}/call/${name}`, "POST", JSON.stringify(payload));
   if (!res.ok) throw new Error(await res.text());
   return res.text();
+};
+
+export type SearchResult = { title: string, hash: Hash, count: number }
+
+export const searchNotes = async (query: string): Promise<SearchResult[]> => {
+  const raw = await callProcedure("search_note", { query });
+  return (fromjson(raw) as [string, number, string][]).map(([title, count, hash]) => ({ title, count, hash: hash as Hash }));
 };
 
 export const sql = async (query: string): Promise<{ names: string[]; rows: unknown[][] }> => {

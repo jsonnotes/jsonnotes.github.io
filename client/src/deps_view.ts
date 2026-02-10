@@ -1,8 +1,8 @@
 import { div, h3, popup, pre, style } from "./html";
 import { jsonOverview } from "@jsonview/lib";
-import { getNote, sql } from "@jsonview/lib/src/dbconn";
+import { getNote } from "@jsonview/lib/src/dbconn";
 import { notePreview } from "./helpers";
-import { Hash, hashData, top } from "@jsonview/core";
+import { Hash } from "@jsonview/core";
 import { noteSearch } from "./helpers";
 
 type QueryResult = { names: string[]; rows: any[][] };
@@ -113,36 +113,14 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
   svg.setAttribute("width", "100%");
   svg.setAttribute("height", "320");
   panel.append(svg, prev);
-  const topHash = hashData(top);
-  const fetchSchemas = () =>
-    Promise.all([
-      sql(`select hash, data from note where schemaHash = '${topHash}'`),
-      sql("select schemaHash from note")
-    ]).then(([schemasRes, countsRes]) => {
-      const counts = new Map<string, number>();
-      countsRes.rows.forEach((row) => {
-        const hash = String(row[0]);
-        counts.set(hash, (counts.get(hash) || 0) + 1);
-      });
-      return schemasRes.rows.map((row) => {
-        let title = "";
-        try {
-          const parsed = JSON.parse(String(row[1] ?? ""));
-          title = parsed?.title ? String(parsed.title) : "";
-        } catch {}
-        const hash = String(row[0] ?? "");
-        return { hash, title, count: counts.get(hash) || 0 };
-      });
-    });
   root.append(h3("Dependencies"), panel);
   const render = async (hash?: Hash) => {
     svg.innerHTML = "";
     if (!hash) {
-      fetchSchemas().then((schemas) =>
-        noteSearch((s) => {
+      noteSearch((s) => {
           window.history.pushState({}, "", `/deps/${s.hash}`);
           render(s.hash as Hash);
-        }, schemas)
+        }
       );
       return;
     }

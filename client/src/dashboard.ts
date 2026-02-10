@@ -2,7 +2,7 @@
 import { button, div, p, routeLink, style } from "./html";
 import { function_schema, hashData, script_result_schema, script_schema, top } from "@jsonview/core";
 import { newestRows } from "@jsonview/lib";
-import { createSchemaPicker, noteLink, noteSearch, SchemaEntry } from "./helpers";
+import { createSchemaPicker, noteLink, noteSearch } from "./helpers";
 
 type QueryResult = { names: string[]; rows: any[][] };
 
@@ -28,48 +28,11 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
     button("function", { onclick: () => setSchema(hashData(function_schema)) }),
     button("script", { onclick: () => setSchema(schemaHashScript) }),
     button("script output", { onclick: () => setSchema(schemaHashScriptResult) }),
-    createSchemaPicker(
-      () =>
-        Promise.all([
-          query(`select hash, data from note where schemaHash = '${topHash}'`),
-          query("select schemaHash from note")
-        ]).then(([schemasRes, countsRes]) => {
-          const counts = new Map<string, number>();
-          countsRes.rows.forEach((row) => {
-            const hash = String(row[0]);
-            counts.set(hash, (counts.get(hash) || 0) + 1);
-          });
-          return schemasRes.rows.map((row) => {
-            let title = "";
-            try {
-              const parsed = JSON.parse(String(row[1] ?? ""));
-              title = parsed?.title ? String(parsed.title) : "";
-            } catch {}
-            const hash = String(row[0] ?? "");
-            return { hash, title, count: counts.get(hash) || 0 };
-          });
-        }),
-      (s) => setSchema(s.hash)
-    )
+    createSchemaPicker((s) => setSchema(s.hash))
   );
   let currentSchema = schemaHashAny;
 
-  const fetchAllNotes = (): Promise<SchemaEntry[]> =>
-    query("select hash, data from note").then((r) =>
-      newestRows(r.rows, 200).map((row) => {
-        let title = "";
-        try {
-          title = JSON.parse(String(row[1] ?? ""))?.title ?? "";
-        } catch {}
-        return { hash: String(row[0] ?? ""), title };
-      })
-    );
-
-  const openSearch = () => {
-    fetchAllNotes().then((notes) => {
-      noteSearch((note) => navigate(`/${note.hash}`), notes);
-    });
-  };
+  const openSearch = () => noteSearch((note) => navigate(`/${note.hash}`));
 
   const setSchema = (value: string) => {
     currentSchema = value;

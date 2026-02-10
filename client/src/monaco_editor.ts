@@ -7,8 +7,8 @@ import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker"
 import { Hash, fromjson, tojson, hashData, script_schema, function_schema } from "@jsonview/core";
 import { div, button, style, input } from "./html";
 import { validateNote } from "@jsonview/lib";
-import { sql } from "@jsonview/lib/src/dbconn";
-import { notePreview, SchemaEntry } from "./helpers";
+import { searchNotes } from "@jsonview/lib/src/dbconn";
+import { notePreview } from "./helpers";
 import { Draft } from "./main";
 
 // Configure Monaco workers
@@ -34,20 +34,6 @@ self.MonacoEnvironment = {
   },
 };
 
-const fetchNotes = (): Promise<SchemaEntry[]> =>
-  sql("select hash, data from note limit 200").then((r) =>
-    r.rows.map((row) => {
-      let title = "";
-      try {
-        title = JSON.parse(String(row[1] ?? ""))?.title ?? "";
-      } catch {}
-      return { hash: String(row[0] ?? ""), title };
-    })
-  );
-
-let noteIndex: SchemaEntry[] | null = null;
-const loadNotes = () =>
-  noteIndex ? Promise.resolve(noteIndex) : fetchNotes().then((rows) => (noteIndex = rows));
 
 type MonacoViewDeps = {
   submit: (data: { schemaHash: Hash; data: any }) => Promise<void>;
@@ -266,21 +252,13 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
         if (!hashMatch) return { suggestions: [] };
 
         const token = hashMatch[1].toLowerCase();
-        const notes = await loadNotes();
+        const filtered = await searchNotes(token).then(r => r.slice(0, 10));
         const range = {
           startLineNumber: position.lineNumber,
           endLineNumber: position.lineNumber,
           startColumn: position.column - token.length - 1,
           endColumn: position.column,
         };
-
-        const filtered = notes
-          .filter(
-            (n) =>
-              n.hash.toLowerCase().includes(token) ||
-              n.title.toLowerCase().includes(token)
-          )
-          .slice(0, 10);
 
         return {
           suggestions: filtered.map((n) => ({

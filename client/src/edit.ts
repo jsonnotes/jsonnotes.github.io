@@ -1,8 +1,8 @@
 import { fromjson, Hash, hashData, NoteData, script_schema, tojson, top } from "@jsonview/core";
 import { a, button, div, input, pre, style, textarea } from "./html";
 import { jsonOverview, validateNote } from "@jsonview/lib";
-import { getNote, sql } from "@jsonview/lib/src/dbconn";
-import { createSchemaPicker, formfield, safeInput, SchemaEntry } from "./helpers";
+import { getNote, searchNotes } from "@jsonview/lib/src/dbconn";
+import { createSchemaPicker, formfield, safeInput } from "./helpers";
 import { Draft } from "./main";
 import { monacoView } from "./monaco_editor";
 
@@ -10,29 +10,6 @@ type EditDeps = { submit: (data: NoteData) => Promise<void> };
 
 const topHash = hashData(top);
 
-const fetchSchemas = (): Promise<SchemaEntry[]> =>
-  Promise.all([
-    sql(`select hash, data from note where schemaHash = '${topHash}'`),
-    sql("select schemaHash from note")
-  ]).then(([schemasRes, countsRes]) => {
-    const counts = new Map<string, number>();
-    countsRes.rows.forEach((row) => counts.set(String(row[0]), (counts.get(String(row[0])) || 0) + 1));
-    return schemasRes.rows.map((row) => {
-      let title = "";
-      try { title = JSON.parse(String(row[1] ?? ""))?.title ?? ""; } catch {}
-      const hash = String(row[0] ?? "");
-      return { hash, title, count: counts.get(hash) || 0 };
-    });
-  });
-
-const fetchNotes = (): Promise<SchemaEntry[]> =>
-  sql("select hash, data from note limit 200").then((r) =>
-    r.rows.map((row) => {
-      let title = "";
-      try { title = JSON.parse(String(row[1] ?? ""))?.title ?? ""; } catch {}
-      return { hash: String(row[0] ?? ""), title };
-    })
-  );
 
 const createSchemaPanel = (onPick: (hash: Hash) => void) => {
   let schemaHash = "" as Hash;
@@ -55,7 +32,7 @@ const createSchemaPanel = (onPick: (hash: Hash) => void) => {
     updateSchemaPreview();
   };
 
-  const schemaPicker = createSchemaPicker(fetchSchemas, (s) => setSchemaHash(s.hash as Hash));
+  const schemaPicker = createSchemaPicker((s) => setSchemaHash(s.hash as Hash));
   const root = div(
     style({ padding: "1em", marginTop: "0.5em", borderRadius: "1em", border: "1px solid #ccc", background: "var(--background-color)" }),
     div(style({ display: "flex", alignItems: "center", gap: "0.75em", flexWrap: "wrap" }), schemaLink, schemaPicker),
@@ -68,7 +45,7 @@ const createSchemaPanel = (onPick: (hash: Hash) => void) => {
 const plainView = ({ submit }: EditDeps) => {
   const scriptHash = hashData(script_schema);
   let schemaHash = "" as Hash;
-  let noteIndex: SchemaEntry[] | null = null;
+
 
   const titleField = input("", {
     placeholder: "script title",
@@ -141,8 +118,6 @@ const plainView = ({ submit }: EditDeps) => {
 
   datafield.onkeydown = handleKeydown;
 
-  const loadNotes = () => noteIndex ? Promise.resolve(noteIndex) : fetchNotes().then((rows) => (noteIndex = rows));
-
   const updateSuggestions = () => {
     const cursor = datafield.selectionStart ?? 0;
     const text = datafield.value;
@@ -156,15 +131,13 @@ const plainView = ({ submit }: EditDeps) => {
       suggestionBox.style.display = "none";
       return;
     }
-    loadNotes().then((notes) => {
-      const q = token.toLowerCase();
-      const filtered = notes.filter((n) => n.hash.toLowerCase().includes(q) || n.title.toLowerCase().includes(q)).slice(0, 8);
+    searchNotes(token).then((notes) => {
       suggestionBox.innerHTML = "";
-      if (!filtered.length) {
+      if (!notes.length) {
         suggestionBox.style.display = "none";
         return;
       }
-      filtered.forEach((n) => {
+      notes.slice(0, 8).forEach((n) => {
         const shortHash = n.hash.slice(0, 8);
         suggestionBox.appendChild(button(`#${shortHash}${n.title ? `: ${n.title}` : ""}`, {
           onclick: () => {
