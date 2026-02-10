@@ -4,11 +4,14 @@ import type { Api } from "./dbconn.ts";
 export const dbname = "jsonview"
 export const server = "maincloud"
 
-export function funCache  <Arg extends Jsonable, T extends Jsonable> (fn: (arg:Arg)=> T) :{get: (arg: Arg)=>T, has: (arg: Arg)=>boolean, set: (arg: Arg, res: T)=>T};
-export function funCache  <Arg extends Jsonable, T extends Promise<Jsonable>> (fn: (arg:Arg)=> T): {get: (arg: Arg)=> T, has: (arg: Arg)=>boolean, set: (arg: Arg, res: Jsonable)=>T};
-export function funCache <Arg extends Jsonable, T extends Jsonable> (fn :(arg:Arg)=> T | Promise<T>) {
+
+
+
+export function funCache  <Arg extends Jsonable, T extends Jsonable> (fn: (arg:Arg)=> T, namespace?: string) :{get: (arg: Arg)=>T, has: (arg: Arg)=>boolean, set: (arg: Arg, res: T)=>T};
+export function funCache  <Arg extends Jsonable, T extends Promise<Jsonable>> (fn: (arg:Arg)=> T, namespace?: string): {get: (arg: Arg)=> T, has: (arg: Arg)=>boolean, set: (arg: Arg, res: Jsonable)=>T};
+export function funCache <Arg extends Jsonable, T extends Jsonable> (fn :(arg:Arg)=> T | Promise<T>, namespace = "") {
   const map = new Map<string, T>();
-  const fkey = hash128(fn.toString())
+  const fkey = hash128(fn.toString() + namespace)
   const ls = typeof localStorage !== "undefined" ? localStorage : null
   return {
     has: (arg:Arg) => map.has(tojson(arg)) || !!ls?.getItem("funcache:" + hash128(fkey, tojson(arg))),

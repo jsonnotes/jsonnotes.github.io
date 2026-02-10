@@ -1,7 +1,7 @@
 import type { Hash, Jsonable, NoteData, Note } from "@jsonview/core";
 import { tojson, fromjson, hashData, function_schema, hash128 } from "@jsonview/core";
 import { runWithFuelAsync } from "@jsonview/core/parser";
-import { dbname, funCache } from "./helpers.ts";
+import { dbname, funCache, server as defaultServer } from "./helpers.ts";
 
 const url_presets = {
   "local": "http://localhost:3000",
@@ -9,21 +9,37 @@ const url_presets = {
 }
 
 export type { Jsonable, NoteData, Note, Hash }
+export type ServerName = "local" | "maincloud";
 
 export type ApiConfig = {
-  server: "local" | "maincloud";
+  server?: ServerName;
   accessToken?: string | null;
 };
 
-export const createApi = (config: ApiConfig) => {
+const ls = typeof localStorage !== "undefined" ? localStorage : null;
+const tokenKey = (server: ServerName) => `access_token:${server}`;
+const readInitialServer = (): ServerName =>
+  (ls?.getItem("db_preset") === "local" ? "local" : defaultServer);
 
-  console.log("connection to", config.server, ".")
-  const server = config.server ?? (typeof localStorage !== "undefined"
-    ? ((localStorage.getItem("db_preset") || "maincloud") === "local" ? "local" : "maincloud")
-    : "maincloud");
+export const SERVER = {
+  value: readInitialServer() as ServerName,
+  get: (): ServerName => SERVER.value,
+  set: (value: ServerName) => {
+    SERVER.value = value;
+    ls?.setItem("db_preset", value);
+    return value;
+  },
+};
 
-  let accessToken = config.accessToken ?? null;
+export const createApi = (config: ApiConfig = {}) => {
+  const server = config.server ?? SERVER.get();
+  SERVER.set(server);
   const baseUrl = url_presets[server];
+  let accessToken = config.accessToken ?? ls?.getItem(tokenKey(server)) ?? null;
+  if (config.accessToken !== undefined) {
+    if (config.accessToken == null) ls?.removeItem(tokenKey(server));
+    else ls?.setItem(tokenKey(server), config.accessToken);
+  }
 
   const req = async (path: string, method: string, body: string | null = null): Promise<Response> => {
     return fetch(`${baseUrl}${path}`, {
@@ -34,6 +50,15 @@ export const createApi = (config: ApiConfig) => {
       },
       body,
     });
+  };
+
+  const ensureAccessToken = async (): Promise<string | null> => {
+    if (accessToken) return accessToken;
+    const res = await req("/v1/identity", "POST");
+    const data = await res.json() as { token?: string };
+    accessToken = data?.token || null;
+    if (accessToken) ls?.setItem(tokenKey(server), accessToken);
+    return accessToken;
   };
 
   const callProcedure = async (name: string, payload: unknown): Promise<string> => {
@@ -50,13 +75,14 @@ export const createApi = (config: ApiConfig) => {
     return { names: schema.elements.map((e: { name: { some: string } }) => e.name.some), rows };
   };
 
-  const {get: getNote, set: setCacheNote} = funCache(async (hash: Hash) : Promise<NoteData> => {
+  const {get: getNoteCached, set: setCacheNote} = funCache(async (hash: Hash) : Promise<NoteData> => {
     const data = await sql(`select * from note where hash = '${hash}'`);
     const row = data.rows[0];
     if (!row) throw new Error("note note found")
     const note = Object.fromEntries(data.names.map((n, i) => [n, row[i]])) as Note;
     return {schemaHash: note.schemaHash, data: fromjson(note.data)}
-  })
+  }, server)
+  const getNote = (hash: Hash): Promise<NoteData> => Promise.resolve(getNoteCached(hash) as NoteData | Promise<NoteData>);
 
   async function addNote (note: NoteData): Promise<Hash>;
   async function addNote (schema: Hash, data: Jsonable): Promise<Hash>;
@@ -99,9 +125,11 @@ export const createApi = (config: ApiConfig) => {
 
   const setAccessToken = (token: string | null) => {
     accessToken = token;
+    if (token == null) ls?.removeItem(tokenKey(server));
+    else ls?.setItem(tokenKey(server), token);
   };
 
-  return { server, baseUrl, req, callProcedure, sql, getNote, addNote, callNote, callNoteLocal, setAccessToken };
+  return { server, baseUrl, req, callProcedure, sql, getNote, addNote, callNote, callNoteLocal, setAccessToken, ensureAccessToken };
 };
 
 export type Api = ReturnType<typeof createApi>;

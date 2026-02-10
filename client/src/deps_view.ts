@@ -1,6 +1,5 @@
 import { div, h3, popup, pre, style } from "./html";
-import { jsonOverview } from "@jsonview/lib";
-import { api } from "./api";
+import { getNote, jsonOverview, sql } from "@jsonview/lib";
 import { notePreview } from "./helpers";
 import { Hash, hashData, top } from "@jsonview/core";
 import { noteSearch } from "./helpers";
@@ -116,8 +115,8 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
   const topHash = hashData(top);
   const fetchSchemas = () =>
     Promise.all([
-      api.sql(`select hash, data from note where schemaHash = '${topHash}'`),
-      api.sql("select schemaHash from note")
+      sql(`select hash, data from note where schemaHash = '${topHash}'`),
+      sql("select schemaHash from note")
     ]).then(([schemasRes, countsRes]) => {
       const counts = new Map<string, number>();
       countsRes.rows.forEach((row) => {
@@ -147,7 +146,7 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
       return;
     }
     const currentHash = hash
-    const schemaHash = (await api.getNote(hash)).schemaHash;
+    const schemaHash = (await getNote(hash)).schemaHash;
     const links = await query("select to, from from links");
     const data = depsDataFromRows(links.rows, currentHash);
 
@@ -219,7 +218,7 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
     }
 
 
-    api.getNote(data.currentHash as Hash).then(n => prev.innerHTML = jsonOverview(n.data))
+    getNote(data.currentHash as Hash).then(n => prev.innerHTML = jsonOverview(n.data))
 
 
   };

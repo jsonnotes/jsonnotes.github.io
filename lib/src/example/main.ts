@@ -40,7 +40,7 @@ document.body.append(renderDom(({update}) => {
   const callNote = section("call note", hashData(exfunc),
     v => api.callNote(v as Hash, fromjson('{}')).then(r => callNote(tojson(r))))
 
-  const search = noteSearch(api, results => searchres(JSON.stringify(results, null, 2)))
+  const search = noteSearch(results => searchres(JSON.stringify(results, null, 2)))
   const searchres = section("search", "title", async query => await search(query))
 
   return page

@@ -84,7 +84,7 @@ it("API: nested call", async ()=>{
 it("API: search", async () => {
   let calls = 0
   const results = await new Promise<any[]>(resolve => {
-    const search = noteSearch(api, res => { if (++calls === 2) resolve(res) })
+    const search = noteSearch((res) => { if (++calls === 2) resolve(res) })
     search("test")
   })
   assert(Array.isArray(results), "search should return array")
@@ -97,7 +97,7 @@ it("API: search by hash", async () => {
   const hash = hashData(testfn)
   let calls = 0
   const results = await new Promise<any[]>(resolve => {
-    const search = noteSearch(api, res => { if (++calls === 2) resolve(res) })
+    const search = noteSearch((res) => { if (++calls === 2) resolve(res) })
     search(hash)
   })
   assert(results.length === 1, "hash search should find exactly one result")
@@ -108,7 +108,7 @@ it("API: search by #hash", async () => {
   const hash = hashData(testfn)
   let calls = 0
   const results = await new Promise<any[]>(resolve => {
-    const search = noteSearch(api, res => { if (++calls === 2) resolve(res) })
+    const search = noteSearch((res) => { if (++calls === 2) resolve(res) })
     search("#" + hash)
   })
   assert(results.length === 1, "#hash search should find exactly one result")

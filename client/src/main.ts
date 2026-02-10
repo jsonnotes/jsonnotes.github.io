@@ -5,10 +5,9 @@ import { createEditView } from "./edit";
 import { createSqlView } from "./sql_view";
 import { createDepsView } from "./deps_view";
 import { Hash, NoteData, tojson, hashData, top } from "@jsonview/core"
-import { renderDom, type VDom } from "@jsonview/lib";
+import { addNote, ensureAccessToken, getNote, renderDom, sql, type VDom } from "@jsonview/lib";
 import { drawPipeline } from "./pipeline_view";
 import { llmcall } from "@jsonview/lib/src/example/pipeline";
-import { api } from "./api";
 import { callNote, mountView } from "./call_note";
 
 let runQuery = () => {};
@@ -25,7 +24,7 @@ const navigate = (path: string) => (history.pushState({}, "", path), handleRoute
 
 const submitNote = async (data: NoteData) => {
   try {
-    const hash = await api.addNote(data)
+    const hash = await addNote(data)
     navigate(`/${hash}`);
   } catch (e: any) {
     popup(h2("ERROR"), p(e.message || "failed to add note"));
@@ -93,7 +92,7 @@ handleRoute = () => {
         editFill({schemaHash, text: "{}"});
       }
     } else {
-      api.getNote(searchhash as Hash)
+      getNote(searchhash as Hash)
         .then((note) => editFill({schemaHash: note.schemaHash, text: tojson(note.data)}))
         .catch((e) => popup(h2("ERROR"), p(e.message)));
     }
@@ -117,7 +116,7 @@ handleRoute = () => {
     if (!hash) render(renderDom(() => drawPipeline(llmcall.data)));
     else {
       render(div("loading..."));
-      api.getNote(hash as Hash).then(note => {
+      getNote(hash as Hash).then(note => {
         render(renderDom(() => drawPipeline(note.data)));
       }).catch(e => render(div(h2("ERROR"), p(e.message))));
     }
@@ -157,19 +156,20 @@ body.appendChild(div(
   div(style({ display: "flex", gap: "1em" }),navitems  )
 ));
 
-const dashboard = createDashboardView({ query: api.sql, navigate});
+const dashboard = createDashboardView({ query: sql, navigate});
 const editView = createEditView({
   submit: submitNote
 });
 editFill = editView.fill;
-const sqlView = createSqlView({ query: api.sql });
-const depsView = createDepsView({ query: api.sql, navigate});
+const sqlView = createSqlView({ query: sql });
+const depsView = createDepsView({ query: sql, navigate});
 
 contentRoot = div(bubble);
 body.appendChild(contentRoot);
 
 runQuery = dashboard.runQuery;
 render(dashboard.root);
+ensureAccessToken().catch(() => {});
 handleRoute();
 
 window.addEventListener("popstate", handleRoute);

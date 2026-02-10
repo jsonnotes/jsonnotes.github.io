@@ -6,7 +6,7 @@ import HtmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { Hash, fromjson, tojson, hashData, script_schema, function_schema } from "@jsonview/core";
 import { div, button, style, input } from "./html";
-import { api } from "./api";
+import { sql } from "@jsonview/lib";
 import { notePreview, validateNote, SchemaEntry } from "./helpers";
 import { Draft } from "./main";
 
@@ -34,7 +34,7 @@ self.MonacoEnvironment = {
 };
 
 const fetchNotes = (): Promise<SchemaEntry[]> =>
-  api.sql("select hash, data from note limit 200").then((r) =>
+  sql("select hash, data from note limit 200").then((r) =>
     r.rows.map((row) => {
       let title = "";
       try {

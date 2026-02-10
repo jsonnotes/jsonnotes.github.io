@@ -1,7 +1,6 @@
 import { Hash, hashData, NoteData, script_schema, function_schema } from "@jsonview/core";
-import { renderDom, type VDom } from "@jsonview/lib";
-import { jsonOverview } from "@jsonview/lib";
-import { api } from "./api";
+import { callNote as callNoteRemote, getNote, jsonOverview, renderDom, type VDom } from "@jsonview/lib";
+import { graph_schema } from "@jsonview/lib/src/example/pipeline";
 import { noteLink } from "./helpers";
 
 import { stringify } from "./helpers";
@@ -31,8 +30,9 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
   const overlay = div(style({display: "flex", flexDirection: "column", gap: "0.75em"}));
 
 
-  api.getNote(hash).then(async note => {
+  getNote(hash).then(async note => {
     const schemaHash = note.schemaHash;
+    const isGraph = schemaHash === hashData(graph_schema);
 
     const titleText = (note.data as any)?.title ?? "";
 
@@ -46,7 +46,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
     const updateContentDisplay = () => {
       contentDiv.innerHTML = "";
       if (useOverview && !isScript) {
-        api.getNote(hash).then(n => {
+        getNote(hash).then(n => {
           contentDiv.append(pre(linkify(jsonOverview(n.data))));
         });
       } else {
@@ -139,7 +139,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         const arg = parsed === undefined ? {} : parsed
         try {
           runRemoteFn.textContent = "running...";
-          const res = await api.callNote(hash, arg);
+          const res = await callNoteRemote(hash, arg);
           popup(h2("result"), pre(typeof res === "string" ? res : JSON.stringify(res, null, 2)));
         } catch (e: any) {
           popup(h2("ERROR"), p(e.message || "run failed"));
@@ -162,6 +162,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         style({ display: "flex", gap: "0.75em", alignItems: "center", paddingBottom: "0.5em" }),
         routeLink(`/edit?hash=${hash}`, "edit" ),
         routeLink(`/deps/${hash}`, "deps" ),
+        isGraph ? routeLink(`/pipeline/${hash}`, "pipeline") : "",
         button("copy", {
           onclick: (e) =>
             navigator.clipboard.writeText(text)
