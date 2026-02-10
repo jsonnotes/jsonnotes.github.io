@@ -1,6 +1,6 @@
 import type { Jsonable } from "@jsonview/core"
 import { NoteData, validate } from "@jsonview/core"
-import { string, arrayT, GraphSchema } from "./types"
+import { string, arrayT, GraphSchema } from "./types.ts"
 
 export const graph_schema = NoteData("graph_schema", GraphSchema)
 

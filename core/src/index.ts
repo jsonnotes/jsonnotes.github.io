@@ -84,7 +84,7 @@ spacetimedb.reducer('add_note', {
 
     return;
   }catch (e){
-    throw new SenderError( "INSERT ERROR: "+fromjson(schemaRow.data))
+    throw new SenderError( "INSERT ERROR: "+ String(e))
   }
 });
 

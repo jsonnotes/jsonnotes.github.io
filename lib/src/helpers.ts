@@ -97,23 +97,33 @@ export const fetchNotes = async (api: Api, limit = 200): Promise<SchemaEntry[]> 
 
 // --- Note helpers ---
 
-export const validateNote = async (api: Api, note: NoteData) => {
-  const resolve = (ref: Hash) => api.getNote(ref).then(n => n.data)
-  const rawData = typeof note.data === "string" ? JSON.parse(note.data) : note.data
-  const rawSchema = (await api.getNote(note.schemaHash)).data
-  return validate(await expandLinks(rawData, resolve), await expandLinks(rawSchema, resolve))
-}
+// export const validateNote = async (api: Api, note: NoteData) => {
+//   const resolveSchema = (ref: Hash) => api.getNote(ref).then(n => n.data)
+//   const resolveData = async (ref: Hash) => {
+//     try {
+//       return (await api.getNote(ref)).data
+//     } catch (err) {
+//       const message = String((err as any)?.message || err).toLowerCase()
+//       if (!message.includes("note not found") && !message.includes("note note found")) throw err
+//       // During editing, a referenced note may not be queryable yet; keep ref literal for validation.
+//       return (`#${ref}`) as Jsonable
+//     }
+//   }
+//   const rawData = typeof note.data === "string" ? JSON.parse(note.data) : note.data
+//   const rawSchema = (await api.getNote(note.schemaHash)).data
+//   return validate(await expandLinks(rawData, resolveData), await expandLinks(rawSchema, resolveSchema))
+// }
 
-export const notePreview = async (api: Api, hash: Hash): Promise<string> => {
-  const note = await api.getNote(hash)
-  const data: any = note.data
-  if (data?.title) return String(data.title)
-  const preview = (typeof data === "string" ? data : JSON.stringify(data)).replace(/\n/g, " ")
-  if (typeof data === "string" || typeof data === "number") return preview.slice(0, 20)
-  return `#${hash.slice(0, 8)}`
-}
+// export const notePreview = async (api: Api, hash: Hash): Promise<string> => {
+//   const note = await api.getNote(hash)
+//   const data: any = note.data
+//   if (data?.title) return String(data.title)
+//   const preview = (typeof data === "string" ? data : JSON.stringify(data)).replace(/\n/g, " ")
+//   if (typeof data === "string" || typeof data === "number") return preview.slice(0, 20)
+//   return `#${hash.slice(0, 8)}`
+// }
 
-export const noteOverview = async (api: Api, hash: Hash): Promise<string> => {
-  const note = await api.getNote(hash)
-  return jsonOverview(note.data)
-}
+// export const noteOverview = async (api: Api, hash: Hash): Promise<string> => {
+//   const note = await api.getNote(hash)
+//   return jsonOverview(note.data)
+// }

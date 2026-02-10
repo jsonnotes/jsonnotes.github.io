@@ -34,6 +34,7 @@ export const SERVER = {
 export const createApi = (config: ApiConfig = {}) => {
   const server = config.server ?? SERVER.get();
   SERVER.set(server);
+  console.log("connection to", server, ".");
   const baseUrl = url_presets[server];
   let accessToken = config.accessToken ?? ls?.getItem(tokenKey(server)) ?? null;
   if (config.accessToken !== undefined) {

@@ -3,6 +3,7 @@ import { createApi } from "../src/dbconn.ts";
 import { noteSearch } from "../src/index.ts";
 import { server } from "../src/helpers.ts";
 import { function_schema, hashData, NoteData, top } from "@jsonview/core";
+import { graph_schema } from "../src/example/pipeline.ts";
 import type { Jsonable } from "@jsonview/core";
 
 const assert = (t:boolean, message?: string)=> {if (!t) throw new Error(message || "Assertion failed");}
@@ -113,4 +114,44 @@ it("API: search by #hash", async () => {
   })
   assert(results.length === 1, "#hash search should find exactly one result")
   assertEq(results[0].hash, hash)
+})
+
+it("API: insert graph note with referenced input", async () => {
+  // Ensure graph schema note exists before inserting notes that use it.
+  await api.addNote(graph_schema);
+  const graphSchemaHash = hashData(graph_schema);
+
+  const inputNode = {
+    $: "input",
+    outputSchema: { type: "string" },
+  };
+
+  const inputHash = await api.addNote(graphSchemaHash, inputNode);
+
+  
+
+  const graphNote = {
+    $: "llm_call",
+    prompt: {
+      $: "logic",
+      code: "return `extract a list of important names from this text: ${data}`",
+      inputs: {
+        data: `#${inputHash}`,
+      },
+      outputSchema: {
+        type: "string",
+      },
+    },
+    outputSchema: {
+      type: "array",
+      items: {
+        type: "string",
+      },
+    },
+  };
+
+  const hash = await api.addNote(graphSchemaHash, graphNote);
+  const saved = await api.getNote(hash);
+  assertEq(saved.schemaHash, graphSchemaHash);
+  assertEq(saved.data as Jsonable, graphNote as Jsonable);
 })

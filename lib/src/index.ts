@@ -1,9 +1,8 @@
-import { fromjson, tojson, type Jsonable, type NoteData } from "@jsonview/core";
+import { expandLinks, fromjson, tojson, validate, type Jsonable, type NoteData } from "@jsonview/core";
 import { createApi, SERVER, type Hash, type ServerName } from "./dbconn.ts";
 import {
   dbname, jsonOverview,
   fetchSchemas as _fetchSchemas, fetchNotes as _fetchNotes, newestRows,
-  validateNote as _validateNote, notePreview as _notePreview, noteOverview as _noteOverview,
   funCache, type SchemaEntry
 } from "./helpers.ts";
 
@@ -43,9 +42,25 @@ export function addNote(a: any, b?: any) { return api.addNote(a, b) }
 
 // --- Helpers using shared api ---
 
-export const validateNote = (note: NoteData) => _validateNote(api, note);
-export const notePreview = (hash: Hash) => _notePreview(api, hash);
-export const noteOverview = (hash: Hash) => _noteOverview(api, hash);
+// export const validateNote = (note: NoteData) => _validateNote(api, note);
+// export const notePreview = (hash: Hash) => _notePreview(api, hash);
+// export const noteOverview = (hash: Hash) => _noteOverview(api, hash);
+
+
+export const notePreview = async (hash: Hash): Promise<string> => {
+  const note = await api.getNote(hash)
+  const data: any = note.data
+  if (data?.title) return String(data.title)
+  const preview = (typeof data === "string" ? data : JSON.stringify(data)).replace(/\n/g, " ")
+  if (typeof data === "string" || typeof data === "number") return preview.slice(0, 20)
+  return `#${hash.slice(0, 8)}`
+}
+
+export const validateNote = async (hash: Hash) => api.getNote(hash).then(async note=>validate(
+  await expandLinks(note.data, api.getNote),
+  await expandLinks(note.schemaHash, api.getNote)
+))
+
 export const fetchSchemas = () => _fetchSchemas(api);
 export const fetchNotes = (limit?: number) => _fetchNotes(api, limit);
 
