@@ -6,14 +6,36 @@
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>jsonview</title>
 
-    <link rel="stylesheet" href="./src/style.css">
+    <style>
+        body{
+            --background-color: #1e1e1e;
+            --color: #fff;
+
+            background-color: var(--background-color);
+            color: var(--color);
+
+            margin:0;
+            padding:0;
+        }
+
+        @media (prefers-color-scheme: light) {
+            body {
+                --background-color: #fff;
+                --color: #333;
+            }
+        }
+
+
+        body{
+            font-family: monospace
+        }
+
+    </style>
 
 </head>
 <body>
 
-
     <script type="module" src="./src/main.ts"></script>
-
 
 </body>
 </html>

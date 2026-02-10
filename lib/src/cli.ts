@@ -32,9 +32,6 @@ export const runCli = async (argv: string[], io: CliIo = defaultIo): Promise<num
     return 1;
   }
 
-
-
-  const dbName = process.env.SPACETIMEDB_NAME || "jsonview";
   const accessToken = process.env.SPACETIMEDB_ACCESS_TOKEN || null;
   const api = createApi({ server, accessToken });
 

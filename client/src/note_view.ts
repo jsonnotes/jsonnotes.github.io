@@ -1,6 +1,8 @@
 import { Hash, hashData, NoteData, script_schema, function_schema } from "@jsonview/core";
 import { renderDom, type VDom } from "@jsonview/lib";
-import { callNoteRemote, getNote, noteLink, noteOverview } from "./dbconn";
+import { jsonOverview } from "@jsonview/lib";
+import { api } from "./api";
+import { noteLink } from "./helpers";
 
 import { stringify } from "./helpers";
 import { button, div, h2, h3, p, popup, pre, routeLink, span, style } from "./html";
@@ -29,7 +31,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
   const overlay = div(style({display: "flex", flexDirection: "column", gap: "0.75em"}));
 
 
-  getNote(hash).then(async note => {
+  api.getNote(hash).then(async note => {
     const schemaHash = note.schemaHash;
 
     const titleText = (note.data as any)?.title ?? "";
@@ -44,8 +46,8 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
     const updateContentDisplay = () => {
       contentDiv.innerHTML = "";
       if (useOverview && !isScript) {
-        noteOverview(hash).then(overview => {
-          contentDiv.append(pre(linkify(overview)));
+        api.getNote(hash).then(n => {
+          contentDiv.append(pre(linkify(jsonOverview(n.data))));
         });
       } else {
         contentDiv.append(linkify(text));
@@ -137,7 +139,7 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         const arg = parsed === undefined ? {} : parsed
         try {
           runRemoteFn.textContent = "running...";
-          const res = await callNoteRemote(hash, arg);
+          const res = await api.callNote(hash, arg);
           popup(h2("result"), pre(typeof res === "string" ? res : JSON.stringify(res, null, 2)));
         } catch (e: any) {
           popup(h2("ERROR"), p(e.message || "run failed"));

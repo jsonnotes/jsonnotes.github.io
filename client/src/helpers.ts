@@ -1,6 +1,7 @@
-import { fromjson, isRef, Jsonable, Schema, tojson } from "@jsonview/core";
-import { button, div, input, p, padding, popup, span, style, textarea } from "./html"
-import { query_data } from "./dbconn";
+import { type Hash, type NoteData, fromjson, isRef, Jsonable, Schema, tojson } from "@jsonview/core";
+import { validateNote as libValidateNote } from "@jsonview/lib";
+import { button, div, input, p, popup, routeLink, span, style, textarea } from "./html"
+import { api } from "./api";
 
 export const stringify = x=>JSON.stringify(x,null,2)
 export const JsonFmt = (data:string) => stringify(JSON.parse(data))
@@ -144,7 +145,7 @@ export const safeInput = (
       onChange();
     };
     const fetchNotes = () =>
-      query_data("select hash, data from note", true, 200).then((res) =>
+      api.sql("select hash, data from note limit 200").then((res) =>
         res.rows.map((row) => {
           let title = "";
           try {
@@ -207,7 +208,7 @@ export const safeInput = (
     }));
 
     const fetchNotes = () =>
-      query_data("select hash, data from note", true, 200).then((res) =>
+      api.sql("select hash, data from note limit 200").then((res) =>
         res.rows.map((row) => {
           let title = "";
           try {
@@ -394,4 +395,20 @@ export const safeInput = (
       }
     })
   }
+}
+
+export const validateNote = (note: NoteData) => libValidateNote(api, note)
+
+export const notePreview = (hash: Hash) => api.getNote(hash).then(note => {
+  const data: any = note.data
+  if (data?.title) return String(data.title);
+  const preview = (typeof data === "string" ? data : JSON.stringify(data)).replace(/\n/g, " ");
+  if (typeof data === "string" || typeof data === "number") return preview.slice(0, 20);
+  return `#${hash.slice(0, 8)}`;
+})
+
+export const noteLink = (hash: Hash, label?: string, args = {}) => {
+  const el = span(label ?? `#${hash}`)
+  if (label === undefined) notePreview(hash).then(pr => el.innerHTML = pr)
+  return routeLink(`/${hash}`, el, args)
 }

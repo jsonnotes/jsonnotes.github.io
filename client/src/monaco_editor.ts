@@ -6,8 +6,8 @@ import HtmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { Hash, fromjson, tojson, hashData, script_schema, function_schema } from "@jsonview/core";
 import { div, button, style, input } from "./html";
-import { notePreview, query_data, validateNote } from "./dbconn";
-import { SchemaEntry } from "./helpers";
+import { api } from "./api";
+import { notePreview, validateNote, SchemaEntry } from "./helpers";
 import { Draft } from "./main";
 
 // Configure Monaco workers
@@ -34,7 +34,7 @@ self.MonacoEnvironment = {
 };
 
 const fetchNotes = (): Promise<SchemaEntry[]> =>
-  query_data("select hash, data from note limit 200").then((r) =>
+  api.sql("select hash, data from note limit 200").then((r) =>
     r.rows.map((row) => {
       let title = "";
       try {
@@ -364,10 +364,10 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
       const text = model.getValue();
       const re = /#([a-f0-9]{32})/g;
       const next: monaco.editor.IModelDeltaDecoration[] = [];
-      const hashesToFetch: string[] = [];
+      const hashesToFetch: Hash[] = [];
       let match: RegExpExecArray | null;
       while ((match = re.exec(text))) {
-        const hash = match[1];
+        const hash = match[1] as Hash;
         const start = model.getPositionAt(match.index);
         const end = model.getPositionAt(match.index + match[0].length);
         const preview = previewCache.get(hash);

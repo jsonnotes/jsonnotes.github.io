@@ -1,12 +1,12 @@
 import { Jsonable, Hash } from "@jsonview/core";
 import { HTML, renderDom, type VDom } from "@jsonview/lib";
-import { callNoteRemote, callNoteLocal, getNote } from "./dbconn";
+import { api } from "./api";
 import { h2, popup } from "./html";
 import { openrouter } from "./openrouter";
 
 const makeOpenrouter = () => async (prompt: string, schema: string | Jsonable) => {
   if (typeof schema === "string") {
-    if (schema.startsWith("#")) schema = (await getNote(schema.slice(1) as Hash)).data;
+    if (schema.startsWith("#")) schema = (await api.getNote(schema.slice(1) as Hash)).data;
   }
   return openrouter(prompt, schema);
 };
@@ -46,7 +46,7 @@ const makeView = (options?: CallNoteOptions) => (render: ViewRenderFn) => {
 };
 
 const browserExtras = (fn: Hash, options?: CallNoteOptions) => ({
-  remote: callNoteRemote,
+  remote: api.callNote,
   openrouter: makeOpenrouter(),
   storage: makeStorage(fn),
   view: makeView(options),
@@ -54,4 +54,4 @@ const browserExtras = (fn: Hash, options?: CallNoteOptions) => ({
 });
 
 export const callNote = async (fn: Hash, arg: Record<string, Jsonable>, options?: CallNoteOptions): Promise<any> =>
-  callNoteLocal(fn, arg, browserExtras(fn, options));
+  api.callNoteLocal(fn, arg, browserExtras(fn, options));

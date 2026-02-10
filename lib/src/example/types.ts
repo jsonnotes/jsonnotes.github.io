@@ -12,11 +12,10 @@ export const object = (properties: Record<string, any>, extra: any = {}) => ({
   ...extra,
 })
 
-export const arrayT = (items : Schema) => ({
-  type:"array",
+export const arrayT = (items: Schema) => ({
+  type: "array",
   items
 })
-
 
 export const schema_schema: Schema = {
   $id: "schema",
@@ -45,10 +44,7 @@ export const schema_schema: Schema = {
   ]
 }
 
-
-
-
-const GraphSchema = {
+export const GraphSchema = {
   $id: "graph",
   oneOf: [
     {
@@ -78,5 +74,3 @@ const GraphSchema = {
     }
   ].map(object)
 }
-
-

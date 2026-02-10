@@ -1,8 +1,7 @@
 import type { Hash, Jsonable, NoteData, Note } from "@jsonview/core";
 import { tojson, fromjson, hashData, function_schema, hash128 } from "@jsonview/core";
 import { runWithFuelAsync } from "@jsonview/core/parser";
-import { dbname } from "./helpers.ts";
-import { funCache } from "./helpers.ts";
+import { dbname, funCache } from "./helpers.ts";
 
 const url_presets = {
   "local": "http://localhost:3000",
@@ -10,7 +9,6 @@ const url_presets = {
 }
 
 export type { Jsonable, NoteData, Note, Hash }
-
 
 export type ApiConfig = {
   server: "local" | "maincloud";
@@ -52,7 +50,7 @@ export const createApi = (config: ApiConfig) => {
     return { names: schema.elements.map((e: { name: { some: string } }) => e.name.some), rows };
   };
 
-  const {get: getNote, has: hasNote, set: setCacheNote} = funCache(async (hash: Hash) : Promise<NoteData> => {
+  const {get: getNote, set: setCacheNote} = funCache(async (hash: Hash) : Promise<NoteData> => {
     const data = await sql(`select * from note where hash = '${hash}'`);
     const row = data.rows[0];
     if (!row) throw new Error("note note found")
@@ -94,9 +92,6 @@ export const createApi = (config: ApiConfig) => {
     };
 
     argNames.forEach(nm=>env[nm] = arg[nm])
-
-
-
     const result = await runWithFuelAsync(data.code, 10000, env);
     if ("err" in result) throw new Error(result.err);
     return result.ok;

@@ -8,7 +8,7 @@ import { Hash, NoteData, tojson, hashData, top } from "@jsonview/core"
 import { renderDom, type VDom } from "@jsonview/lib";
 import { drawPipeline } from "./pipeline_view";
 import { llmcall } from "@jsonview/lib/src/example/pipeline";
-import { addNote, getNote, query_data } from "./dbconn";
+import { api } from "./api";
 import { callNote, mountView } from "./call_note";
 
 let runQuery = () => {};
@@ -25,7 +25,7 @@ const navigate = (path: string) => (history.pushState({}, "", path), handleRoute
 
 const submitNote = async (data: NoteData) => {
   try {
-    const hash = await addNote(data)
+    const hash = await api.addNote(data)
     navigate(`/${hash}`);
   } catch (e: any) {
     popup(h2("ERROR"), p(e.message || "failed to add note"));
@@ -93,7 +93,7 @@ handleRoute = () => {
         editFill({schemaHash, text: "{}"});
       }
     } else {
-      getNote(searchhash as Hash)
+      api.getNote(searchhash as Hash)
         .then((note) => editFill({schemaHash: note.schemaHash, text: tojson(note.data)}))
         .catch((e) => popup(h2("ERROR"), p(e.message)));
     }
@@ -117,7 +117,7 @@ handleRoute = () => {
     if (!hash) render(renderDom(() => drawPipeline(llmcall.data)));
     else {
       render(div("loading..."));
-      getNote(hash as Hash).then(note => {
+      api.getNote(hash as Hash).then(note => {
         render(renderDom(() => drawPipeline(note.data)));
       }).catch(e => render(div(h2("ERROR"), p(e.message))));
     }
@@ -157,13 +157,13 @@ body.appendChild(div(
   div(style({ display: "flex", gap: "1em" }),navitems  )
 ));
 
-const dashboard = createDashboardView({ query: query_data, navigate});
+const dashboard = createDashboardView({ query: api.sql, navigate});
 const editView = createEditView({
   submit: submitNote
 });
 editFill = editView.fill;
-const sqlView = createSqlView({ query: query_data });
-const depsView = createDepsView({ query: query_data, navigate});
+const sqlView = createSqlView({ query: api.sql });
+const depsView = createDepsView({ query: api.sql, navigate});
 
 contentRoot = div(bubble);
 body.appendChild(contentRoot);
@@ -173,7 +173,3 @@ render(dashboard.root);
 handleRoute();
 
 window.addEventListener("popstate", handleRoute);
-
-// import { insert_scenarios } from "./scenarios";
-
-// insert_scenarios()

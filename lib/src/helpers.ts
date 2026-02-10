@@ -1,11 +1,8 @@
 import { fromjson, hash128, hashData, tojson, top, validate, expandLinks, type Jsonable, type Hash, type NoteData } from "@jsonview/core";
 import type { Api } from "./dbconn.ts";
-export { openrouterCall } from "./openrouter.ts";
 
 export const dbname = "jsonview"
 export const server = "maincloud"
-
-
 
 export function funCache  <Arg extends Jsonable, T extends Jsonable> (fn: (arg:Arg)=> T) :{get: (arg: Arg)=>T, has: (arg: Arg)=>boolean, set: (arg: Arg, res: T)=>T};
 export function funCache  <Arg extends Jsonable, T extends Promise<Jsonable>> (fn: (arg:Arg)=> T): {get: (arg: Arg)=> T, has: (arg: Arg)=>boolean, set: (arg: Arg, res: Jsonable)=>T};

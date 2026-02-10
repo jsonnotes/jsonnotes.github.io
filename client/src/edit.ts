@@ -1,6 +1,8 @@
 import { fromjson, Hash, hashData, NoteData, script_schema, tojson, top } from "@jsonview/core";
 import { a, button, div, input, pre, style, textarea } from "./html";
-import { getNote, noteOverview, query_data, validateNote } from "./dbconn";
+import { jsonOverview } from "@jsonview/lib";
+import { api } from "./api";
+import { validateNote } from "./helpers";
 import { createSchemaPicker, formfield, safeInput, SchemaEntry } from "./helpers";
 import { Draft } from "./main";
 import { monacoView } from "./monaco_editor";
@@ -11,8 +13,8 @@ const topHash = hashData(top);
 
 const fetchSchemas = (): Promise<SchemaEntry[]> =>
   Promise.all([
-    query_data(`select hash, data from note where schemaHash = '${topHash}'`),
-    query_data("select schemaHash from note")
+    api.sql(`select hash, data from note where schemaHash = '${topHash}'`),
+    api.sql("select schemaHash from note")
   ]).then(([schemasRes, countsRes]) => {
     const counts = new Map<string, number>();
     countsRes.rows.forEach((row) => counts.set(String(row[0]), (counts.get(String(row[0])) || 0) + 1));
@@ -25,7 +27,7 @@ const fetchSchemas = (): Promise<SchemaEntry[]> =>
   });
 
 const fetchNotes = (): Promise<SchemaEntry[]> =>
-  query_data("select hash, data from note limit 200").then((r) =>
+  api.sql("select hash, data from note limit 200").then((r) =>
     r.rows.map((row) => {
       let title = "";
       try { title = JSON.parse(String(row[1] ?? ""))?.title ?? ""; } catch {}
@@ -44,7 +46,7 @@ const createSchemaPanel = (onPick: (hash: Hash) => void) => {
   };
 
   const schemaList = pre();
-  const updateSchemaPreview = () => noteOverview(schemaHash).then((p) => (schemaList.innerHTML = p));
+  const updateSchemaPreview = () => api.getNote(schemaHash).then(n => schemaList.innerHTML = jsonOverview(n.data));
 
   const setSchemaHash = (hash: Hash) => {
     if (hash === schemaHash) return;
@@ -265,7 +267,7 @@ export const niceView = ({ submit }: EditDeps) => {
   const setSchemaHash = (hash: Hash) => {
     schemaHash = hash;
     root.innerHTML = "";
-    return getNote(schemaHash).then((schema) => {
+    return api.getNote(schemaHash).then((schema) => {
       form = safeInput(schema.data, saveDraft);
       root.innerHTML = "";
       root.append(

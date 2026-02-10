@@ -1,9 +1,6 @@
-// import { Stored, Writable } from "./store"
-
 export type htmlKey = 'innerText'|'onclick' | 'oninput' | 'onkeydown' |'children'|'class'|'id'|'href'|'data-nav'|'contentEditable'|'eventListeners'|'color'|'background' | 'style' | 'placeholder' | 'tabIndex' | 'colSpan'
 
-export const htmlElement = (tag:string, text:string, cls:string = "", args?:Partial<Record<htmlKey, any>>):HTMLElement =>{
-
+const htmlElement = (tag:string, text:string, cls:string = "", args?:Partial<Record<htmlKey, any>>):HTMLElement =>{
   const _element = document.createElement(tag)
   _element.innerText = text
   if (args) Object.entries(args).forEach(([key, value])=>{
@@ -20,7 +17,6 @@ export const htmlElement = (tag:string, text:string, cls:string = "", args?:Part
       _element.style[key] = value
     }else if (key === 'style'){
       Object.entries(value as Record<string, string>).forEach(([key, value])=>{
-
         key = key.replace(/([A-Z])/g, '-$1').toLowerCase();
         _element.style.setProperty(key, value)
       })
@@ -35,11 +31,7 @@ export const htmlElement = (tag:string, text:string, cls:string = "", args?:Part
   return _element
 }
 
-
-
-
 type HTMLArg = string | number | HTMLElement | Partial<Record<htmlKey, any>> | Promise<HTMLArg> | HTMLArg[]
-
 
 export const html = (tag:string, ...cs:HTMLArg[]):HTMLElement=>{
   let children: HTMLElement[] = []
@@ -66,18 +58,13 @@ export const html = (tag:string, ...cs:HTMLArg[]):HTMLElement=>{
   return htmlElement(tag, "", "", {...args, children})
 }
 
-
 export type HTMLGenerator<T extends HTMLElement = HTMLElement> = (...cs:HTMLArg[]) => T
 
 const newHtmlGenerator = <T extends HTMLElement>(tag:string)=>(...cs:HTMLArg[]):T=>html(tag, ...cs) as T
 
-
-
 export const p:HTMLGenerator<HTMLParagraphElement> = newHtmlGenerator("p")
-export const h1:HTMLGenerator<HTMLHeadingElement> = newHtmlGenerator("h1")
 export const h2:HTMLGenerator<HTMLHeadingElement> = newHtmlGenerator("h2")
 export const h3:HTMLGenerator<HTMLHeadingElement> = newHtmlGenerator("h3")
-export const h4:HTMLGenerator<HTMLHeadingElement> = newHtmlGenerator("h4")
 
 export const div:HTMLGenerator<HTMLDivElement> = newHtmlGenerator("div")
 export const pre:HTMLGenerator<HTMLDivElement> = newHtmlGenerator("pre")
@@ -94,7 +81,6 @@ export const routeLink = (href: string, text = null, ...cs: HTMLArg[]) =>
     }, style:{color:"inherit", textDecoration: "none", border: "1px solid #ccc", padding: "0.1em", borderRadius: "0.25em"}},
     ...cs
   );
-// export const noteLink = (id: string | number | bigint, ...cs: HTMLArg[]) => routeLink(`/${id}`, ...cs);
 export const span:HTMLGenerator<HTMLSpanElement> = newHtmlGenerator("span")
 
 export const table:HTMLGenerator<HTMLTableElement> = newHtmlGenerator("table")
@@ -102,57 +88,31 @@ export const tr:HTMLGenerator<HTMLTableRowElement> = newHtmlGenerator("tr")
 export const td:HTMLGenerator<HTMLTableCellElement> = newHtmlGenerator("td")
 export const th:HTMLGenerator<HTMLTableCellElement> = newHtmlGenerator("th")
 
-export const canvas:HTMLGenerator<HTMLCanvasElement> = newHtmlGenerator("canvas")
-
-// export const svg:SVGElement = document.createElement("svg");
-
 export const style = (...rules: Record<string, string>[]) => {
   return {style: Object.assign({}, ...rules)}
 }
 
-export const margin = (value: string) => style({margin: value})
-export const padding = (value: string) => style({padding: value})
-export const border = (value: string) => style({border: value})
-export const borderRadius = (value: string) => style({borderRadius: value})
-export const width = (value: string) => style({width: value})
-export const height = (value: string) => style({height: value})
-export const display = (value: string) => style({display: value})
-export const color = (value: string = "var(--color)") => style({color: value})
-export const background = (value: string = "var(--background)") => style({background: value})
-
-
-
 const textInput = (tag: string, cs:HTMLArg[])=>{
   const content = cs.filter(c=>typeof c == 'string').join(' ')
-  const el = html(tag,  ...cs) as HTMLInputElement | HTMLTextAreaElement
-
+  const el = html(tag, ...cs) as HTMLInputElement | HTMLTextAreaElement
   el.value = content
-
-
   return el
 }
 
-
-export const input:HTMLGenerator<HTMLInputElement> = (...cs)=> textInput("input", cs)  as HTMLInputElement
+export const input:HTMLGenerator<HTMLInputElement> = (...cs)=> textInput("input", cs) as HTMLInputElement
 export const textarea:HTMLGenerator<HTMLTextAreaElement> = (...cs)=> textInput("textarea", cs) as HTMLTextAreaElement
 
-
-
-
 export const popup = (...cs:HTMLArg[])=>{
-
   const dialogfield = div(
-    {
-      style: {
-        background: "var(--background-color)",
-        color: "var(--color)",
-        padding: "1em",
-        paddingBottom: "2em",
-        borderRadius: "1em",
-        zIndex: "2000",
-        overflowY: "scroll",
-      }
-    },
+    {style: {
+      background: "var(--background-color)",
+      color: "var(--color)",
+      padding: "1em",
+      paddingBottom: "2em",
+      borderRadius: "1em",
+      zIndex: "2000",
+      overflowY: "scroll",
+    }},
     ...cs)
 
   const popupbackground = div(
@@ -179,70 +139,11 @@ export const popup = (...cs:HTMLArg[])=>{
   };
 
   const handleKeydown = (e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      closePopup();
-    }
+    if (e.key === "Escape") closePopup();
   };
 
   popupbackground.onclick = closePopup;
   document.addEventListener("keydown", handleKeydown);
-
-  dialogfield.onclick = (e) => {
-    e.stopPropagation();
-  }
+  dialogfield.onclick = (e) => e.stopPropagation();
   return popupbackground
-
-}
-
-
-const body = document.body;
-
-
-const typ = (x:any): string => {
-  if (x instanceof Array) return "array"
-  if (x == null) return "null"
-  if (x == undefined) return "undefined"
-  else if (x instanceof Function) return "function"
-  else if (x instanceof HTMLElement) return "htmlElement"
-
-  else if (x instanceof Object) {
-    let keys = Object.keys(x);
-    // if (keys.length == 2 && keys.includes("tag") && keys.includes("args")) return "repr";
-    return "object"}
-  else return typeof x
-}
-
-const brackets = (typ: string): [string, string] => {
-  if (typ == "array") return ["[", "]"]
-  else if (typ == "object") return ["{", "}"]
-  else if (typ == "function") return ["Function(", ")"]
-  else if (typ == "htmlElement") return ["<", "/>"]
-  else return ["", ""]
-}
-
-const preview_text = (x:any, maxsize = 100) : string => {
-  let t = typ(x);
-  let bracks = brackets(t);
-  let inner = ""
-
-  if (t == "array"){
-    for (let i = 0; i < x.length; i++){
-      inner += preview_text(x[i], maxsize - inner.length);
-      if (i < x.length - 1) inner += ", ";
-      if (inner.length >= maxsize) break;
-    }
-
-  } else if (t == "object"){
-    for (let [key, value] of Object.entries(x)){
-      inner += key + ": " + preview_text(value, maxsize - inner.length) + ", ";
-      if (inner.length >= maxsize) break;
-    }
-  } else if (t == "function"){
-    inner = x.toString()
-  } else if (t == "htmlElement"){
-    inner = x.tagName + x.textContent
-  }else inner = String(x).slice(0, maxsize)
-
-  String(x).slice(0, maxsize)
-  return bracks[0] + inner + bracks[1]
 }
