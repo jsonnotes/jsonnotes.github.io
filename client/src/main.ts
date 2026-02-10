@@ -6,6 +6,7 @@ import { createSqlView } from "./sql_view";
 import { createDepsView } from "./deps_view";
 import { Hash, NoteData, tojson, hashData, top } from "@jsonview/core"
 import { renderDom, type VDom } from "@jsonview/lib";
+import { view as pipelineVDom } from "@jsonview/lib/src/example/pipeline";
 import { addNote, getNote, query_data } from "./dbconn";
 import { callNote, mountView } from "./call_note";
 
@@ -110,6 +111,8 @@ handleRoute = () => {
   } else if (path.startsWith("deps")) {
     render(depsView.root);
     depsView.render((path.slice(5) || lastNoteRef) as Hash);
+  } else if (path === "pipeline") {
+    render(renderDom(() => pipelineVDom));
   } else {
     lastNoteRef = path;
     showNote(path as Hash);
@@ -133,6 +136,7 @@ let navitems = [
   ["Edit", "/edit"],
   ["SQL", "/sql"],
   ["Deps", "/deps"],
+  ["Pipeline", "/pipeline"],
 ].map(([name, path])=>a(style({ textDecoration: "none", color: "inherit", fontWeight: "bold" }), {"href": path, onclick: (e)=>{
   if (e.metaKey) return
   e.preventDefault()

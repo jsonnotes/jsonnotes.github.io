@@ -7,8 +7,8 @@ type DomEventType = MouseEventType | KeyboardEventType;
 const mouseEvents : MouseEventType[] = ["click", "mouseup", "mousedown", "drag"];
 const keyboardEvents : KeyboardEventType[] = ["keydown", "keyup"];
 const svgNamespace = "http://www.w3.org/2000/svg";
-const svgTags = new Set(["svg", "path", "g", "line", "polyline", "polygon", "circle", "ellipse", "rect"]);
-const allowedAttributeNames = new Set(["viewBox","width","height","xmlns","d","fill","stroke","stroke-width","stroke-linecap","stroke-linejoin","stroke-dasharray","stroke-dashoffset","x","y","x1","y1","x2","y2","cx","cy","r","rx","ry","points","transform","opacity"]);
+const svgTags = new Set(["svg", "path", "g", "line", "polyline", "polygon", "circle", "ellipse", "rect", "text"]);
+const allowedAttributeNames = new Set(["viewBox","width","height","xmlns","d","fill","stroke","stroke-width","stroke-linecap","stroke-linejoin","stroke-dasharray","stroke-dashoffset","x","y","x1","y1","x2","y2","cx","cy","r","rx","ry","points","transform","opacity","font-size","font-family","font-weight","text-anchor","dominant-baseline","dx","dy"]);
 
 
 type MouseEvent = {
@@ -145,6 +145,7 @@ const mkDom = (tag: string) => (...content:Content[]) =>{
 let div= mkDom("div")
 let svg = mkDom("svg")
 let path = mkDom("path")
+let text = mkDom("text")
 
 
 
@@ -208,7 +209,7 @@ export const HTML = {
     fill?: string,
     stroke?: string,
     strokeWidth?: string
-  } = {}) => {
+  } = {}, ...children: VDom[]) => {
     const paths = pathData instanceof Array ? pathData : [pathData]
     const { viewBox = "0 0 24 24", width = "1em", height = "1em", fill = "currentColor", stroke, strokeWidth } = options
     const pathAttrs: Record<string, string> = { fill }
@@ -216,8 +217,39 @@ export const HTML = {
     if (strokeWidth) pathAttrs["stroke-width"] = strokeWidth
     return svg(
       { attrs: { viewBox, width, height, xmlns: svgNamespace } },
-      ...paths.map(d => path({ attrs: { ...pathAttrs, d } }))
+      ...paths.map(d => path({ attrs: { ...pathAttrs, d } })),
+      ...children
     )
+  },
+  svgText: (
+    content: string,
+    options: {
+      x?: string,
+      y?: string,
+      fill?: string,
+      background?: string,
+      fontSize?: string,
+      fontFamily?: string,
+      fontWeight?: string,
+      textAnchor?: string,
+      dominantBaseline?: string,
+      dx?: string,
+      dy?: string
+    } = {}
+  ) => {
+    const attrs: Record<string, string> = {}
+    if (options.x) attrs.x = options.x
+    if (options.y) attrs.y = options.y
+    if (options.fill) attrs.fill = options.fill
+    if (options.background) attrs.background = options.background
+    if (options.fontSize) attrs["font-size"] = options.fontSize
+    if (options.fontFamily) attrs["font-family"] = options.fontFamily
+    if (options.fontWeight) attrs["font-weight"] = options.fontWeight
+    if (options.textAnchor) attrs["text-anchor"] = options.textAnchor
+    if (options.dominantBaseline) attrs["dominant-baseline"] = options.dominantBaseline
+    if (options.dx) attrs.dx = options.dx
+    if (options.dy) attrs.dy = options.dy
+    return text({ attrs }, content)
   },
   popup
 }
