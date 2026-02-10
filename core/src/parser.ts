@@ -139,8 +139,15 @@ export type Stmt =
   | { type: "ForOfStatement"; left: VarDecl[] | Expr; leftKind: "let" | "const" | null; right: Expr; body: Stmt };
 export type Pattern =
   | Identifier
-  | { type: "ArrayPattern"; elements: Identifier[] }
-  | { type: "ObjectPattern"; properties: Identifier[] };
+  | { type: "ArrayPattern"; elements: Pattern[] }
+  | { type: "ObjectPattern"; properties: PatternProperty[] };
+
+export type PatternProperty = {
+  type: "Property";
+  key: Identifier | Literal;
+  value: Pattern;
+  shorthand: boolean;
+};
 
 export type VarDecl = { type: "VariableDeclarator"; id: Pattern; init: Expr | null };
 
@@ -157,7 +164,7 @@ export type Expr =
   | { type: "LogicalExpression"; operator: string; left: Expr; right: Expr }
   | { type: "UnaryExpression"; operator: string; argument: Expr }
   | { type: "ConditionalExpression"; test: Expr; consequent: Expr; alternate: Expr }
-  | { type: "ArrowFunctionExpression"; params: Identifier[]; body: Expr | BlockStatement };
+  | { type: "ArrowFunctionExpression"; params: Pattern[]; body: Expr | BlockStatement };
 
 export type Identifier = { type: "Identifier"; name: string };
 export type Literal = { type: "Literal"; value: string | number | boolean | null };
@@ -178,8 +185,8 @@ export const validateScopes = (program: Program, allowedGlobals: string[] = []) 
 
   const declarePattern = (p: Pattern) => {
     if (p.type === "Identifier") declare(p.name);
-    else if (p.type === "ArrayPattern") p.elements.forEach((e) => declare(e.name));
-    else p.properties.forEach((e) => declare(e.name));
+    else if (p.type === "ArrayPattern") p.elements.forEach(declarePattern);
+    else p.properties.forEach((prop) => declarePattern(prop.value));
   };
 
   const visitExpr = (e: Expr): void => {
@@ -225,7 +232,7 @@ export const validateScopes = (program: Program, allowedGlobals: string[] = []) 
         return;
       case "ArrowFunctionExpression":
         enter();
-        e.params.forEach((p) => declare(p.name));
+        e.params.forEach(declarePattern);
         if (e.body.type === "BlockStatement") visitStmt(e.body);
         else visitExpr(e.body);
         exit();
@@ -443,7 +450,7 @@ const renderProp = (p: Property) => {
 };
 
 const renderArrow = (e: Extract<Expr, { type: "ArrowFunctionExpression" }>) => {
-  const params = `(${e.params.map((p) => p.name).join(", ")})`;
+  const params = `(${e.params.map(renderPattern).join(", ")})`;
   if (e.body.type === "BlockStatement") {
     return `${params} => ${renderStmt(e.body, true)}`;
   }
@@ -510,8 +517,22 @@ const renderDecl = (d: VarDecl) =>
 
 const renderPattern = (p: Pattern): string => {
   if (p.type === "Identifier") return p.name;
-  if (p.type === "ArrayPattern") return `[${p.elements.map((e) => e.name).join(", ")}]`;
-  return `{${p.properties.map((e) => e.name).join(", ")}}`;
+  if (p.type === "ArrayPattern") return `[${p.elements.map(renderPattern).join(", ")}]`;
+  return `{${p.properties.map(renderPatternProperty).join(", ")}}`;
+};
+
+const renderPatternProperty = (p: PatternProperty): string => {
+  const key =
+    p.key.type === "Identifier" ? p.key.name : renderLiteral(p.key.value);
+  if (
+    p.shorthand &&
+    p.key.type === "Identifier" &&
+    p.value.type === "Identifier" &&
+    p.value.name === p.key.name
+  ) {
+    return key;
+  }
+  return `${key}: ${renderPattern(p.value)}`;
 };
 
 export const renderWithFuel = (program: Program, fuel = 10000) => {
@@ -882,15 +903,18 @@ export const parse = (src: string): Program => {
     if (match("punct", "(")) {
       const start = i;
       next();
-      const params: Identifier[] = [];
+      const params: Pattern[] = [];
       let isParams = true;
-      if (!match("punct", ")")) {
-        do {
-          if (!match("identifier")) { isParams = false; break; }
-          params.push(parseIdentifier());
-          if (!match("punct", ",")) break;
-          next();
-        } while (true);
+      try {
+        if (!match("punct", ")")) {
+          do {
+            params.push(parsePattern());
+            if (!match("punct", ",")) break;
+            next();
+          } while (true);
+        }
+      } catch {
+        isParams = false;
       }
       if (isParams && match("punct", ")")) {
         next();
@@ -986,10 +1010,10 @@ export const parse = (src: string): Program => {
   const parsePattern = (): Pattern => {
     if (match("punct", "[")) {
       eat("punct", "[");
-      const elements: Identifier[] = [];
+      const elements: Pattern[] = [];
       if (!match("punct", "]")) {
         do {
-          elements.push(parseIdentifier());
+          elements.push(parsePattern());
           if (!match("punct", ",")) break;
           next();
         } while (true);
@@ -999,10 +1023,25 @@ export const parse = (src: string): Program => {
     }
     if (match("punct", "{")) {
       eat("punct", "{");
-      const properties: Identifier[] = [];
+      const properties: PatternProperty[] = [];
       if (!match("punct", "}")) {
         do {
-          properties.push(parseIdentifier());
+          let key: Identifier | Literal;
+          let shorthand = false;
+          if (match("identifier")) key = parseIdentifier();
+          else if (match("string")) key = { type: "Literal", value: next().value };
+          else if (match("number")) key = { type: "Literal", value: Number(next().value) };
+          else throw new Error(`Expected object pattern key at ${peek().pos}`);
+          let value: Pattern;
+          if (match("operator", ":")) {
+            next();
+            value = parsePattern();
+          } else {
+            if (key.type !== "Identifier") throw new Error(`Expected ':' after key at ${peek().pos}`);
+            value = key;
+            shorthand = true;
+          }
+          properties.push({ type: "Property", key, value, shorthand });
           if (!match("punct", ",")) break;
           next();
         } while (true);

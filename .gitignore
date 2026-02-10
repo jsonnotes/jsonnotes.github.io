@@ -3,4 +3,6 @@
 **/.env*
 .vscode/settings.json
 
+**/.env.json
+
 notes-backup/

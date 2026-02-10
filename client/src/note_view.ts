@@ -1,34 +1,10 @@
-import { Hash, hashData, NoteData, script_schema, Jsonable, function_schema } from "@jsonview/core";
+import { Hash, hashData, NoteData, script_schema, function_schema } from "@jsonview/core";
 import { renderDom, type VDom } from "@jsonview/lib";
-import { addNote, callProcedure, callNoteRemote, getNote, noteLink, noteOverview } from "./dbconn";
+import { callNoteRemote, getNote, noteLink, noteOverview } from "./dbconn";
 
 import { stringify } from "./helpers";
-import { a, button, div, h2, h3, p, padding, popup, pre, routeLink, span, style } from "./html";
-
-import { openrouter } from "./openrouter";
-import { callNote } from "./call_note";
-
-
-export const buildins = {
-  openrouter: async (prompt: string, schema: Hash | Jsonable) => {
-
-    if (typeof schema === "string") {
-      const raw = schema.startsWith("#") ? schema.slice(1) : schema;
-      if (/^[a-f0-9]{32}$/.test(raw)) {
-        schema = (await getNote(raw as Hash)).data;
-      }
-    }
-    return openrouter(prompt, schema)
-  },
-  getNote,
-  addNote,
-  callNote,
-  remote: callNoteRemote
-
-}
-
-
-for (let exp of ["openrouter", "getNote", "addNote", "callNote", "remote"]) if (!Object.keys(buildins).includes(exp)) throw new Error("buildin missing but expected: "+ exp)
+import { button, div, h2, h3, p, popup, pre, routeLink, span, style } from "./html";
+import { callNote, mountView } from "./call_note";
 
 const linkify = (text: string) => {
   const el = span(style({margin:"0.5em"}));
@@ -136,9 +112,17 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
         const arg = parsed === undefined ? {} : parsed
         try {
           runLocalFn.textContent = "running...";
-          const res = await callNote(hash, arg);
-          if (isVDom(res)) popup(h2("result"), renderDom(() => res));
-          else popup(h2("result"), pre(typeof res === "string" ? res : JSON.stringify(res, null, 2)));
+          const res = await callNote(hash, arg, {
+            view: (renderView) => mountView(renderView, (rendered) => {
+              overlay.innerHTML = "";
+              overlay.append(rendered);
+              history.pushState({}, "", `/view/${hash}`);
+            }),
+          });
+          if (res !== undefined) {
+            if (isVDom(res)) popup(h2("result"), renderDom(() => res));
+            else popup(h2("result"), pre(typeof res === "string" ? res : JSON.stringify(res, null, 2)));
+          }
         } catch (e: any) {
           popup(h2("ERROR"), p(e.message || "run failed"));
         } finally {

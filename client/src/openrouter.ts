@@ -1,6 +1,6 @@
-import { validate } from "@jsonview/core";
 import { hash128 } from "@jsonview/core/hash";
-import { h2, input, p, popup, style } from "./html";
+import { openrouterCall } from "@jsonview/lib";
+import { input, p, popup } from "./html";
 
 
 const storekey = "$"+hash128("openrouter")
@@ -32,27 +32,10 @@ export const openrouter = async (prompt: string, schema: any, model = "openai/gp
     })
   }
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${await OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model,
-      messages: [{role: "user",content: prompt}],
-      "response_format": { "type": "json_schema", json_schema: {"name": "response", "schema": schema}}
-
-    })
+  return openrouterCall({
+    apiKey: OPENROUTER_API_KEY,
+    prompt,
+    schema,
+    model,
   });
-
-  const data = await response.json();
-  try{
-    let resp = JSON.parse(data.choices[0].message.content);
-    validate(resp, schema)
-    return resp
-  }catch {
-    // console.log("openrouter response:", data)
-    return data
-  }
 }

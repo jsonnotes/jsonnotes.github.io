@@ -1,11 +1,13 @@
-import { a, div, h2, p, popup, style } from "./html";
+import { a, div, h2, p, popup, pre, style } from "./html";
 import { openNoteView } from "./note_view";
 import { createDashboardView } from "./dashboard";
 import { createEditView } from "./edit";
 import { createSqlView } from "./sql_view";
 import { createDepsView } from "./deps_view";
 import { Hash, NoteData, tojson, hashData, top } from "@jsonview/core"
+import { renderDom, type VDom } from "@jsonview/lib";
 import { addNote, getNote, query_data } from "./dbconn";
+import { callNote, mountView } from "./call_note";
 
 let runQuery = () => {};
 
@@ -30,6 +32,29 @@ const submitNote = async (data: NoteData) => {
 
 
 const showNote = (hash: Hash) => render(openNoteView(hash, submitNote))
+const isVDom = (value: unknown): value is VDom => {
+  if (!value || typeof value !== "object") return false;
+  const v = value as VDom;
+  return (
+    typeof v.tag === "string" &&
+    typeof v.textContent === "string" &&
+    typeof v.id === "string" &&
+    typeof v.style === "object" &&
+    Array.isArray(v.children)
+  );
+};
+const showFunctionView = (hash: Hash) => {
+  render(div("running..."));
+  callNote(hash, {}, {
+    view: (renderView) => mountView(renderView, render),
+  }).then((res) => {
+    if (res === undefined) return;
+    if (isVDom(res)) render(renderDom(() => res));
+    else render(pre(typeof res === "string" ? res : JSON.stringify(res, null, 2)));
+  }).catch((e: any) => {
+    render(div(h2("ERROR"), p(e.message || "view call failed")));
+  });
+}
 
 
 const navKey = (path: string) => {
@@ -78,6 +103,10 @@ handleRoute = () => {
     runQuery();
   } else if (path === "sql") {
     render(sqlView.root);
+  } else if (path.startsWith("view/")) {
+    const hash = path.slice(5);
+    if (!hash) render(div(h2("ERROR"), p("missing function hash")));
+    else showFunctionView(hash as Hash);
   } else if (path.startsWith("deps")) {
     render(depsView.root);
     depsView.render((path.slice(5) || lastNoteRef) as Hash);

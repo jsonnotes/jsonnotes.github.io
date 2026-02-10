@@ -23,7 +23,11 @@ export type Jsonable = string | number | boolean | Jsonable[] | {[key: string]: 
 export const tojson = (x: Jsonable)=>JSON.stringify(x, null, 2)
 export const fromjson = (x:string): Jsonable => JSON.parse(x)
 
-export const validate = (data: Jsonable, schema: Jsonable) => {
+// export function validate (data: NoteData): void;
+// export function validate (data: Jsonable, schema: Jsonable): void;
+
+export function validate (data:Jsonable , schema: Jsonable) {
+  // if (schema == undefined) ({schemaHash:schema, data} = data as NoteData)
   const validate = new Ajv().compile(schema as any);
   if (validate(data)) return true;
   else throw new Error(validate.errors?.map((e: any) => e.message).join(", ") || "Invalid data");
@@ -41,9 +45,24 @@ export function hashData({schemaHash, data} : NoteData){
 
 export const hashCall : (fn:Hash, data:Jsonable) => Hash = hash128
 
-export function NoteData(title:string, schema: NoteData, data: any = {}): NoteData{
+export function NoteData(data: Jsonable): NoteData
+export function NoteData(title: string, data: Jsonable): NoteData
+export function NoteData(title: string, schema: NoteData, data: Record<string, Jsonable>): NoteData
+
+export function NoteData(title:string | Jsonable, schema?: NoteData | Jsonable, data?: Record<string, Jsonable>): NoteData{
+
+  if (schema == undefined){
+    data = title as Record<string, Jsonable>
+    title = ""
+    schema = top
+  }
+  if (data == undefined){
+    data = schema as Record<string, Jsonable>
+    schema = top
+  }
+
   return {
-    schemaHash: hashData(schema),
+    schemaHash: hashData(schema as NoteData),
     data: {
       ...(title? {title} : {}),
       ...data

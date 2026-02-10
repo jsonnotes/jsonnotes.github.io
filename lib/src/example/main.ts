@@ -1,7 +1,8 @@
 import { fromjson, function_schema, Hash, hashData, NoteData, tojson, top } from "@jsonview/core";
-import { createApi } from "./dbconn";
-import { noteSearch } from "./index";
-import { HTML, renderDom, VDom } from "./views";
+import { createApi } from "../dbconn";
+import { jsonOverview, noteSearch } from "../index";
+import { HTML, renderDom, VDom } from "../views";
+import { graph_schema, view } from "./pipeline";
 
 const body = document.body;
 const api = createApi({server:"maincloud"})
@@ -83,7 +84,7 @@ body.append(renderDom(({add, del, update})=>{
     })
   )
 
-  let search = noteSearch(api, results=> searchres(JSON.stringify(results, null, 2)));
+  let search = noteSearch(api, (results)=> searchres(JSON.stringify(results, null, 2)));
   const searchres = section("search Note", "title", async query=> await search(query))
   box("examle svg", HTML.svgPath(
     ["M3 12h18", "M12 3v18"],
@@ -115,6 +116,19 @@ body.append(renderDom(({add, del, update})=>{
 
     )
   }
+
+
+  {
+    box(
+      "graph schema",
+      // HTML.pre(jsonOverview(GraphSchema))
+      view
+    )
+
+    api.addNote(graph_schema)
+  }
+
+
   return page
 
 

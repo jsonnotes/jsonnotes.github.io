@@ -67,6 +67,9 @@ it("variables and assignment", () => {
 it("destructuring", () => {
   testRun("let [a, b] = [1, 2]; return a + b", {result: 3})
   testRun("let {x, y} = {x: 10, y: 20}; return x + y", {result: 30})
+  testRun("let {x: a, y: b} = {x: 10, y: 20}; return a + b", {result: 30})
+  testRun("let {a: {b}} = {a: {b: 7}}; return b", {result: 7})
+  testRun("const sum = ({x, y}) => x + y; return sum({x: 2, y: 3})", {result: 5})
 })
 
 it("if/else", () => {
@@ -189,4 +192,3 @@ it("async: env with sync functions", async () => {
   let res = await runWithFuelAsync("return add(3, 4)", 1000, {add: (a: number, b: number) => a + b})
   assert("ok" in res && (res as any).ok === 7)
 })
-

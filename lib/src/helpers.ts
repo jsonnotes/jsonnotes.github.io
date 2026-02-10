@@ -1,5 +1,6 @@
 import { fromjson, hash128, hashData, tojson, top, validate, expandLinks, type Jsonable, type Hash, type NoteData } from "@jsonview/core";
 import type { Api } from "./dbconn.ts";
+export { openrouterCall } from "./openrouter.ts";
 
 export const dbname = "jsonview"
 export const server = "maincloud"
@@ -113,27 +114,5 @@ export const notePreview = async (api: Api, hash: Hash): Promise<string> => {
 export const noteOverview = async (api: Api, hash: Hash): Promise<string> => {
   const note = await api.getNote(hash)
   return jsonOverview(note.data)
-}
-
-// --- OpenRouter ---
-
-export const openrouterCall = async (apiKey: string, prompt: string, schema: any, model = "openai/gpt-4o") => {
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_schema", json_schema: { name: "response", schema } }
-    })
-  })
-  const data = await response.json()
-  try {
-    const resp = JSON.parse(data.choices[0].message.content)
-    validate(resp, schema)
-    return resp
-  } catch {
-    return data
-  }
 }
 
