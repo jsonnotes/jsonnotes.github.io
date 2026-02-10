@@ -2,7 +2,7 @@ import { fromjson, function_schema, Hash, hashData, NoteData, tojson, top } from
 import { createApi } from "../dbconn";
 import { jsonOverview, noteSearch } from "../index";
 import { HTML, renderDom, VDom } from "../views";
-import { graph_schema, view } from "./pipeline";
+import { graph_schema, llmcall } from "./pipeline";
 
 const body = document.body;
 const api = createApi({server:"maincloud"})
@@ -119,13 +119,8 @@ body.append(renderDom(({add, del, update})=>{
 
 
   {
-    box(
-      "graph schema",
-      // HTML.pre(jsonOverview(GraphSchema))
-      view
-    )
-
     api.addNote(graph_schema)
+    api.addNote(llmcall)
   }
 
 

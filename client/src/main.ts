@@ -6,7 +6,8 @@ import { createSqlView } from "./sql_view";
 import { createDepsView } from "./deps_view";
 import { Hash, NoteData, tojson, hashData, top } from "@jsonview/core"
 import { renderDom, type VDom } from "@jsonview/lib";
-import { view as pipelineVDom } from "@jsonview/lib/src/example/pipeline";
+import { drawPipeline } from "./pipeline_view";
+import { llmcall } from "@jsonview/lib/src/example/pipeline";
 import { addNote, getNote, query_data } from "./dbconn";
 import { callNote, mountView } from "./call_note";
 
@@ -111,8 +112,15 @@ handleRoute = () => {
   } else if (path.startsWith("deps")) {
     render(depsView.root);
     depsView.render((path.slice(5) || lastNoteRef) as Hash);
-  } else if (path === "pipeline") {
-    render(renderDom(() => pipelineVDom));
+  } else if (path === "pipeline" || path.startsWith("pipeline/")) {
+    const hash = path.slice(9);
+    if (!hash) render(renderDom(() => drawPipeline(llmcall.data)));
+    else {
+      render(div("loading..."));
+      getNote(hash as Hash).then(note => {
+        render(renderDom(() => drawPipeline(note.data)));
+      }).catch(e => render(div(h2("ERROR"), p(e.message))));
+    }
   } else {
     lastNoteRef = path;
     showNote(path as Hash);

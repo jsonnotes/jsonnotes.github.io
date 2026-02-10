@@ -3,7 +3,7 @@ import { fromjson, tojson } from "@jsonview/core";
 import type { Api, Hash } from "./dbconn.ts";
 
 export { createApi, type Api, type ApiConfig, type Hash } from "./dbconn.ts";
-export { server, dbname, jsonOverview, fetchSchemas, fetchNotes, validateNote, notePreview, noteOverview, type SchemaEntry } from "./helpers.ts";
+export { server, dbname, jsonOverview, fetchSchemas, fetchNotes, newestRows, validateNote, notePreview, noteOverview, type SchemaEntry } from "./helpers.ts";
 export { openrouterCall, DEFAULT_OPENROUTER_MODEL, type OpenRouterConfig } from "./openrouter.ts";
 export { renderDom, type VDom, HTML } from "./views.ts";
 

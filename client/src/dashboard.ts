@@ -1,6 +1,7 @@
 
 import { button, div, p, routeLink, style } from "./html";
 import { function_schema, hashData, script_result_schema, script_schema, top } from "@jsonview/core";
+import { newestRows } from "@jsonview/lib";
 import { createSchemaPicker, noteSearch, SchemaEntry } from "./helpers";
 import { noteLink } from "./dbconn";
 
@@ -55,8 +56,8 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
   let currentSchema = schemaHashAny;
 
   const fetchAllNotes = (): Promise<SchemaEntry[]> =>
-    query("select hash, data from note limit 200").then((r) =>
-      r.rows.map((row) => {
+    query("select hash, data from note").then((r) =>
+      newestRows(r.rows, 200).map((row) => {
         let title = "";
         try {
           title = JSON.parse(String(row[1] ?? ""))?.title ?? "";
@@ -79,8 +80,7 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
   const renderRows = (rows: any[][]) => {
     result.innerHTML = "";
     const list = div(style({ display: "flex", flexDirection: "column", gap: "0.5em" }));
-    const reversed = [...rows].reverse();
-    reversed.forEach((row) => {
+    rows.forEach((row) => {
       const note = { hash: row[0], data: row[1] };
       onRow && onRow(note);
       list.append(noteLink(note.hash));
@@ -117,11 +117,12 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
     }
 
     const sql = currentSchema === schemaHashAny
-      ? `select hash, data from note limit ${maxitems}`
-      : `select hash, data from note where schemaHash = '${currentSchema}' limit ${maxitems}`;
+      ? "select hash, data from note"
+      : `select hash, data from note where schemaHash = '${currentSchema}'`;
     const data = await query(sql);
-    cachedRows.set(currentSchema, data.rows);
-    renderRows(data.rows);
+    const rows = newestRows(data.rows, maxitems);
+    cachedRows.set(currentSchema, rows);
+    renderRows(rows);
   };
 
   const searchButton = button("🔍 Search Notes", {

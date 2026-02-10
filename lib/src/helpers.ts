@@ -14,8 +14,8 @@ export function funCache <Arg extends Jsonable, T extends Jsonable> (fn :(arg:Ar
   const fkey = hash128(fn.toString())
   const ls = typeof localStorage !== "undefined" ? localStorage : null
   return {
-    has: (arg:Arg) => map.has(tojson(arg)) || localStorage.hasItem("funcache:" + hash128(fkey, tojson(arg))),
-    set: (arg:Arg, res:T) => {localStorage.setItem("funcache:" + hash128(fkey, tojson(arg)), tojson(res)); map.set(tojson(arg), res); return res},
+    has: (arg:Arg) => map.has(tojson(arg)) || !!ls?.getItem("funcache:" + hash128(fkey, tojson(arg))),
+    set: (arg:Arg, res:T) => {ls?.setItem("funcache:" + hash128(fkey, tojson(arg)), tojson(res)); map.set(tojson(arg), res); return res},
     get:(arg:Arg)=>{
     const key = tojson(arg);
     if (map.has(key)) return map.get(key)
@@ -64,6 +64,8 @@ export const jsonOverview = (json: Jsonable) => {
 // --- Data fetching helpers ---
 
 export type SchemaEntry = { hash: string; title: string; count?: number }
+export const newestRows = <T>(rows: T[], limit: number): T[] =>
+  rows.slice(Math.max(0, rows.length - limit)).reverse()
 
 export const fetchSchemas = async (api: Api): Promise<SchemaEntry[]> => {
   const topHash = hashData(top)
@@ -85,8 +87,8 @@ export const fetchSchemas = async (api: Api): Promise<SchemaEntry[]> => {
 }
 
 export const fetchNotes = async (api: Api, limit = 200): Promise<SchemaEntry[]> =>
-  api.sql(`select hash, data from note limit ${limit}`).then(r =>
-    r.rows.map(row => {
+  api.sql("select hash, data from note").then(r =>
+    newestRows(r.rows, limit).map(row => {
       let title = ""
       try { title = JSON.parse(String(row[1] ?? ""))?.title ?? "" } catch {}
       return { hash: String(row[0] ?? ""), title }
@@ -115,4 +117,3 @@ export const noteOverview = async (api: Api, hash: Hash): Promise<string> => {
   const note = await api.getNote(hash)
   return jsonOverview(note.data)
 }
-
