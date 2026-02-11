@@ -5,6 +5,7 @@ import {jsonOverview, newestRows, funCache, type SchemaEntry} from "./helpers.ts
 export { jsonOverview, newestRows, funCache, type SchemaEntry };
 export { openrouterCall, DEFAULT_OPENROUTER_MODEL, type OpenRouterConfig } from "./openrouter.ts";
 export { renderDom, type VDom, type UPPER, HTML } from "./views.ts";
+export { drawDag, type DagNode, type DagConfig } from "./dag.ts";
 
 
 

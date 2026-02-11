@@ -51,8 +51,10 @@ spacetimedb.reducer('add_note', {
   data: t.string(),
 }, (ctx, { schemaHash, data } ) => {
 
+  if (!schemaHash) schemaHash = hashData(top);
   const schemaRow = ctx.db.note.hash.find(schemaHash);
   if (!schemaRow) throw new SenderError('Schema not found');
+  const schemaData = fromjson(schemaRow.data)
 
   try{
     const resolve = (hash: Hash) => {
@@ -61,16 +63,13 @@ spacetimedb.reducer('add_note', {
       return fromjson(note.data);
     }
     const parsed = fromjson(data)
-    validate(expandLinksSync(parsed, resolve), expandLinksSync(fromjson(schemaRow.data), resolve))
+    validate(expandLinksSync(parsed, resolve), expandLinksSync(schemaData, resolve))
 
     const hash = hashData({schemaHash: schemaHash as Hash, data: parsed})
-
-    const existing = ctx.db.note.hash.find(hash);
-    if (existing) return;
-
+    if (ctx.db.note.hash.find(hash)) return;
     ctx.db.note.insert({ hash, schemaHash, data})
 
-    const targets = new Set<string>([schemaRow.hash]);
+    const targets = new Set<string>([schemaHash]);
     const re = /#([a-f0-9]{32})/g;
     let match: RegExpExecArray | null;
     while ((match = re.exec(data))) {
@@ -121,7 +120,9 @@ spacetimedb.procedure('search_note', {query: t.string()}, t.array(t.object(
     .sort((a,b)=> a.c - b.c)
     let reps = []
     for (let ct of lc){
-      let dat = fromjson(ctx.db.note.hash.find(ct.hash)!.data) 
+      let note = ctx.db.note.hash.find(ct.hash)
+      if (!note) continue
+      let dat = fromjson(note.data)
       if (typeof dat == "object" && "title" in dat && typeof dat.title == "string" && dat.title.startsWith(query)){
         reps.push({title: dat.title, count: ct.c, hash: ct.hash})
         if (reps.length >= 100) return reps

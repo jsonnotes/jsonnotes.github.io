@@ -4,7 +4,7 @@ type MouseEventType = "click"| "mousemove" | "mouseup" | "mousedown" | "drag"
 type KeyboardEventType = "keydown" | "keyup"
 type DomEventType = MouseEventType | KeyboardEventType;
 
-const mouseEvents : MouseEventType[] = ["click", "mouseup", "mousedown", "drag"];
+const mouseEvents : MouseEventType[] = ["click", "mousemove", "mouseup", "mousedown", "drag"];
 const keyboardEvents : KeyboardEventType[] = ["keydown", "keyup"];
 const svgNamespace = "http://www.w3.org/2000/svg";
 const svgTags = new Set(["svg", "path", "g", "line", "polyline", "polygon", "circle", "ellipse", "rect", "text"]);
@@ -14,6 +14,9 @@ const allowedAttributeNames = new Set(["viewBox","width","height","xmlns","d","f
 type MouseEvent = {
   type: MouseEventType
   target: VDom
+  clientX?: number
+  clientY?: number
+  currentTarget?: Element
 };
 
 type KeyboardEvent = {
@@ -70,7 +73,8 @@ export const renderDom = (mker: (ufn: UPPER) => VDom): HTMLElement => {
     })
     Object.entries(dom.style).forEach(st=>el.style.setProperty(...st))
     mouseEvents.forEach((type) => el.addEventListener(type, (e) => {
-      if (dom.onEvent!= undefined) dom.onEvent!( { type, target: doms.get(e.target as HTMLElement) ! })
+      const me = e as globalThis.MouseEvent
+      if (dom.onEvent!= undefined) dom.onEvent!({ type, target: doms.get(e.target as HTMLElement)!, clientX: me.clientX, clientY: me.clientY, currentTarget: el })
     }));
     keyboardEvents.forEach((type) => el.addEventListener(type, (e) =>{
       let {key, metaKey, shiftKey} = e as globalThis.KeyboardEvent;
