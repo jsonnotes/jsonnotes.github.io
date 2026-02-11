@@ -1,4 +1,4 @@
-import { Hash, Jsonable, tojson } from "@jsonview/core"
+import { Hash, Jsonable, tojson, hash128 } from "@jsonview/core"
 import { HTML, type VDom } from "@jsonview/lib"
 import { getNote } from "@jsonview/lib/src/dbconn"
 import { Graph } from "@jsonview/lib/src/example/types"
@@ -80,52 +80,89 @@ const arrow = (from: BoxData, to: BoxData): VDom => {
   return svgEl("path", { d, stroke: "var(--color)", "stroke-width": "0.5", fill: "none" })
 }
 
-const drawBoxes = (boxes: BoxData[], connections: BoxData[][]): VDom =>
-  HTML.svgPath([], { viewBox: "0 0 100 80", width: "70%", height: "70%" },
+// --- DAG builder: deduplicate nodes by content hash ---
+
+type DagNode = { id: string, graph: Graph, children: string[], parents: string[], label: string }
+
+const buildDag = (graph: Graph) => {
+  const nodes = new Map<string, DagNode>()
+  const walk = (g: Graph): string => {
+    const id = hash128(tojson(g))
+    if (nodes.has(id)) return id
+    const node: DagNode = { id, graph: g, children: [], parents: [], label: g.$ }
+    nodes.set(id, node)
+    node.children = getSrc(g).map(walk)
+    node.children.forEach(cid => nodes.get(cid)!.parents.push(id))
+    return id
+  }
+  return { nodes, root: walk(graph) }
+}
+
+// --- Layered DAG layout (simplified Sugiyama) ---
+
+const layoutDag = (nodes: Map<string, DagNode>, root: string) => {
+  // Layer assignment: leaves=0, root=max
+  const depths = new Map<string, number>()
+  const depthOf = (id: string): number => {
+    if (depths.has(id)) return depths.get(id)!
+    const n = nodes.get(id)!
+    const d = n.children.length ? 1 + Math.max(...n.children.map(depthOf)) : 0
+    depths.set(id, d)
+    return d
+  }
+  nodes.forEach((_, id) => depthOf(id))
+  const maxDepth = Math.max(0, ...depths.values())
+
+  // Group by layer
+  const layers: string[][] = Array.from({ length: maxDepth + 1 }, () => [])
+  nodes.forEach((_, id) => layers[depths.get(id)!].push(id))
+
+  // Barycenter ordering (2 passes)
+  const pos = new Map<string, number>()
+  layers.forEach(g => g.forEach((id, i) => pos.set(id, i)))
+  const bary = (id: string, dir: "children" | "parents") => {
+    const nb = nodes.get(id)![dir]
+    return nb.length ? nb.reduce((s, n) => s + pos.get(n)!, 0) / nb.length : pos.get(id)!
+  }
+  for (let d = maxDepth - 1; d >= 0; d--) {
+    layers[d].sort((a, b) => bary(a, "children") - bary(b, "children"))
+    layers[d].forEach((id, i) => pos.set(id, i))
+  }
+  for (let d = 1; d <= maxDepth; d++) {
+    layers[d].sort((a, b) => bary(a, "parents") - bary(b, "parents"))
+    layers[d].forEach((id, i) => pos.set(id, i))
+  }
+
+  // Position assignment
+  const gapX = BOX_W + 5, gapY = BOX_H + 10
+  const maxW = Math.max(...layers.map(g => g.length))
+  const W = maxW * gapX + 20
+  const H = (maxDepth + 1) * gapY + 20
+  const positions = new Map<string, BoxData>()
+  for (const [depth, group] of layers.entries()) {
+    const layerW = group.length * gapX
+    const startX = (W - layerW) / 2 + gapX / 2
+    for (const [i, id] of group.entries()) {
+      positions.set(id, { x: startX + i * gapX, y: 10 + depth * gapY + BOX_H / 2, text: nodes.get(id)!.label })
+    }
+  }
+  return { positions, viewBox: `0 0 ${W} ${H}` }
+}
+
+export const drawPipeline = async (pipeline: Jsonable): Promise<VDom> => {
+  const graph = await expandLinks(pipeline)
+  const { nodes, root } = buildDag(graph)
+  const { positions, viewBox } = layoutDag(nodes, root)
+
+  const boxes = [...positions.values()]
+  const connections: BoxData[][] = []
+  nodes.forEach(node => {
+    const to = positions.get(node.id)!
+    node.children.forEach(cid => connections.push([positions.get(cid)!, to]))
+  })
+
+  return HTML.svgPath([], { viewBox, width: "70%", height: "70%" },
     ...connections.map(([from, to]) => arrow(from, to)),
     ...boxes.map(textbox),
   )
-
-export const drawPipeline = async (pipeline: Jsonable): Promise<VDom> => {
-  const boxes: BoxData[] = []
-  const connections: BoxData[][] = []
-  const n = await expandLinks(pipeline)
-  console.log("graph:", tojson(n))
-
-  const depth = (n: any): number =>
-    n.$ === "logic" ? 1 + Math.max(0, ...Object.values(n.inputs as Record<string, any>).map((v: any) => depth(v)))
-    : n.$ === "llm_call" ? 1 + depth(n.prompt)
-    : 0
-
-  const leaves = (n: any): number =>
-    n.$ === "logic" ? Object.values(n.inputs as Record<string, any>).reduce((s: number, v: any) => s + leaves(v), 0) || 1
-    : n.$ === "llm_call" ? leaves(n.prompt)
-    : 1
-
-  const maxD = depth(n), numL = leaves(n)
-  const colW = 80 / Math.max(1, numL)
-  const rowH = maxD > 0 ? 60 / maxD : 20
-  const baseY = 10 + maxD * rowH
-  let leafIdx = 0
-
-  const place = (n: any, level: number): BoxData => {
-    const y = baseY - level * rowH
-    if (n.$ === "input") {
-      const box: BoxData = { x: 10 + (++leafIdx - 0.5) * colW, y, text: "input" }
-      boxes.push(box)
-      return box
-    }
-    const children =
-      n.$ === "logic" ? Object.values(n.inputs as Record<string, any>).map((v: any) => place(v, level + 1))
-      : n.$ === "llm_call" ? [place(n.prompt, level + 1)]
-      : []
-    const x = children.length ? children.reduce((s, b) => s + b.x, 0) / children.length : 50
-    const box: BoxData = { x, y, text: n.$ }
-    boxes.push(box)
-    children.forEach(c => connections.push([c, box]))
-    return box
-  }
-
-  place(n, 0)
-  return drawBoxes(boxes, connections)
 }
