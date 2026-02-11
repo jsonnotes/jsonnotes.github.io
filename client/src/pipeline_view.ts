@@ -1,7 +1,49 @@
-import { Jsonable } from "@jsonview/core"
+import { Hash, Jsonable, tojson } from "@jsonview/core"
 import { HTML, type VDom } from "@jsonview/lib"
+import { getNote } from "@jsonview/lib/src/dbconn"
+import { Graph } from "@jsonview/lib/src/example/types"
 
 type BoxData = { x: number, y: number, text: string }
+
+
+const getSrc = (graph: Graph) => {
+  if (graph.$ === "logic") return Object.values(graph.inputs)
+  if (graph.$ === "llm_call") return [graph.prompt]
+  if (graph.$ === "loop") return [graph.input, graph.condition, graph.body]
+  return []
+}
+
+
+const childCount = (graph: Graph) => {
+  if (graph.$ === "logic") return Object.values(graph.inputs).length
+  if (graph.$ === "llm_call") return 1
+  if (graph.$ === "loop") return 3
+  return 0
+}
+
+const setSrc = (graph: Graph, srcs: Graph[]) => {
+  if (srcs.length !== childCount(graph)) throw new Error("wrong number of sources")
+  if (graph.$ === "logic") return {...graph, inputs: Object.fromEntries(srcs.map((s, i) => [Object.keys(graph.inputs)[i], s]))}
+  if (graph.$ === "llm_call") return {...graph, prompt: srcs[0]}
+  if (graph.$ === "loop") return {...graph, input: srcs[0], condition: srcs[1], body: srcs[2]}
+  return graph
+}
+
+const mapGraphSync = (graph: Graph, f: (g: Graph)=>Graph): Graph => setSrc(graph,getSrc(graph).map(f))
+const mapGraph = (graph: Graph, f: (g: Graph)=>Promise<Graph>): Promise<Graph> =>  Promise.all(getSrc(graph).map(f)).then(srcs => setSrc(graph,srcs))
+
+
+async function expandLinks(data:Jsonable): Promise<Graph> {
+  console.log("expand", tojson(data))
+  if (typeof data == "string") return getNote(data.slice(1) as Hash).then(n => expandLinks(n.data))
+  if (!(typeof data == "object" && "$" in data)) throw new Error("not a graph")
+  return mapGraph(
+    data as Graph,
+    async (g: Graph) => expandLinks(g)
+  )
+}
+
+
 
 const BOX_W = 30
 const BOX_H = 8
@@ -44,10 +86,11 @@ const drawBoxes = (boxes: BoxData[], connections: BoxData[][]): VDom =>
     ...boxes.map(textbox),
   )
 
-export const drawPipeline = (pipeline: Jsonable): VDom => {
+export const drawPipeline = async (pipeline: Jsonable): Promise<VDom> => {
   const boxes: BoxData[] = []
   const connections: BoxData[][] = []
-  const n = pipeline as any
+  const n = await expandLinks(pipeline)
+  console.log("graph:", tojson(n))
 
   const depth = (n: any): number =>
     n.$ === "logic" ? 1 + Math.max(0, ...Object.values(n.inputs as Record<string, any>).map((v: any) => depth(v)))

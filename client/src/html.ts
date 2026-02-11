@@ -78,7 +78,7 @@ export const routeLink = (href: string, text = null, ...cs: HTMLArg[]) =>
       e.preventDefault();
       history.pushState({}, "", href);
       window.dispatchEvent(new PopStateEvent("popstate"));
-    }, style:{color:"inherit", textDecoration: "none", border: "1px solid #ccc", padding: "0.1em", borderRadius: "0.25em"}},
+    }, style:{color:"inherit", textDecoration: "none", border: "1px solid #ccc", padding: "0px 4px", borderRadius: "0.25em"}},
     ...cs
   );
 export const span:HTMLGenerator<HTMLSpanElement> = newHtmlGenerator("span")

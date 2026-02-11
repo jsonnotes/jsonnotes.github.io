@@ -1,4 +1,4 @@
-import { expandLinks, fromjson, Hash, hashData, tojson, top, validate, type Jsonable, type NoteData } from "@jsonview/core";
+import { expandLinks, fromjson, hashData, tojson, top, validate, type Hash, type Jsonable, type NoteData } from "@jsonview/core";
 import { callProcedure, getNote, SERVER, sql, type ServerName } from "./dbconn.ts";
 import {jsonOverview, newestRows, funCache, type SchemaEntry} from "./helpers.ts";
 
@@ -18,10 +18,11 @@ export const notePreview = async (hash: Hash): Promise<string> => {
   return `#${hash.slice(0, 8)}`
 }
 
-export const validateNote = async (note: NoteData) => validate(
-  await expandLinks(note.data, getNote),
-  await expandLinks(note.schemaHash, getNote)
-)
+export const validateNote = async (note: NoteData) => {
+  const resolve = async (hash: Hash) => (await getNote(hash)).data
+  const schema = await resolve(note.schemaHash)
+  return validate(await expandLinks(note.data, resolve), await expandLinks(schema, resolve))
+}
 
 
 export type SearchRes = { title: string, hash: Hash, count: number }

@@ -114,12 +114,12 @@ handleRoute = () => {
     render(depsView.root);
     depsView.render((path.slice(5) || lastNoteRef) as Hash);
   } else if (path === "pipeline" || path.startsWith("pipeline/")) {
-    const hash = path.slice(9);
-    if (!hash) render(renderDom(() => drawPipeline(llmcall.data)));
+    let hash = path.slice(9);
+    if (!hash) hash = hashData(llmcall)
     else {
       render(div("loading..."));
       getNote(hash as Hash).then(note => {
-        render(renderDom(() => drawPipeline(note.data)));
+        drawPipeline(note.data).then(dom=>render(renderDom(() => dom)))
       }).catch(e => render(div(h2("ERROR"), p(e.message))));
     }
   } else {
