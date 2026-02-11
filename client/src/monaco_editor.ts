@@ -252,7 +252,10 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
         if (!hashMatch) return { suggestions: [] };
 
         const token = hashMatch[1].toLowerCase();
-        const filtered = await searchNotes(token).then(r => r.slice(0, 10));
+        const isHex = /^[a-f0-9]+$/i.test(token);
+        let results = await searchNotes(isHex ? "" : token);
+        if (isHex && token) results = results.filter(n => n.hash.includes(token) || n.title.toLowerCase().includes(token));
+        const filtered = results.slice(0, 10);
         const range = {
           startLineNumber: position.lineNumber,
           endLineNumber: position.lineNumber,
@@ -262,7 +265,7 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
 
         return {
           suggestions: filtered.map((n) => ({
-            label: `#${n.hash.slice(0, 8)}${n.title ? `: ${n.title}` : ""}`,
+            label: `#${n.hash.slice(0, 8)}${n.title ? `: ${n.title}` : ""} (${n.count})`,
             kind: monaco.languages.CompletionItemKind.Reference,
             insertText: `#${n.hash}`,
             range,

@@ -131,7 +131,9 @@ const plainView = ({ submit }: EditDeps) => {
       suggestionBox.style.display = "none";
       return;
     }
-    searchNotes(token).then((notes) => {
+    const isHex = /^[a-f0-9]+$/i.test(token);
+    searchNotes(isHex ? "" : token).then((notes) => {
+      if (isHex && token) notes = notes.filter(n => n.hash.includes(token.toLowerCase()) || n.title.toLowerCase().includes(token.toLowerCase()));
       suggestionBox.innerHTML = "";
       if (!notes.length) {
         suggestionBox.style.display = "none";
@@ -139,7 +141,7 @@ const plainView = ({ submit }: EditDeps) => {
       }
       notes.slice(0, 8).forEach((n) => {
         const shortHash = n.hash.slice(0, 8);
-        suggestionBox.appendChild(button(`#${shortHash}${n.title ? `: ${n.title}` : ""}`, {
+        suggestionBox.appendChild(button(`#${shortHash}${n.title ? `: ${n.title}` : ""} (${n.count})`, {
           onclick: () => {
             const before = text.slice(0, hashPos);
             const after = text.slice(cursor);

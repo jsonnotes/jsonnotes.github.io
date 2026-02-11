@@ -36,7 +36,6 @@ jsonview/
 │   └── src/
 │       ├── main.ts      # Router + page composition
 │       ├── html.ts      # Legacy DOM helpers (prefer lib/views.ts)
-│       ├── dbconn.ts    # API client wrapper (imports from @jsonview/lib)
 │       ├── edit.ts      # Edit view (plain/nice/monaco modes)
 │       ├── monaco_editor.ts  # Monaco integration with # autocomplete
 │       ├── note_view.ts # Note view + local function execution
