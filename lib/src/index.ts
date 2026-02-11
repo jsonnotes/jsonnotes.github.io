@@ -1,8 +1,7 @@
-import { expandLinks, fromjson, hashData, tojson, top, validate, type Jsonable, type NoteData } from "@jsonview/core";
-import { callProcedure, getNote, SERVER, sql, type Hash, type ServerName } from "./dbconn.ts";
+import { expandLinks, fromjson, Hash, hashData, tojson, top, validate, type Jsonable, type NoteData } from "@jsonview/core";
+import { callProcedure, getNote, SERVER, sql, type ServerName } from "./dbconn.ts";
 import {jsonOverview, newestRows, funCache, type SchemaEntry} from "./helpers.ts";
 
-export { SERVER, type Hash } from "./dbconn.ts";
 export { jsonOverview, newestRows, funCache, type SchemaEntry };
 export { openrouterCall, DEFAULT_OPENROUTER_MODEL, type OpenRouterConfig } from "./openrouter.ts";
 export { renderDom, type VDom, HTML } from "./views.ts";

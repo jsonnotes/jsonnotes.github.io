@@ -10,9 +10,7 @@ const url_presets = {
   "maincloud": "https://maincloud.spacetimedb.com"
 }
 
-export type { Jsonable, NoteData, Note, Hash }
 export type ServerName = "local" | "maincloud";
-
 const ls = typeof localStorage !== "undefined" ? localStorage : null;
 
 export const SERVER = {

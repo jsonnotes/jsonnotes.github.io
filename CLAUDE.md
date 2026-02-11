@@ -4,7 +4,8 @@
 - Don't add any external dependencies apart from SpacetimeDB (core), ajv, vite, monaco-editor (client)
 - Keep solutions maximally simple in terms of lines of code (while not sacrificing typing or variable names)
 - No bloat, boilerplate, repetitive logic
-- All new utilities go in `lib/` with tests
+- Every functionality should be reused whenever possible. There should NOT be the same function recreated in lib and client.
+- `core/` changes are rare and must be approved
 - **lib and core must be fully tested** — run `npm test` before every deployment
 
 ## Project Structure (npm workspaces)
@@ -20,30 +21,37 @@ jsonview/
 │
 ├── lib/                 # @jsonview/lib - Tested utilities + minimal reference client
 │   ├── src/
-│   │   ├── dbconn.ts    # createApi: getNote, addNote, sql, callProcedure, callNote, callNoteLocal
-│   │   ├── index.ts     # Re-exports + noteSearch
-│   │   ├── helpers.ts   # funCache, jsonOverview, dbname, server constants
+│   │   ├── dbconn.ts    # Standalone API exports: getNote, addNote, sql, searchNotes, callNote, callNoteLocal
+│   │   ├── index.ts     # noteSearch, validateNote, fetchSchemas
+│   │   ├── helpers.ts   # funCache, jsonOverview, newestRows, SchemaEntry
 │   │   ├── views.ts     # VDom system: renderDom, HTML helpers, event handling
+│   │   ├── openrouter.ts # OpenRouter LLM integration (openrouterCall)
 │   │   ├── cli.ts       # runCli for CLI commands (has shebang — don't import from browser code)
-│   │   └── example_client.ts  # Minimal webapp
+│   │   └── example/     # Example pipelines
+│   │       ├── types.ts     # Pipeline graph types
+│   │       ├── pipeline.ts  # Pipeline definitions + llmcall
+│   │       └── main.ts      # Pipeline entry point
 │   ├── __tests__/       # Tests (node --test)
 │   │   ├── api.test.ts  # API + search tests (requires maincloud)
 │   │   ├── cli.test.ts  # CLI unit tests
-│   │   └── parser.test.ts # Parser + executor tests
+│   │   ├── parser.test.ts # Parser + executor tests
+│   │   └── schema.test.ts  # Schema validation tests
 │   └── index.html       # Minimal webapp entry
 │
 ├── client/              # @jsonview/client - Full UI
 │   └── src/
 │       ├── main.ts      # Router + page composition
-│       ├── html.ts      # Legacy DOM helpers (prefer lib/views.ts)
-│       ├── edit.ts      # Edit view (plain/nice/monaco modes)
+│       ├── html.ts      # DOM helpers (div, button, style, input, etc.)
+│       ├── helpers.ts   # noteSearch popup, createSchemaPicker, safeInput, notePreview, noteLink
+│       ├── edit.ts      # Edit view (monaco editor + schema panel)
 │       ├── monaco_editor.ts  # Monaco integration with # autocomplete
 │       ├── note_view.ts # Note view + local function execution
 │       ├── dashboard.ts # Dashboard + schema filtering
 │       ├── sql_view.ts  # SQL query interface
-│       ├── deps_view.ts # Dependencies/links view
+│       ├── deps_view.ts # Dependencies/links SVG view
 │       ├── call_note.ts # Note calling interface
-│       └── openrouter.ts # OpenRouter AI integration
+│       ├── pipeline_view.ts # Pipeline graph visualization
+│       └── openrouter.ts # OpenRouter AI integration (client-side)
 │
 └── docs/                # Build output for GitHub Pages
 ```
@@ -109,46 +117,52 @@ runWithFuelAsync(src, fuel?, env?)  // Execute with fuel limit (async)
 runWithFuelShared(src, fuelRef, env?)  // Shared fuel for nested calls
 ```
 
-### @jsonview/lib (lib/src/index.ts)
+### @jsonview/lib (lib/src/dbconn.ts) — standalone module-level exports
 ```ts
-// Re-exports
-createApi, Api, ApiConfig, Hash, server, dbname, jsonOverview
+dbname                         // "jsonview"
+type ServerName = "local" | "maincloud"
+SERVER                         // { value, get(), set(value) } — persisted to localStorage
 
-// Search
-type SearchRes = { title: string, hash: Hash, count: number }
-noteSearch(api, update)       // Returns search function; caches per server in localStorage
+// API functions (auto-authenticates on import via top-level await)
+sql(query)                     // Run SQL, returns { names, rows }
+getNote(hash)                  // Get note by hash (cached via funCache, returns Promise)
+addNote(schema, data)          // Add note, returns hash (deduped)
+addNote(noteData)              // Overload: pass NoteData directly
+callProcedure(name, payload)   // Call any SpacetimeDB procedure
+searchNotes(query)             // Search notes by title prefix via search_note procedure
+callNote(fn, arg?)             // Call server function (double fromjson for string wrapping)
+callNoteLocal(fn, arg, extras?) // Execute function_schema note locally via parser
+setCacheNote(hash, noteData)   // Manually populate the getNote cache
 ```
 
-### @jsonview/lib (lib/src/dbconn.ts)
+### @jsonview/lib (lib/src/index.ts) — re-exports + utilities
 ```ts
-type ApiConfig = { server: "local" | "maincloud", accessToken?: string | null }
+// Re-exports
+SERVER, Hash                   // from dbconn
+jsonOverview, newestRows, funCache, SchemaEntry  // from helpers
+renderDom, VDom, HTML          // from views
+openrouterCall, DEFAULT_OPENROUTER_MODEL, OpenRouterConfig  // from openrouter
 
-createApi(config: ApiConfig) => {
-  server, baseUrl,
-  sql(query)                   // Run SQL, returns {names, rows}
-  getNote(hash)                // Get note by hash (cached via funCache)
-  addNote(schema, data)        // Add note, returns hash (deduped)
-  addNote(noteData)            // Overload: pass NoteData directly
-  callProcedure(name, payload) // Call any procedure
-  callNote(fn, arg?)           // Call server function (double fromjson for string wrapping)
-  callNoteLocal(fn, arg, extras?) // Execute function_schema note locally via parser
-  setAccessToken(token)        // Update auth
-}
+// Utilities
+notePreview(hash)              // Short label for a note (title or truncated data)
+validateNote(note)             // Validate NoteData against its schema (expands links)
+noteSearch(update)             // Returns search function; caches per server in localStorage
+fetchSchemas()                 // Get all schema notes with counts
+fetchNotes(limit?)             // Get recent notes as SchemaEntry[]
 ```
 
 ### @jsonview/lib (lib/src/helpers.ts)
 ```ts
-dbname                         // "jsonview"
-server                         // "maincloud"
 funCache(fn)                   // Memoize with Map + localStorage persistence
 jsonOverview(json)             // Tree-like string summary of JSON
+newestRows(rows, limit)        // Last N rows reversed (newest first)
+type SchemaEntry = { hash, title, count? }
 ```
 
 ### @jsonview/lib (lib/src/views.ts)
 ```ts
 type VDom                      // Virtual DOM node
 type DomEvent                  // Mouse or keyboard event
-type UPPER = { add, del, update }  // DOM manipulation callbacks
 renderDom(maker)               // Render VDom tree to HTMLElement
 HTML.div, span, p, h1-h6, a, button, input, textarea, pre, popup  // VDom builders
 ```
@@ -157,8 +171,15 @@ HTML.div, span, p, h1-h6, a, button, input, textarea, pre, popup  // VDom builde
 ```ts
 type CliIo = { stdout, stderr }
 runCli(argv, io?)              // Execute CLI command, returns exit code
-// ⚠️ Has shebang — do NOT import from browser code (use helpers.ts for shared constants)
+// ⚠️ Has shebang — do NOT import from browser code
 ```
+
+## Import Patterns
+
+- **Prefer direct imports** to `@jsonview/lib/src/dbconn` over re-exports through `@jsonview/lib`
+- Client files import dbconn functions directly: `import { getNote, sql } from "@jsonview/lib/src/dbconn"`
+- Client files import lib utilities from `@jsonview/lib`: `import { renderDom, type VDom } from "@jsonview/lib"`
+- Within lib, use relative imports with `.ts` extension (Node ESM): `import { funCache } from "./helpers.ts"`
 
 ## Internal Architecture
 
@@ -167,7 +188,9 @@ runCli(argv, io?)              // Execute CLI command, returns exit code
 - **Validation**: JSON validated against schema on backend; links expanded for validation only
 - **Link format**: `#` followed by 32 lowercase hex chars (e.g., `#a1b2c3d4...`)
 - **add_note is a reducer**: Maincloud only exposes reducers; clients compute the hash locally
-- **funCache**: Memoizes functions with both in-memory Map and localStorage persistence; safe in Node.js (gracefully handles missing localStorage)
+- **funCache**: Memoizes functions with both in-memory Map and localStorage persistence; returns cached values synchronously on cache hit (wrap with `Promise.resolve` for async callers)
+- **dbconn is a standalone module**: Exports functions directly at module level (no factory). Authenticates via top-level `await getToken()` on import.
+- **Note search**: Server-side via `search_note` procedure (title prefix). For `#` autocomplete with hex tokens, call `searchNotes("")` and filter client-side by hash substring.
 
 ## Note Types
 - `Note`: `{ hash, schemaHash, data }` where `data` is JSON string
@@ -186,14 +209,15 @@ runCli(argv, io?)              // Execute CLI command, returns exit code
 - Server storage isolated: each function gets keyspace `${noteId}:${key}`
 - Parser validates scopes (no undeclared variables) and rejects prototype access
 
-## UI Features (client)
+## Client Routes
 
-**Edit Modes** (cycle with button):
-- Nice: schema-based forms
-- Plain: raw JSON textarea
-- Monaco: full editor with # autocomplete
-
-**Link Autocomplete**: Type `#` to search notes by hash/title
+- `/` — Dashboard (note list + schema filter)
+- `/edit` — Monaco editor + schema picker
+- `/sql` — SQL query interface
+- `/deps` `/deps/:hash` — Dependency graph SVG
+- `/pipeline` `/pipeline/:hash` — Pipeline graph visualization
+- `/view/:hash` — Execute function and render result as VDom
+- `/:hash` — Note view (catch-all)
 
 ## Database Procedures
 
@@ -209,14 +233,16 @@ runCli(argv, io?)              // Execute CLI command, returns exit code
 - Assume shared storage in nested server calls -> Each call has isolated storage
 - Pass `undefined` to procedures -> Use `"null"` string
 - Import types as values -> Use `import type { Hash }` for type-only imports
-- Import from `cli.ts` in browser code -> Import shared constants from `helpers.ts` (cli.ts has shebang that breaks Vite)
+- Import from `cli.ts` in browser code -> cli.ts has shebang that breaks Vite
 - Use bare `localStorage` in lib code -> Guard with `typeof localStorage !== "undefined"` for Node.js compat
 - Expect `t.object(...)` procedure results as objects -> SpacetimeDB returns tuples (arrays), map them manually
 - Expect single `fromjson` on `call_note` results -> It's double-encoded (string in string), needs `fromjson(fromjson(raw))`
+- Expect `getNote()` to always return a Promise -> `funCache` returns cached values synchronously; wrap with `Promise.resolve()` when needed
+- Use relative imports without `.ts` extension in lib -> Node ESM requires explicit `.ts` extensions
 
-## CLI + Dev Notes
+## Dev Notes
 
 - Global CLI available via `npm link -w @jsonview/lib` -> `jsonview` command
 - Monaco workers require Vite worker imports (see `client/src/monaco_editor.ts`)
-- `noteSearch` caches per server (`searchCache:local` / `searchCache:maincloud`)
-- Partial hash search uses local cache only (no server call); full 32-char hash does direct `getNote`
+- `noteSearch` in `lib/src/index.ts` caches per server (`searchCache:local` / `searchCache:maincloud`); partial hash searches use local cache, full 32-char hash does direct `getNote`
+- `searchNotes` in `lib/src/dbconn.ts` calls `search_note` procedure directly (no caching)
