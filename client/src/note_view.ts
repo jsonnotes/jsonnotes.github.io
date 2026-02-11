@@ -1,27 +1,17 @@
 import { Hash, hashData, NoteData, script_schema, function_schema } from "@jsonview/core";
-import { jsonOverview, renderDom, type VDom } from "@jsonview/lib";
+import { jsonOverview, splitRefs, type VDom } from "@jsonview/lib";
 import { getNote, callNote as callNoteRemote } from "@jsonview/lib/src/dbconn";
 import { graph_schema } from "@jsonview/lib/src/example/pipeline";
-import { noteLink } from "./helpers";
-
-import { stringify } from "./helpers";
+import { noteLink, stringify } from "./helpers";
 import { button, div, h2, h3, p, popup, pre, routeLink, span, style } from "./html";
-import { callNote, mountView } from "./call_note";
+import { callNote, mountView, promptArgs, showResult } from "./call_note";
 
 const linkify = (text: string) => {
   const el = span(style({margin:"0.5em"}));
-  const re = /#([a-f0-9]{32})/g;
-  let last = 0;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(text))) {
-    const start = match.index;
-    const raw = match[1];
-    const token = raw as Hash;
-    if (start > last) el.append(document.createTextNode(text.slice(last, start)));
-    el.append(noteLink(token as Hash,)),
-    last = start + match[0].length;
-  }
-  if (last < text.length) el.append(document.createTextNode(text.slice(last)));
+  splitRefs(text).forEach(tok => {
+    if (tok.type === "text") el.append(document.createTextNode(tok.value));
+    else el.append(noteLink(tok.value as Hash));
+  })
   return el;
 };
 
@@ -69,79 +59,35 @@ export const openNoteView = (hash: Hash, submitNote: (data: NoteData) => Promise
     const title = h3(`${isScript ? "Script" : "Note"} #${shortHash} ${titleText} `);
 
     if (note.schemaHash === hashData(function_schema)) {
-      const isVDom = (value: unknown): value is VDom => {
-        if (!value || typeof value !== "object") return false;
-        const v = value as VDom;
-        return (
-          typeof v.tag === "string" &&
-          typeof v.textContent === "string" &&
-          typeof v.id === "string" &&
-          typeof v.style === "object" &&
-          Array.isArray(v.children)
-        );
-      };
-
-      const promptArgs = (storageKey: string) => {
-        const fnData = note.data as any;
-        const argNames = Object.keys(fnData?.args || {});
-        const usesArgs = String(fnData?.code || "").includes("args");
-        const needsArgs = argNames.length > 0 || usesArgs;
-        if (!needsArgs) return { canceled: false, raw: null as string | null, parsed: undefined as any };
-
-        const defaultArgs = argNames.length
-          ? JSON.stringify(Object.fromEntries(argNames.map((n: string) => [n, null])), null, 2)
-          : "{}";
-        const lastarg = localStorage.getItem(storageKey) ?? defaultArgs;
-        const argText = prompt("args as JSON object (use {} for none)", lastarg);
-        if (argText == null) return { canceled: true, raw: null, parsed: undefined };
-        const trimmed = argText.trim();
-        if (!trimmed) {
-          popup(h2("ERROR"), p("Args cannot be empty. Use {} for no arguments."));
-          return { canceled: true, raw: null, parsed: undefined };
-        }
-        try {
-          const parsed = JSON.parse(trimmed);
-          localStorage.setItem(storageKey, trimmed);
-          return { canceled: false, raw: trimmed, parsed };
-        } catch (e: any) {
-          popup(h2("ERROR"), p("Invalid JSON: " + e.message));
-          return { canceled: true, raw: null, parsed: undefined };
-        }
-      };
+      const fnData = note.data as any;
 
       const runLocalFn = button("run local", { onclick: async () => {
-        const { canceled, parsed } = promptArgs("local_fun_arg");
+        const { canceled, parsed } = promptArgs(fnData, "local_fun_arg");
         if (canceled) return;
-        const arg = parsed === undefined ? {} : parsed
         try {
           runLocalFn.textContent = "running...";
-          const res = await callNote(hash, arg, {
+          const res = await callNote(hash, parsed ?? {}, {
             view: (renderView) => mountView(renderView, (rendered) => {
               overlay.innerHTML = "";
               overlay.append(rendered);
               history.pushState({}, "", `/view/${hash}`);
             }),
           });
-          if (res !== undefined) {
-            if (isVDom(res)) popup(h2("result"), renderDom(() => res));
-            else popup(h2("result"), pre(typeof res === "string" ? res : JSON.stringify(res, null, 2)));
-          }
+          showResult(res);
         } catch (e: any) {
           popup(h2("ERROR"), p(e.message || "run failed"));
         } finally {
           runLocalFn.textContent = "run local";
         }
-
       }});
 
       const runRemoteFn = button("run remote", { onclick: async () => {
-        const { canceled, parsed } = promptArgs("remote_fun_arg");
+        const { canceled, parsed } = promptArgs(fnData, "remote_fun_arg");
         if (canceled) return;
-        const arg = parsed === undefined ? {} : parsed
         try {
           runRemoteFn.textContent = "running...";
-          const res = await callNoteRemote(hash, arg);
-          popup(h2("result"), pre(typeof res === "string" ? res : JSON.stringify(res, null, 2)));
+          const res = await callNoteRemote(hash, parsed ?? {});
+          showResult(res);
         } catch (e: any) {
           popup(h2("ERROR"), p(e.message || "run failed"));
         } finally {

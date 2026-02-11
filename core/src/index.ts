@@ -116,15 +116,12 @@ spacetimedb.procedure('search_note', {query: t.string()}, t.array(t.object(
   }
 )), (ctx, {query})=> {
   return ctx.withTx(ctx=>{
-    let lc =  Array.from(ctx.db.links.iter(), (row)=>({hash:row.to, c:row.from.length}))
-    .sort((a,b)=> a.c - b.c)
     let reps = []
-    for (let ct of lc){
-      let note = ctx.db.note.hash.find(ct.hash)
-      if (!note) continue
+    for (let note of ctx.db.note.iter()){
       let dat = fromjson(note.data)
       if (typeof dat == "object" && "title" in dat && typeof dat.title == "string" && dat.title.startsWith(query)){
-        reps.push({title: dat.title, count: ct.c, hash: ct.hash})
+        let links = ctx.db.links.to.find(note.hash)
+        reps.push({title: dat.title, count: links ? links.from.length : 0, hash: note.hash})
         if (reps.length >= 100) return reps
       }
     }

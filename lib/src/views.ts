@@ -1,10 +1,10 @@
 // page view
 
-type MouseEventType = "click"| "mousemove" | "mouseup" | "mousedown" | "drag"
+type MouseEventType = "click"| "mousemove" | "mouseup" | "mousedown" | "drag" | "wheel"
 type KeyboardEventType = "keydown" | "keyup"
 type DomEventType = MouseEventType | KeyboardEventType;
 
-const mouseEvents : MouseEventType[] = ["click", "mousemove", "mouseup", "mousedown", "drag"];
+const mouseEvents : MouseEventType[] = ["click", "mousemove", "mouseup", "mousedown", "drag", "wheel"];
 const keyboardEvents : KeyboardEventType[] = ["keydown", "keyup"];
 const svgNamespace = "http://www.w3.org/2000/svg";
 const svgTags = new Set(["svg", "path", "g", "line", "polyline", "polygon", "circle", "ellipse", "rect", "text"]);
@@ -16,7 +16,9 @@ type MouseEvent = {
   target: VDom
   clientX?: number
   clientY?: number
+  deltaY?: number
   currentTarget?: Element
+  preventDefault?: () => void
 };
 
 type KeyboardEvent = {
@@ -74,7 +76,15 @@ export const renderDom = (mker: (ufn: UPPER) => VDom): HTMLElement => {
     Object.entries(dom.style).forEach(st=>el.style.setProperty(...st))
     mouseEvents.forEach((type) => el.addEventListener(type, (e) => {
       const me = e as globalThis.MouseEvent
-      if (dom.onEvent!= undefined) dom.onEvent!({ type, target: doms.get(e.target as HTMLElement)!, clientX: me.clientX, clientY: me.clientY, currentTarget: el })
+      if (dom.onEvent!= undefined) dom.onEvent!({
+        type,
+        target: doms.get(e.target as HTMLElement)!,
+        clientX: me.clientX,
+        clientY: me.clientY,
+        deltaY: type === "wheel" ? (me as globalThis.WheelEvent).deltaY : undefined,
+        currentTarget: el,
+        preventDefault: () => e.preventDefault(),
+      })
     }));
     keyboardEvents.forEach((type) => el.addEventListener(type, (e) =>{
       let {key, metaKey, shiftKey} = e as globalThis.KeyboardEvent;
@@ -112,6 +122,7 @@ type Subscriber = {
   "onmouseup"? : MouseListener
   "onmousedown"? : MouseListener
   "onclick"? :MouseListener
+  "onwheel"? : MouseListener
 };
 
 type Content = string | VDom | Content[] | {id: string} | {style: Record<string, string>} | Subscriber | {value: string} | {attrs: Record<string, string>}

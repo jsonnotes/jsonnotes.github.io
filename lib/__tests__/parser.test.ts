@@ -49,6 +49,9 @@ it("booleans and comparisons", () => {
   testRun("return !true", {result: false})
   testRun("return true && false", {result: false})
   testRun("return false || true", {result: true})
+  testRun("return typeof 3", {result: "number"})
+  testRun("return typeof 'x'", {result: "string"})
+  testRun("return typeof {a: 1}", {result: "object"})
 })
 
 it("ternary", () => {
@@ -103,6 +106,9 @@ it("arrow functions", () => {
   testRun("const add = (a, b) => a + b; return add(2, 3)", {result: 5})
   testRun("const inc = x => x + 1; return inc(4)", {result: 5})
   testRun("const f = () => { return 42 }; return f()", {result: 42})
+  testRun("const f = (...xs) => xs.length; return f(1, 2, 3)", {result: 3})
+  testRun("const add3 = (a, b, c) => a + b + c; return add3(...[1, 2], 3)", {result: 6})
+  testRun("let async = 2; return async + 1", {result: 3})
 })
 
 it("closures", () => {
@@ -115,18 +121,34 @@ it("arrays", () => {
   testRun("let a = [1, 2, 3]; return a.length", {result: 3})
   testRun("return [1, 2, 3].map(x => x * 2)", {result: [2, 4, 6]})
   testRun("return [1, 2, 3].filter(x => x > 1)", {result: [2, 3]})
+  testRun("return [...[1, 2], 3]", {result: [1, 2, 3]})
+  testRun("let [x, ...rest] = [1, 2, 3]; return [x, rest]", {result: [1, [2, 3]]})
 })
 
 it("objects", () => {
   testRun("return {a: 1, b: 2}", {result: {a: 1, b: 2}})
   testRun("let o = {x: 5}; return o.x", {result: 5})
   testRun("let o = {x: 5}; return o['x']", {shouldError: true})
+  testRun("let o = {x: 5}; return o.constructor", {shouldError: true})
+  testRun("let o = {x: 5}; return o.__proto__", {shouldError: true})
   testRun("let x = 1; let y = 2; return {x, y}", {result: {x: 1, y: 2}})
+  testRun("return {a: 1, ...{b: 2}}", {result: {a: 1, b: 2}})
+  testRun("let {a, ...rest} = {a: 1, b: 2, c: 3}; return [a, rest]", {result: [1, {b: 2, c: 3}]})
+  testRun("return Object.keys({a: 1, b: 2})", {result: ["a", "b"]})
+  testRun("return Object.values({a: 1, b: 2})", {result: [1, 2]})
+  testRun("return Object.entries({a: 1, b: 2})", {result: [["a", 1], ["b", 2]]})
 })
 
 it("method calls", () => {
   testRun('return "hello".toUpperCase()', {result: "HELLO"})
   testRun('return "a,b,c".split(",")', {result: ["a", "b", "c"]})
+})
+
+it("safe Function builtin", () => {
+  testRun("const f = Function('x', 'return x + 1'); return f(2)", {result: 3})
+  testRun("const mul = Function('a,b', 'return a * b'); return mul(3, 4)", {result: 12})
+  testRun("const f = Function('...xs', 'return xs.length'); return f(1, 2, 3)", {result: 3})
+  testRun("let y = 7; const f = Function('return y'); return f()", {shouldError: true})
 })
 
 it("env injection", () => {
@@ -156,6 +178,12 @@ it("fuel consumed", () => {
   assert(res.fuel < 10000, "fuel should decrease")
 })
 
+it("safe Function shares fuel budget", () => {
+  let res = runWithFuel("const f = Function('while (true) {}'); return f()", 100)
+  assert("err" in res, "expected error")
+  assert((res as any).err.includes("fuel"), `expected fuel error, got: ${(res as any).err}`)
+})
+
 it("scope: rejects undeclared", () => {
   let errs = validateScopes(parse("return foo"))
   assert(errs.length > 0 && errs[0].includes("foo"))
@@ -173,6 +201,8 @@ it("scope: allows globals", () => {
 
 it("prototype: rejected", () => {
   assert(validateNoPrototype(parse("x.prototype")).length > 0)
+  assert(validateNoPrototype(parse("x.constructor")).length > 0)
+  assert(validateNoPrototype(parse("x.__proto__")).length > 0)
 })
 
 it("bracket indexing: only numeric literals", () => {
@@ -191,4 +221,49 @@ it("async: returns promise result", async () => {
 it("async: env with sync functions", async () => {
   let res = await runWithFuelAsync("return add(3, 4)", 1000, {add: (a: number, b: number) => a + b})
   assert("ok" in res && (res as any).ok === 7)
+})
+
+it("async: supports await syntax", async () => {
+  let res = await runWithFuelAsync("return await f()", 1000, {f: () => Promise.resolve(99)})
+  assert("ok" in res, `expected ok, got: ${"err" in res ? res.err : ""}`)
+  assert((res as any).ok === 99, `expected 99, got: ${(res as any).ok}`)
+})
+
+it("async: supports async arrow functions", async () => {
+  let res1 = await runWithFuelAsync("const f = async x => await Promise.resolve(x + 1); return await f(4)", 1000, {Promise})
+  assert("ok" in res1, `expected ok, got: ${"err" in res1 ? res1.err : ""}`)
+  assert((res1 as any).ok === 5, `expected 5, got: ${(res1 as any).ok}`)
+
+  let res2 = await runWithFuelAsync("const f = async (a, b) => { return a + b }; return await f(2, 3)", 1000)
+  assert("ok" in res2, `expected ok, got: ${"err" in res2 ? res2.err : ""}`)
+  assert((res2 as any).ok === 5, `expected 5, got: ${(res2 as any).ok}`)
+})
+
+it("async: supports member access on awaited value", async () => {
+  let res = await runWithFuelAsync(
+    "let graph = (await getNote('#x')).data; return graph",
+    1000,
+    {getNote: async () => ({data: {ok: true}})},
+  )
+  assert("ok" in res, `expected ok, got: ${"err" in res ? res.err : ""}`)
+  assert(JSON.stringify((res as any).ok) === JSON.stringify({ok: true}))
+})
+
+it("async: safe Object facade is available", async () => {
+  let res = await runWithFuelAsync("return await Promise.resolve(Object.keys({a: 1}))", 1000)
+  assert("ok" in res, `expected ok, got: ${"err" in res ? res.err : ""}`)
+  assert((res as any).ok?.[0] === "a", `expected ['a'], got: ${JSON.stringify((res as any).ok)}`)
+})
+
+it("async: safe Function builtin supports await", async () => {
+  let res = await runWithFuelAsync(
+    "const f = Function('x', 'return await Promise.resolve(x + 1)'); return await f(4)",
+    1000,
+  )
+  assert("ok" in res, `expected ok, got: ${"err" in res ? res.err : ""}`)
+  assert((res as any).ok === 5, `expected 5, got: ${(res as any).ok}`)
+})
+
+it("sync runner: await syntax is rejected", () => {
+  testRun("return await f()", { shouldError: true, env: {f: () => Promise.resolve(1)} })
 })

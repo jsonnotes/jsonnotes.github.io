@@ -1,4 +1,5 @@
 import { type VDom, type UPPER } from "./views.ts"
+import { splitRefs } from "./refs.ts"
 
 export type DagNode = { id: string, label: string, data?: any }
 
@@ -133,8 +134,12 @@ const layout = (config: DagConfig) => {
 
 const htmlEl = (tag: string, style: Record<string, string>, ...children: VDom[]): VDom =>
   ({ tag, attrs: {}, style, textContent: "", id: "", children })
+const htmlText = (tag: string, textContent: string, style: Record<string, string> = {}): VDom =>
+  ({ tag, attrs: {}, style, textContent, id: "", children: [] })
 
 const VP_W = 200, VP_H = 110
+const MIN_VP_W = 70
+const MAX_VP_SCALE = 1.8
 
 export const drawDag = (config: DagConfig): (upper: UPPER) => VDom => {
   const { onClick, overview, nodeLink } = config
@@ -144,16 +149,27 @@ export const drawDag = (config: DagConfig): (upper: UPPER) => VDom => {
   const nodeDataMap = new Map<string, DagNode>()
   for (const n of config.nodes) nodeDataMap.set(n.id, n)
 
-  // Pan state — center initially
-  let panX = (fullW - VP_W) / 2, panY = (fullH - VP_H) / 2
+  // View state (pan + zoom) — centered initially
+  const aspect = VP_W / VP_H
+  const maxVpW = Math.max(VP_W, fullW * MAX_VP_SCALE)
+  let vpW = VP_W
+  let vpH = VP_H
+  let panX = (fullW - vpW) / 2, panY = (fullH - vpH) / 2
   let dragging = false, dragMoved = false
   let dragStartX = 0, dragStartY = 0, panStartX = 0, panStartY = 0
 
+  const clampAxis = (pan: number, full: number, vp: number, pad: number) => {
+    const center = (full - vp) / 2
+    const min = Math.min(center - pad, -pad)
+    const max = Math.max(center + pad, full - vp + pad)
+    return Math.max(min, Math.min(pan, max))
+  }
+
   const clamp = () => {
-    if (fullW <= VP_W) panX = (fullW - VP_W) / 2
-    else panX = Math.max(0, Math.min(panX, fullW - VP_W))
-    if (fullH <= VP_H) panY = (fullH - VP_H) / 2
-    else panY = Math.max(0, Math.min(panY, fullH - VP_H))
+    const panPadX = vpW * 0.45
+    const panPadY = vpH * 0.25
+    panX = clampAxis(panX, fullW, vpW, panPadX)
+    panY = clampAxis(panY, fullH, vpH, panPadY)
   }
   clamp()
 
@@ -210,7 +226,7 @@ export const drawDag = (config: DagConfig): (upper: UPPER) => VDom => {
     const svg: VDom = {
       tag: "svg", textContent: "", id: "",
       style: { cursor: "grab" },
-      attrs: { viewBox: `${panX} ${panY} ${VP_W} ${VP_H}`, width: "100%", xmlns: "http://www.w3.org/2000/svg" },
+      attrs: { viewBox: `${panX} ${panY} ${vpW} ${vpH}`, width: "100%", xmlns: "http://www.w3.org/2000/svg" },
       children: [],
       onEvent: (e) => {
         if (e.type === "mousedown" && e.clientX != null) {
@@ -226,8 +242,8 @@ export const drawDag = (config: DagConfig): (upper: UPPER) => VDom => {
           const dx = e.clientX - dragStartX, dy = e.clientY! - dragStartY
           if (!dragMoved && Math.abs(dx) < 3 && Math.abs(dy) < 3) return
           dragMoved = true
-          panX = panStartX - dx * (VP_W / rect.width)
-          panY = panStartY - dy * (VP_H / rect.height)
+          panX = panStartX - dx * (vpW / rect.width)
+          panY = panStartY - dy * (vpH / rect.height)
           clamp()
           rebuild()
           upper.update(root)
@@ -235,24 +251,35 @@ export const drawDag = (config: DagConfig): (upper: UPPER) => VDom => {
           const wasDragging = dragging && dragMoved
           dragging = false
           if (wasDragging) { rebuild(); upper.update(root) }
+        } else if (e.type === "wheel") {
+          e.preventDefault?.()
+          const rect = (e.currentTarget as Element)?.getBoundingClientRect?.()
+          if (!rect) return
+          const zoom = (e.deltaY || 0) > 0 ? 1.1 : 0.9
+          const oldVpW = vpW, oldVpH = vpH
+          const newVpW = Math.max(MIN_VP_W, Math.min(maxVpW, oldVpW * zoom))
+          const newVpH = newVpW / aspect
+          const px = e.clientX != null ? Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) : 0.5
+          const py = e.clientY != null ? Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height)) : 0.5
+          const worldX = panX + px * oldVpW
+          const worldY = panY + py * oldVpH
+          vpW = newVpW
+          vpH = newVpH
+          panX = worldX - px * vpW
+          panY = worldY - py * vpH
+          clamp()
+          rebuild()
+          upper.update(root)
         }
       },
     }
 
-    const overviewEl: VDom = {
-      tag: "pre", textContent: "", id: "", style: {
-        "white-space": "pre-wrap", "font-size": "0.85em", "margin": "0",
-        "padding": "0.5em", "overflow-y": "auto", "max-height": "100%",
-      },
-      attrs: {}, children: [],
-    }
-
-    const root = htmlEl("div", { display: "flex", gap: "1em", width: "100%", "align-items": "start" },
-      htmlEl("div", { flex: "1", "min-width": "0" }, svg),
+    const root = htmlEl("div", { width: "100%", position: "relative" },
+      htmlEl("div", { width: "100%" }, svg),
     )
 
     const rebuild = () => {
-      svg.attrs.viewBox = `${panX} ${panY} ${VP_W} ${VP_H}`
+      svg.attrs.viewBox = `${panX} ${panY} ${vpW} ${vpH}`
       svg.style.cursor = dragging ? "grabbing" : "grab"
       const lit = new Set(selected ? nodeEdges.get(selected) || [] : [])
       svg.children = [
@@ -260,11 +287,6 @@ export const drawDag = (config: DagConfig): (upper: UPPER) => VDom => {
         ...boxes.map(([id, box]) => mkBox(id, box, id === selected, (e) => {
           if (e.type !== "click" || dragMoved) return
           const newSelected = selected === id ? null : id
-          if (newSelected) {
-            panX = box.x - VP_W / 2
-            panY = box.y - VP_H / 2
-            clamp()
-          }
           selected = newSelected
           rebuild()
           upper.update(root)
@@ -276,7 +298,6 @@ export const drawDag = (config: DagConfig): (upper: UPPER) => VDom => {
       ]
       const selNode = selected ? nodeDataMap.get(selected) : null
       if (selNode && overview) {
-        overviewEl.textContent = overview(selNode)
         const panelChildren: VDom[] = []
         const href = nodeLink?.(selNode)
         if (href) {
@@ -291,13 +312,51 @@ export const drawDag = (config: DagConfig): (upper: UPPER) => VDom => {
           }
           panelChildren.push(btn)
         }
-        panelChildren.push(overviewEl)
+        const overviewChildren = splitRefs(overview(selNode)).map((tok) => {
+          if (tok.type === "text") return htmlText("span", tok.value)
+          const refHash = tok.value
+          const refHref = `/${refHash}`
+          return {
+            tag: "button", textContent: `#${refHash.slice(0, 8)}`, id: "", style: {
+              cursor: "pointer",
+              border: "1px solid #ccc",
+              "border-radius": "0.25em",
+              padding: "0 0.25em",
+              "font-size": "0.95em",
+              "background-color": "transparent",
+              color: "inherit",
+            },
+            attrs: {}, children: [],
+            onEvent: (e) => {
+              if (e.type !== "click") return
+              history.pushState({}, "", refHref)
+              dispatchEvent(new PopStateEvent("popstate"))
+            },
+          } as VDom
+        })
+        panelChildren.push(htmlEl("pre", {
+          "white-space": "pre-wrap", "font-size": "0.85em", "margin": "0",
+          "padding": "0.5em", "overflow-y": "auto", "max-height": "100%",
+        }, ...overviewChildren))
         root.children = [
-          htmlEl("div", { flex: "1", "min-width": "0" }, svg),
-          htmlEl("div", { flex: "1", "min-width": "0", "border-left": "1px solid var(--color)", "padding-left": "1em" }, ...panelChildren),
+          htmlEl("div", { width: "100%" }, svg),
+          htmlEl("div", {
+            position: "absolute",
+            top: "0",
+            right: "0",
+            bottom: "0",
+            width: "min(28rem, 42%)",
+            "max-height": "100%",
+            "overflow-y": "auto",
+            "background-color": "var(--background-color)",
+            "border-left": "1px solid var(--color)",
+            "padding-left": "1em",
+            "padding-right": "0.5em",
+            "padding-top": "0.25em",
+          }, ...panelChildren),
         ]
       } else {
-        root.children = [htmlEl("div", { flex: "1", "min-width": "0" }, svg)]
+        root.children = [htmlEl("div", { width: "100%" }, svg)]
       }
     }
 

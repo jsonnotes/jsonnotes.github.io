@@ -13,6 +13,8 @@ const keywords = new Set([
   "if",
   "else",
   "return",
+  "await",
+  "typeof",
   "let",
   "const",
   "for",
@@ -94,7 +96,7 @@ const tokenize = (src: string): Token[] => {
     const start = i;
     const two = src.slice(i, i + 2);
     const three = src.slice(i, i + 3);
-    if (three === "===" || three === "!==") {
+    if (three === "===" || three === "!==" || three === "...") {
       i += 3;
       push("operator", three, start);
       continue;
@@ -139,8 +141,11 @@ export type Stmt =
   | { type: "ForOfStatement"; left: VarDecl[] | Expr; leftKind: "let" | "const" | null; right: Expr; body: Stmt };
 export type Pattern =
   | Identifier
+  | RestElement
   | { type: "ArrayPattern"; elements: Pattern[] }
-  | { type: "ObjectPattern"; properties: PatternProperty[] };
+  | { type: "ObjectPattern"; properties: (PatternProperty | RestElement)[] };
+
+export type RestElement = { type: "RestElement"; argument: Pattern };
 
 export type PatternProperty = {
   type: "Property";
@@ -153,10 +158,12 @@ export type VarDecl = { type: "VariableDeclarator"; id: Pattern; init: Expr | nu
 
 export type Expr =
   | Identifier
+  | SpreadElement
   | Literal
-  | { type: "ArrayExpression"; elements: Expr[] }
-  | { type: "ObjectExpression"; properties: Property[] }
-  | { type: "CallExpression"; callee: Expr; arguments: Expr[] }
+  | { type: "ArrayExpression"; elements: (Expr | SpreadElement)[] }
+  | { type: "ObjectExpression"; properties: (Property | SpreadElement)[] }
+  | { type: "AwaitExpression"; argument: Expr }
+  | { type: "CallExpression"; callee: Expr; arguments: (Expr | SpreadElement)[] }
   | { type: "MemberExpression"; object: Expr; property: Expr; computed: boolean }
   | { type: "AssignmentExpression"; operator: string; left: Expr; right: Expr }
   | { type: "UpdateExpression"; operator: "++" | "--"; argument: Expr; prefix: boolean }
@@ -164,9 +171,10 @@ export type Expr =
   | { type: "LogicalExpression"; operator: string; left: Expr; right: Expr }
   | { type: "UnaryExpression"; operator: string; argument: Expr }
   | { type: "ConditionalExpression"; test: Expr; consequent: Expr; alternate: Expr }
-  | { type: "ArrowFunctionExpression"; params: Pattern[]; body: Expr | BlockStatement };
+  | { type: "ArrowFunctionExpression"; params: Pattern[]; body: Expr | BlockStatement; async: boolean };
 
 export type Identifier = { type: "Identifier"; name: string };
+export type SpreadElement = { type: "SpreadElement"; argument: Expr };
 export type Literal = { type: "Literal"; value: string | number | boolean | null };
 export type Property = { type: "Property"; key: Identifier | Literal; value: Expr; shorthand: boolean };
 
@@ -185,8 +193,12 @@ export const validateScopes = (program: Program, allowedGlobals: string[] = []) 
 
   const declarePattern = (p: Pattern) => {
     if (p.type === "Identifier") declare(p.name);
+    else if (p.type === "RestElement") declarePattern(p.argument);
     else if (p.type === "ArrayPattern") p.elements.forEach(declarePattern);
-    else p.properties.forEach((prop) => declarePattern(prop.value));
+    else p.properties.forEach((prop) => {
+      if (prop.type === "RestElement") declarePattern(prop.argument);
+      else declarePattern(prop.value);
+    });
   };
 
   const visitExpr = (e: Expr): void => {
@@ -196,15 +208,24 @@ export const validateScopes = (program: Program, allowedGlobals: string[] = []) 
         return;
       case "Literal":
         return;
+      case "SpreadElement":
+        visitExpr(e.argument);
+        return;
       case "ArrayExpression":
-        e.elements.forEach(visitExpr);
+        e.elements.forEach((el) => visitExpr(el));
         return;
       case "ObjectExpression":
-        e.properties.forEach((p) => visitExpr(p.value));
+        e.properties.forEach((p) => {
+          if (p.type === "SpreadElement") visitExpr(p.argument);
+          else visitExpr(p.value);
+        });
+        return;
+      case "AwaitExpression":
+        visitExpr(e.argument);
         return;
       case "CallExpression":
         visitExpr(e.callee);
-        e.arguments.forEach(visitExpr);
+        e.arguments.forEach((a) => visitExpr(a));
         return;
       case "MemberExpression":
         visitExpr(e.object);
@@ -302,10 +323,11 @@ export const validateScopes = (program: Program, allowedGlobals: string[] = []) 
 
 export const validateNoPrototype = (program: Program) => {
   const errors: string[] = [];
+  const forbiddenMembers = new Set(["prototype", "constructor", "__proto__"]);
   const visitExpr = (e: Expr): void => {
     switch (e.type) {
       case "MemberExpression":
-        if (!e.computed && e.property.type === "Identifier" && e.property.name === "prototype") {
+        if (!e.computed && e.property.type === "Identifier" && forbiddenMembers.has(e.property.name)) {
           errors.push("prototype access");
         }
         if (e.computed && !(e.property.type === "Literal" && typeof e.property.value === "number")) {
@@ -314,15 +336,24 @@ export const validateNoPrototype = (program: Program) => {
         visitExpr(e.object);
         if (e.computed) visitExpr(e.property);
         return;
+      case "SpreadElement":
+        visitExpr(e.argument);
+        return;
       case "CallExpression":
         visitExpr(e.callee);
-        e.arguments.forEach(visitExpr);
+        e.arguments.forEach((a) => visitExpr(a));
+        return;
+      case "AwaitExpression":
+        visitExpr(e.argument);
         return;
       case "ArrayExpression":
-        e.elements.forEach(visitExpr);
+        e.elements.forEach((el) => visitExpr(el));
         return;
       case "ObjectExpression":
-        e.properties.forEach((p) => visitExpr(p.value));
+        e.properties.forEach((p) => {
+          if (p.type === "SpreadElement") visitExpr(p.argument);
+          else visitExpr(p.value);
+        });
         return;
       case "AssignmentExpression":
         visitExpr(e.left);
@@ -409,12 +440,16 @@ const renderExpr = (e: Expr): string => {
   switch (e.type) {
     case "Identifier":
       return e.name;
+    case "SpreadElement":
+      return `...${renderExpr(e.argument)}`;
     case "Literal":
       return renderLiteral(e.value);
     case "ArrayExpression":
       return `[${e.elements.map(renderExpr).join(", ")}]`;
     case "ObjectExpression":
-      return `{${e.properties.map(renderProp).join(", ")}}`;
+      return `{${e.properties.map((p) => p.type === "SpreadElement" ? `...${renderExpr(p.argument)}` : renderProp(p)).join(", ")}}`;
+    case "AwaitExpression":
+      return `(await ${renderExpr(e.argument)})`;
     case "CallExpression": {
       const calleeStr = renderExpr(e.callee);
       const needsParens = e.callee.type === "ArrowFunctionExpression";
@@ -434,7 +469,9 @@ const renderExpr = (e: Expr): string => {
     case "LogicalExpression":
       return `(${renderExpr(e.left)} ${e.operator} ${renderExpr(e.right)})`;
     case "UnaryExpression":
-      return `(${e.operator}${renderExpr(e.argument)})`;
+      return e.operator === "typeof"
+        ? `(${e.operator} ${renderExpr(e.argument)})`
+        : `(${e.operator}${renderExpr(e.argument)})`;
     case "ConditionalExpression":
       return `(${renderExpr(e.test)} ? ${renderExpr(e.consequent)} : ${renderExpr(e.alternate)})`;
     case "ArrowFunctionExpression":
@@ -451,10 +488,11 @@ const renderProp = (p: Property) => {
 
 const renderArrow = (e: Extract<Expr, { type: "ArrowFunctionExpression" }>) => {
   const params = `(${e.params.map(renderPattern).join(", ")})`;
+  const prefix = e.async ? "async " : "";
   if (e.body.type === "BlockStatement") {
-    return `${params} => ${renderStmt(e.body, true)}`;
+    return `${prefix}${params} => ${renderStmt(e.body, true)}`;
   }
-  return `${params} => { __burn(); return ${renderExpr(e.body)}; }`;
+  return `${prefix}${params} => { __burn(); return ${renderExpr(e.body)}; }`;
 };
 
 const renderStmt = (s: Stmt, inFn = false): string => {
@@ -517,8 +555,9 @@ const renderDecl = (d: VarDecl) =>
 
 const renderPattern = (p: Pattern): string => {
   if (p.type === "Identifier") return p.name;
+  if (p.type === "RestElement") return `...${renderPattern(p.argument)}`;
   if (p.type === "ArrayPattern") return `[${p.elements.map(renderPattern).join(", ")}]`;
-  return `{${p.properties.map(renderPatternProperty).join(", ")}}`;
+  return `{${p.properties.map((prop) => prop.type === "RestElement" ? `...${renderPattern(prop.argument)}` : renderPatternProperty(prop)).join(", ")}}`;
 };
 
 const renderPatternProperty = (p: PatternProperty): string => {
@@ -553,6 +592,12 @@ export const renderRunnerWithFuelShared = (program: Program, fuelRefName = "__fu
   return `${prelude}const __run = () => {${body}}; try { const ok = __run(); return { ok, fuel: ${fuelRefName}.value }; } catch (err) { return { err: String(err), fuel: ${fuelRefName}.value }; }`;
 };
 
+export const renderRunnerWithFuelSharedAsync = (program: Program, fuelRefName = "__fuel") => {
+  const prelude = `const __burn = () => { if (--${fuelRefName}.value < 0) throw new Error("fuel exhausted"); };`;
+  const body = program.body.map((s) => renderStmt(s, true)).join("");
+  return `${prelude}const __run = async () => {${body}}; return __run().then(ok => ({ ok, fuel: ${fuelRefName}.value })).catch(err => ({ err: String(err), fuel: ${fuelRefName}.value }));`;
+};
+
 export const renderRunnerWithFuelAsync = (program: Program, fuel = 10000) => {
   const prelude = `let __fuel = ${fuel}; const __burn = () => { if (--__fuel < 0) throw new Error("fuel exhausted"); };`;
   const body = program.body.map((s) => renderStmt(s, true)).join("");
@@ -560,6 +605,100 @@ export const renderRunnerWithFuelAsync = (program: Program, fuel = 10000) => {
 };
 
 export type runRes = { ok: unknown; fuel: number } | { err: string; fuel: number };
+
+const SAFE_OBJECT = (() => {
+  const safe = Object.create(null) as {
+    keys: (obj: unknown) => string[];
+    values: (obj: unknown) => unknown[];
+    entries: (obj: unknown) => [string, unknown][];
+  };
+  safe.keys = (obj: unknown) => Object.keys(obj as Record<string, unknown>);
+  safe.values = (obj: unknown) => Object.values(obj as Record<string, unknown>);
+  safe.entries = (obj: unknown) => Object.entries(obj as Record<string, unknown>);
+  return Object.freeze(safe);
+})();
+
+type FuelRef = { value: number };
+type FunctionParam = { name: string, rest: boolean };
+
+const parseFunctionCtor = (ctorArgs: unknown[]): { params: FunctionParam[], body: string } => {
+  if (ctorArgs.some((v) => typeof v !== "string")) {
+    throw new Error("Function arguments must be strings");
+  }
+  const parts = ctorArgs as string[];
+  const body = parts.length ? parts[parts.length - 1] : "";
+  const rawParams = parts.slice(0, -1);
+  const params: FunctionParam[] = [];
+  for (const raw of rawParams) {
+    for (const seg of raw.split(",")) {
+      const name = seg.trim();
+      if (!name) continue;
+      const rest = name.startsWith("...");
+      const base = rest ? name.slice(3) : name;
+      if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(base)) {
+        throw new Error(`Invalid function parameter: ${name}`);
+      }
+      params.push({ name: base, rest });
+    }
+  }
+  const restCount = params.filter((p) => p.rest).length;
+  if (restCount > 1 || (restCount === 1 && !params[params.length - 1].rest)) {
+    throw new Error("Rest parameter must be the last parameter");
+  }
+  return { params, body };
+};
+
+const mapFunctionArgs = (params: FunctionParam[], callArgs: unknown[]): Record<string, unknown> => {
+  const env: Record<string, unknown> = {};
+  let idx = 0;
+  for (const p of params) {
+    if (p.rest) {
+      env[p.name] = callArgs.slice(idx);
+      idx = callArgs.length;
+    } else {
+      env[p.name] = callArgs[idx++];
+    }
+  }
+  return env;
+};
+
+const makeSafeFunctionSync = (fuelRef: FuelRef, outerGlobals: Record<string, unknown>) => (...ctorArgs: unknown[]) => {
+  const { params, body } = parseFunctionCtor(ctorArgs);
+  return (...callArgs: unknown[]) => {
+    const localEnv = { ...outerGlobals, ...mapFunctionArgs(params, callArgs) };
+    const res = runWithFuelShared(body, fuelRef, localEnv);
+    if ("err" in res) throw new Error(res.err);
+    return res.ok;
+  };
+};
+
+const makeSafeFunctionAsync = (fuelRef: FuelRef, outerGlobals: Record<string, unknown>) => (...ctorArgs: unknown[]) => {
+  const { params, body } = parseFunctionCtor(ctorArgs);
+  return async (...callArgs: unknown[]) => {
+    const localEnv = { ...outerGlobals, ...mapFunctionArgs(params, callArgs) };
+    const res = await runWithFuelSharedAsync(body, fuelRef, localEnv);
+    if ("err" in res) throw new Error(res.err);
+    return res.ok;
+  };
+};
+
+const withBuiltins = (
+  env: Record<string, unknown>,
+  fuelRef: FuelRef,
+  mode: "sync" | "async",
+): Record<string, unknown> => {
+  const baseGlobals: Record<string, unknown> = {
+    ...env,
+    Object: SAFE_OBJECT,
+    Promise,
+  };
+  return {
+    ...baseGlobals,
+    Function: mode === "async"
+      ? makeSafeFunctionAsync(fuelRef, baseGlobals)
+      : makeSafeFunctionSync(fuelRef, baseGlobals),
+  };
+};
 
 const stringifyError = (err: unknown): string => {
   if (err instanceof Error) {
@@ -585,33 +724,48 @@ export const runWithFuel = (
   fuel = 10000,
   env: Record<string, unknown> = {},
 ): runRes => {
-  try {
-    const program = parse(src);
-    const protoErrs = validateNoPrototype(program);
-    if (protoErrs.length) return { err: "prototype access", fuel };
-    const scopeErrs = validateScopes(program, Object.keys(env));
-    if (scopeErrs.length) return { err: scopeErrs.join(", "), fuel };
-    return (new Function(...Object.keys(env),renderRunnerWithFuel(program, fuel)) as (...args:unknown[]) => runRes)(...Object.values(env));
-  } catch (err) {
-    return {err: stringifyError(err), fuel };
-  }
+  const fuelRef = { value: fuel };
+  return runWithFuelShared(src, fuelRef, env);
 };
 
 export const runWithFuelShared = (
   src: string,
-  fuelRef: { value: number },
+  fuelRef: FuelRef,
   env: Record<string, unknown> = {},
   fuelRefName = "__fuel"
 ): runRes => {
   try {
+    const runtimeEnv = withBuiltins(env, fuelRef, "sync");
     const program = parse(src);
     const protoErrs = validateNoPrototype(program);
     if (protoErrs.length) return { err: "prototype access", fuel: fuelRef.value };
-    const scopeErrs = validateScopes(program, [...Object.keys(env), fuelRefName]);
+    const scopeErrs = validateScopes(program, [...Object.keys(runtimeEnv), fuelRefName]);
     if (scopeErrs.length) return { err: scopeErrs.join(", "), fuel: fuelRef.value };
     const code = renderRunnerWithFuelShared(program, fuelRefName);
-    const fullEnv = { ...env, [fuelRefName]: fuelRef };
+    const fullEnv = { ...runtimeEnv, [fuelRefName]: fuelRef };
     return (new Function(...Object.keys(fullEnv), code) as (...args:unknown[]) => runRes)(...Object.values(fullEnv));
+  } catch (err) {
+    return { err: stringifyError(err), fuel: fuelRef.value };
+  }
+};
+
+export const runWithFuelSharedAsync = async (
+  src: string,
+  fuelRef: FuelRef,
+  env: Record<string, unknown> = {},
+  fuelRefName = "__fuel"
+): Promise<runRes> => {
+  try {
+    const runtimeEnv = withBuiltins(env, fuelRef, "async");
+    const program = parse(src);
+    const protoErrs = validateNoPrototype(program);
+    if (protoErrs.length) return { err: "prototype access", fuel: fuelRef.value };
+    const scopeErrs = validateScopes(program, [...Object.keys(runtimeEnv), fuelRefName]);
+    if (scopeErrs.length) return { err: scopeErrs.join(", "), fuel: fuelRef.value };
+    const code = renderRunnerWithFuelSharedAsync(program, fuelRefName);
+    const fullEnv = { ...runtimeEnv, [fuelRefName]: fuelRef };
+    const fn = new Function(...Object.keys(fullEnv), code) as (...args: unknown[]) => Promise<runRes>;
+    return await fn(...Object.values(fullEnv));
   } catch (err) {
     return { err: stringifyError(err), fuel: fuelRef.value };
   }
@@ -622,18 +776,8 @@ export const runWithFuelAsync = async (
   fuel = 10000,
   env: Record<string, unknown> = {}
 ): Promise<runRes> => {
-  try {
-    const program = parse(src);
-    const protoErrs = validateNoPrototype(program);
-    if (protoErrs.length) return { err: "prototype access", fuel };
-    const scopeErrs = validateScopes(program, Object.keys(env));
-    if (scopeErrs.length) return { err: scopeErrs.join(", "), fuel };
-    const code = renderRunnerWithFuelAsync(program, fuel);
-    const fn = new Function(...Object.keys(env), code) as (...args:unknown[]) => Promise<runRes>;
-    return await fn(...Object.values(env));
-  } catch (err) {
-    return { err: stringifyError(err), fuel };
-  }
+  const fuelRef = { value: fuel };
+  return runWithFuelSharedAsync(src, fuelRef, env);
 };
 
 export const parse = (src: string): Program => {
@@ -848,9 +992,17 @@ export const parse = (src: string): Program => {
   };
 
   const parseUnary = (): Expr => {
+    if (match("keyword", "await")) {
+      next();
+      return { type: "AwaitExpression", argument: parseUnary() };
+    }
     if (match("operator", "++") || match("operator", "--")) {
       const op = next().value as "++" | "--";
       return { type: "UpdateExpression", operator: op, argument: parseUnary(), prefix: true };
+    }
+    if (match("keyword", "typeof")) {
+      next();
+      return { type: "UnaryExpression", operator: "typeof", argument: parseUnary() };
     }
     if (match("operator", "!") || match("operator", "-") || match("operator", "+")) {
       const op = next().value;
@@ -891,12 +1043,49 @@ export const parse = (src: string): Program => {
   };
 
   const parseArrowOrPrimary = (): Expr => {
+    if (match("identifier", "async")) {
+      const start = i;
+      next();
+      if (match("identifier")) {
+        const id = parseIdentifier();
+        if (match("operator", "=>")) {
+          next();
+          const body = match("punct", "{") ? parseBlock() : parseExpression();
+          return { type: "ArrowFunctionExpression", params: [id], body, async: true };
+        }
+      } else if (match("punct", "(")) {
+        next();
+        const params: Pattern[] = [];
+        let isParams = true;
+        try {
+          if (!match("punct", ")")) {
+            do {
+              params.push(parsePattern());
+              if (!match("punct", ",")) break;
+              next();
+            } while (true);
+          }
+        } catch {
+          isParams = false;
+        }
+        if (isParams && match("punct", ")")) {
+          next();
+          if (match("operator", "=>")) {
+            next();
+            const body = match("punct", "{") ? parseBlock() : parseExpression();
+            return { type: "ArrowFunctionExpression", params, body, async: true };
+          }
+        }
+      }
+      i = start;
+    }
+
     if (match("identifier")) {
       const id = parseIdentifier();
       if (match("operator", "=>")) {
         next();
         const body = match("punct", "{") ? parseBlock() : parseExpression();
-        return { type: "ArrowFunctionExpression", params: [id], body };
+        return { type: "ArrowFunctionExpression", params: [id], body, async: false };
       }
       return id;
     }
@@ -921,7 +1110,7 @@ export const parse = (src: string): Program => {
         if (match("operator", "=>")) {
           next();
           const body = match("punct", "{") ? parseBlock() : parseExpression();
-          return { type: "ArrowFunctionExpression", params, body };
+          return { type: "ArrowFunctionExpression", params, body, async: false };
         }
       }
       i = start;
@@ -947,10 +1136,15 @@ export const parse = (src: string): Program => {
 
   const parseArray = (): Expr => {
     eat("punct", "[");
-    const elements: Expr[] = [];
+    const elements: (Expr | SpreadElement)[] = [];
     if (!match("punct", "]")) {
       do {
-        elements.push(parseExpression());
+        if (match("operator", "...")) {
+          next();
+          elements.push({ type: "SpreadElement", argument: parseExpression() });
+        } else {
+          elements.push(parseExpression());
+        }
         if (!match("punct", ",")) break;
         next();
       } while (true);
@@ -961,9 +1155,16 @@ export const parse = (src: string): Program => {
 
   const parseObject = (): Expr => {
     eat("punct", "{");
-    const properties: Property[] = [];
+    const properties: (Property | SpreadElement)[] = [];
     if (!match("punct", "}")) {
       do {
+        if (match("operator", "...")) {
+          next();
+          properties.push({ type: "SpreadElement", argument: parseExpression() });
+          if (!match("punct", ",")) break;
+          next();
+          continue;
+        }
         let key: Identifier | Literal;
         let shorthand = false;
         if (match("identifier")) key = parseIdentifier();
@@ -988,12 +1189,17 @@ export const parse = (src: string): Program => {
     return { type: "ObjectExpression", properties };
   };
 
-  const parseArguments = (): Expr[] => {
+  const parseArguments = (): (Expr | SpreadElement)[] => {
     eat("punct", "(");
-    const args: Expr[] = [];
+    const args: (Expr | SpreadElement)[] = [];
     if (!match("punct", ")")) {
       do {
-        args.push(parseExpression());
+        if (match("operator", "...")) {
+          next();
+          args.push({ type: "SpreadElement", argument: parseExpression() });
+        } else {
+          args.push(parseExpression());
+        }
         if (!match("punct", ",")) break;
         next();
       } while (true);
@@ -1008,6 +1214,10 @@ export const parse = (src: string): Program => {
   };
 
   const parsePattern = (): Pattern => {
+    if (match("operator", "...")) {
+      next();
+      return { type: "RestElement", argument: parsePattern() };
+    }
     if (match("punct", "[")) {
       eat("punct", "[");
       const elements: Pattern[] = [];
@@ -1023,9 +1233,16 @@ export const parse = (src: string): Program => {
     }
     if (match("punct", "{")) {
       eat("punct", "{");
-      const properties: PatternProperty[] = [];
+      const properties: (PatternProperty | RestElement)[] = [];
       if (!match("punct", "}")) {
         do {
+          if (match("operator", "...")) {
+            next();
+            properties.push({ type: "RestElement", argument: parsePattern() });
+            if (!match("punct", ",")) break;
+            next();
+            continue;
+          }
           let key: Identifier | Literal;
           let shorthand = false;
           if (match("identifier")) key = parseIdentifier();

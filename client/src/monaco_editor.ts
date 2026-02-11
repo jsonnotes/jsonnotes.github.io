@@ -6,8 +6,7 @@ import HtmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { Hash, fromjson, tojson, hashData, script_schema, function_schema } from "@jsonview/core";
 import { div, button, style, input } from "./html";
-import { validateNote } from "@jsonview/lib";
-import { searchNotes } from "@jsonview/lib/src/dbconn";
+import { validateNote, hashSearch } from "@jsonview/lib";
 import { notePreview } from "./helpers";
 import { Draft } from "./main";
 
@@ -248,14 +247,11 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
           endColumn: position.column,
         });
 
-        const hashMatch = textUntilPosition.match(/#([a-f0-9]*)$/i);
+        const hashMatch = textUntilPosition.match(/#([a-z0-9]*)$/i);
         if (!hashMatch) return { suggestions: [] };
 
-        const token = hashMatch[1].toLowerCase();
-        const isHex = /^[a-f0-9]+$/i.test(token);
-        let results = await searchNotes(isHex ? "" : token);
-        if (isHex && token) results = results.filter(n => n.hash.includes(token) || n.title.toLowerCase().includes(token));
-        const filtered = results.slice(0, 10);
+        const token = hashMatch[1];
+        const filtered = (await hashSearch(token)).slice(0, 10);
         const range = {
           startLineNumber: position.lineNumber,
           endLineNumber: position.lineNumber,
@@ -322,7 +318,7 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
           background: #ccc4;
           border: 1px solid #ccc4;
           border-radius: 6px;
-          padding: 0 6px;
+          padding: 0 0px;
           margin-left: 0;
         }
       `;
@@ -399,7 +395,7 @@ export const monacoView = ({ submit }: MonacoViewDeps) => {
           endLineNumber: pos.lineNumber,
           endColumn: pos.column,
         });
-        if (/#([a-f0-9]*)$/i.test(textUntilPosition)) {
+        if (/#([a-z0-9]*)$/i.test(textUntilPosition)) {
           editor?.trigger("hash", "editor.action.triggerSuggest", {});
         }
       }

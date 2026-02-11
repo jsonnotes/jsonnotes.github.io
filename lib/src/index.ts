@@ -1,8 +1,9 @@
 import { expandLinks, fromjson, hashData, tojson, top, validate, type Hash, type Jsonable, type NoteData } from "@jsonview/core";
-import { callProcedure, getNote, SERVER, sql, type ServerName } from "./dbconn.ts";
+import { callProcedure, getNote, searchNotes, SERVER, sql, type ServerName } from "./dbconn.ts";
 import {jsonOverview, newestRows, funCache, type SchemaEntry} from "./helpers.ts";
+import { splitRefs, type RefToken } from "./refs.ts";
 
-export { jsonOverview, newestRows, funCache, type SchemaEntry };
+export { jsonOverview, newestRows, funCache, splitRefs, type RefToken, type SchemaEntry };
 export { openrouterCall, DEFAULT_OPENROUTER_MODEL, type OpenRouterConfig } from "./openrouter.ts";
 export { renderDom, type VDom, type UPPER, HTML } from "./views.ts";
 export { drawDag, type DagNode, type DagConfig } from "./dag.ts";
@@ -27,6 +28,21 @@ export const validateNote = async (note: NoteData) => {
 
 
 export type SearchRes = { title: string, hash: Hash, count: number }
+
+export const hashSearch = async (token: string): Promise<SearchRes[]> => {
+  const bare = token.startsWith("#") ? token.slice(1) : token
+  const isHex = /^[a-f0-9]+$/i.test(bare)
+  if (isHex && bare.length === 32) {
+    try {
+      const note = await getNote(bare as Hash)
+      const title = (note.data as any)?.title ?? ""
+      return [{ title, hash: bare as Hash, count: 1 }]
+    } catch { return [] }
+  }
+  let results = await searchNotes(isHex ? "" : bare)
+  if (isHex && bare) results = results.filter(r => r.hash.includes(bare.toLowerCase()) || r.title.toLowerCase().includes(bare.toLowerCase()))
+  return results as SearchRes[]
+}
 
 export function noteSearch(update: (results: SearchRes[]) => void): (term: string) => void {
   const cacheKey = "searchCache:" + SERVER.get();
@@ -93,4 +109,3 @@ export const fetchNotes = async ( limit = 200): Promise<SchemaEntry[]> =>
       return { hash: String(row[0] ?? ""), title }
     })
   )
-

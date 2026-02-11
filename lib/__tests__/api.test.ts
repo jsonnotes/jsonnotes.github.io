@@ -1,5 +1,5 @@
 import { it } from "node:test";
-import { addNote, callNote, callNoteLocal, getNote } from "../src/dbconn.ts";
+import { addNote, callNote, callNoteLocal, getNote, searchNotes } from "../src/dbconn.ts";
 import { noteSearch } from "../src/index.ts";
 import { function_schema, hashData, NoteData, top } from "@jsonview/core";
 import { graph_schema } from "../src/example/pipeline.ts";
@@ -91,6 +91,10 @@ it("API: search", async () => {
   assert(results.length > 0, "search should find results")
   assert(results[0].title.startsWith("test"), "result title should match query")
   assert(typeof results[0].hash === "string", "result should have hash")
+
+  await addNote(hashData(top), {type: "string"})
+  
+
 })
 
 it("API: search by hash", async () => {
@@ -113,6 +117,31 @@ it("API: search by #hash", async () => {
   })
   assert(results.length === 1, "#hash search should find exactly one result")
   assertEq(results[0].hash, hash)
+})
+
+it("API: searchNotes empty query", async () => {
+  const results = await searchNotes("")
+  assert(Array.isArray(results), "should return array")
+  assert(results.length > 0, "empty query should return results")
+  results.forEach(r => {
+    assert(typeof r.title === "string", "result should have title")
+    assert(typeof r.hash === "string" && r.hash.length === 32, "result should have 32-char hash")
+    assert(typeof r.count === "number", "result should have count")
+  })
+})
+
+it("API: searchNotes by title prefix", async () => {
+  const results = await searchNotes("test")
+  assert(results.length > 0, "should find notes with title prefix 'test'")
+  results.forEach(r => assert(r.title.startsWith("test"), `title '${r.title}' should start with 'test'`))
+})
+
+it("API: searchNotes returns title and hash for preview", async () => {
+  const hash = hashData(testfn)
+  const results = await searchNotes("test function")
+  const match = results.find(r => r.hash === hash)
+  assert(!!match, "should find the test function note")
+  assertEq(match!.title, "test function")
 })
 
 it("API: insert graph note with referenced input", async () => {

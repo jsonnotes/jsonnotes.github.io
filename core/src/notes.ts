@@ -99,7 +99,7 @@ const titled2 = NoteData("titled2", has_titled_child, {child: `#${hashData(title
 
 export const function_schema = NoteData("function schema", top, object({
   title: string,
-  args: { additionalProperties: {} },
+  args: { type: "object", additionalProperties: {} },
   code: string,
   returnSchema: {}
 }, {required: ["args", "code", "returnSchema"]  }))

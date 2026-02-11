@@ -1,10 +1,11 @@
-import { fromjson, Hash, hashData, NoteData, script_schema, tojson, top } from "@jsonview/core";
-import { a, button, div, input, pre, style, textarea } from "./html";
-import { jsonOverview, validateNote } from "@jsonview/lib";
-import { getNote, searchNotes } from "@jsonview/lib/src/dbconn";
+import { fromjson, Hash, hashData, NoteData, script_schema, function_schema, tojson, top } from "@jsonview/core";
+import { a, button, div, input, p, popup, pre, style, textarea } from "./html";
+import { jsonOverview, validateNote, hashSearch } from "@jsonview/lib";
+import { getNote } from "@jsonview/lib/src/dbconn";
 import { createSchemaPicker, formfield, safeInput } from "./helpers";
 import { Draft } from "./main";
 import { monacoView } from "./monaco_editor";
+import { callDraft, promptArgs, showResult } from "./call_note";
 
 type EditDeps = { submit: (data: NoteData) => Promise<void> };
 
@@ -131,9 +132,7 @@ const plainView = ({ submit }: EditDeps) => {
       suggestionBox.style.display = "none";
       return;
     }
-    const isHex = /^[a-f0-9]+$/i.test(token);
-    searchNotes(isHex ? "" : token).then((notes) => {
-      if (isHex && token) notes = notes.filter(n => n.hash.includes(token.toLowerCase()) || n.title.toLowerCase().includes(token.toLowerCase()));
+    hashSearch(token).catch(() => [] as Awaited<ReturnType<typeof hashSearch>>).then((notes) => {
       suggestionBox.innerHTML = "";
       if (!notes.length) {
         suggestionBox.style.display = "none";
@@ -270,13 +269,41 @@ export const niceView = ({ submit }: EditDeps) => {
 export const createEditView = (submit: EditDeps) => {
   const monacoEditor = monacoView(submit);
   const active = monacoEditor;
-  const schemaPanel = createSchemaPanel((hash) => active.setSchemaHash(hash));
-  const root = div(active.root, schemaPanel.root);
+  const functionHash = hashData(function_schema);
+
+  const runBtn = button("run local", {
+    style: { display: "none", marginTop: "0.5em" },
+    onclick: async () => {
+      let fnData: any;
+      try { fnData = fromjson(active.getDraft().text); } catch { return; }
+      const { canceled, parsed } = promptArgs(fnData, "edit_run_args");
+      if (canceled) return;
+      try {
+        runBtn.textContent = "running...";
+        showResult(await callDraft(fnData, parsed ?? {}));
+      } catch (e: any) {
+        popup(p(e.message || "run failed"));
+      } finally {
+        runBtn.textContent = "run local";
+      }
+    },
+  });
+
+  const updateRunBtn = (hash: Hash) => {
+    runBtn.style.display = hash === functionHash ? "" : "none";
+  };
+
+  const schemaPanel = createSchemaPanel((hash) => {
+    active.setSchemaHash(hash);
+    updateRunBtn(hash);
+  });
+  const root = div(active.root, runBtn, schemaPanel.root);
 
   return {
     fill: (newdata: Draft) => {
       schemaPanel.setSchemaHash(newdata.schemaHash);
       active.fill(newdata);
+      updateRunBtn(newdata.schemaHash);
     },
     root
   };

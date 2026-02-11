@@ -1,5 +1,6 @@
 import { type Hash, type NoteData, fromjson, isRef, Jsonable, Schema, tojson } from "@jsonview/core";
-import { getNote, searchNotes } from "@jsonview/lib/src/dbconn";
+import { getNote } from "@jsonview/lib/src/dbconn";
+import { hashSearch } from "@jsonview/lib";
 import { button, div, input, p, popup, routeLink, span, style, textarea } from "./html"
 
 export const stringify = x=>JSON.stringify(x,null,2)
@@ -31,19 +32,7 @@ export const noteSearch = (onSelect: (schema: SchemaEntry) => void) => {
   };
 
   const doSearch = (q: string) => {
-    const bare = q.startsWith("#") ? q.slice(1) : q;
-    const isHash = /^[a-f0-9]{8,32}$/.test(bare);
-    if (isHash && bare.length === 32) {
-      getNote(bare as Hash).then(note => {
-        const title = (note.data as any)?.title ?? "";
-        renderList([{ title, hash: bare, count: 1 }]);
-      }).catch(() => renderList([]));
-    } else {
-      searchNotes(isHash ? "" : q).then(results => {
-        if (isHash) results = results.filter(r => r.hash.includes(bare));
-        renderList(results);
-      }).catch(() => renderList([]));
-    }
+    hashSearch(q).then(renderList).catch(() => renderList([]));
   };
 
   doSearch("");
@@ -184,9 +173,7 @@ export const safeInput = (
         suggestionBox.style.display = "none";
         return;
       }
-      const isHex = /^[a-f0-9]+$/i.test(token);
-      searchNotes(isHex ? "" : token).then((notes) => {
-        if (isHex && token) notes = notes.filter(n => n.hash.includes(token.toLowerCase()) || n.title.toLowerCase().includes(token.toLowerCase()));
+      hashSearch(token).then((notes) => {
         suggestionBox.innerHTML = "";
         if (!notes.length) {
           suggestionBox.style.display = "none";

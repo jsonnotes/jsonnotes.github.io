@@ -117,8 +117,10 @@ export const callNoteLocal = async (fn: Hash, arg: Record<string, Jsonable>, ext
   const argNames = data.inputs?.length ? data.inputs : Object.keys(data.args || {});
 
   const env: Record<string, unknown> = {
-    getNote, addNote, hash: hash128,
-    call: (h: Hash, a: Record<string,Jsonable>) => callNoteLocal(h, a, extras),
+    getNote: (h:string) => getNote(h.slice(1) as Hash),
+    addNote,
+    hash: hash128,
+    call: (h: string, a: Record<string,Jsonable>) => callNoteLocal(h.slice(1) as Hash, a, extras),
     ...extras,
   };
 
