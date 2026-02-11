@@ -4,7 +4,7 @@ import { createDashboardView } from "./dashboard";
 import { createEditView } from "./edit";
 import { createSqlView } from "./sql_view";
 import { createDepsView } from "./deps_view";
-import { Hash, NoteData, tojson, hashData, top } from "@jsonview/core"
+import { Hash, Jsonable, NoteData, tojson, hashData, top } from "@jsonview/core"
 import { renderDom, type VDom } from "@jsonview/lib";
 
 import { drawPipeline } from "./pipeline_view";
@@ -114,14 +114,15 @@ handleRoute = () => {
     render(depsView.root);
     depsView.render((path.slice(5) || lastNoteRef) as Hash);
   } else if (path === "pipeline" || path.startsWith("pipeline/")) {
-    let hash = path.slice(9);
-    if (!hash) hash = hashData(llmcall)
-    else {
-      render(div("loading..."));
-      getNote(hash as Hash).then(note => {
-        drawPipeline(note.data).then(dom=>render(renderDom(() => dom)))
-      }).catch(e => render(div(h2("ERROR"), p(e.message))));
-    }
+    const hash = path.slice(9);
+    render(div("loading..."));
+    const data = hash
+      ? getNote(hash as Hash).then(n => n.data)
+      : Promise.resolve(llmcall.data as Jsonable);
+    data
+      .then(d => drawPipeline(d))
+      .then(maker => render(renderDom(maker)))
+      .catch(e => render(div(h2("ERROR"), p(e.message))));
   } else {
     lastNoteRef = path;
     showNote(path as Hash);
