@@ -3,6 +3,7 @@ import { button, div, p, routeLink, style } from "./html";
 import { function_schema, hashData, script_result_schema, script_schema, top } from "@jsonview/core";
 import { newestRows } from "@jsonview/lib";
 import { createSchemaPicker, noteLink, noteSearch } from "./helpers";
+import { graph_schema } from "@jsonview/lib/src/example/pipeline";
 
 type QueryResult = { names: string[]; rows: any[][] };
 
@@ -14,10 +15,6 @@ type DashboardDeps = {
 
 export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) => {
   const schemaHashAny = "any";
-  const schemaHashScript = hashData(script_schema);
-  const schemaHashScriptResult = hashData(script_result_schema);
-  const topHash = hashData(top);
-
   let cachedCount: number | null = null;
   let cachedRows: Map<string, any[][]> = new Map(); // schema -> rows
 
@@ -25,9 +22,11 @@ export const createDashboardView = ({ query, navigate, onRow }: DashboardDeps) =
   const schemaSelect = div(
     style({ display: "flex", gap: "0.5em", alignItems: "center", flexWrap: "wrap" }),
     button("any", { onclick: () => setSchema(schemaHashAny) }),
-    button("function", { onclick: () => setSchema(hashData(function_schema)) }),
-    button("script", { onclick: () => setSchema(schemaHashScript) }),
-    button("script output", { onclick: () => setSchema(schemaHashScriptResult) }),
+    Object.entries({
+      function: function_schema,
+      pipeline: graph_schema,
+
+    }).map(([name, schema]) => button(name, { onclick: () => setSchema(hashData(schema)) })),
     createSchemaPicker((s) => setSchema(s.hash))
   );
   let currentSchema = schemaHashAny;

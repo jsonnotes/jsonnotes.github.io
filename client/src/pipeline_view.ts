@@ -59,7 +59,7 @@ const textbox = (box: BoxData): VDom =>
     svgEl("rect", {
       x: `${box.x - BOX_W / 2}`, y: `${box.y - BOX_H / 2}`,
       width: `${BOX_W}`, height: `${BOX_H}`,
-      fill: "none", stroke: "var(--color)", "stroke-width": "0.3",
+      fill: "var(--background-color)", stroke: "var(--color)", "stroke-width": "0.3",
     }),
     svgTextEl(box.text, {
       x: `${box.x}`, y: `${box.y}`,
