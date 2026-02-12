@@ -56,15 +56,15 @@ it("renders svg vdom with one box per node and one path per edge", () => {
   const { upper } = mkUpper();
   const root = drawDag({
     nodes: [
-      { id: "a", label: "A" },
-      { id: "b", label: "B" },
-      { id: "c", label: "C" },
+      { id: "a", dom: { tag: "span", attrs: {}, style: {}, textContent: "A", id: "", children: [] } },
+      { id: "b", dom: { tag: "span", attrs: {}, style: {}, textContent: "B", id: "", children: [] } },
+      { id: "c", dom: { tag: "span", attrs: {}, style: {}, textContent: "C", id: "", children: [] } },
     ],
     edges: [
       ["a", "b"],
       ["b", "c"],
     ],
-  })(upper);
+  }).render(upper);
 
   assertEq(root.tag, "div");
   const svg = getSvg(root)!;
@@ -84,16 +84,16 @@ it("highlights selected node and connected edges on click", () => {
   const { upper, updates } = mkUpper();
   const root = drawDag({
     nodes: [
-      { id: "a", label: "A" },
-      { id: "b", label: "B" },
-      { id: "c", label: "C" },
+      { id: "a", dom: { tag: "span", attrs: {}, style: {}, textContent: "A", id: "", children: [] } },
+      { id: "b", dom: { tag: "span", attrs: {}, style: {}, textContent: "B", id: "", children: [] } },
+      { id: "c", dom: { tag: "span", attrs: {}, style: {}, textContent: "C", id: "", children: [] } },
     ],
     edges: [
       ["a", "b"],
       ["b", "c"],
     ],
-    onClick: (node) => clicked.push(node.id),
-  })(upper);
+    onClickBox: (_id, node) => clicked.push(node.id),
+  }).render(upper);
 
   const boxB = findBox(root, "B");
   assert(!!boxB, "B box missing");
@@ -117,16 +117,16 @@ it("second click deselects node and removes highlights", () => {
   const { upper, updates } = mkUpper();
   const root = drawDag({
     nodes: [
-      { id: "a", label: "A" },
-      { id: "b", label: "B" },
-      { id: "c", label: "C" },
+      { id: "a", dom: { tag: "span", attrs: {}, style: {}, textContent: "A", id: "", children: [] } },
+      { id: "b", dom: { tag: "span", attrs: {}, style: {}, textContent: "B", id: "", children: [] } },
+      { id: "c", dom: { tag: "span", attrs: {}, style: {}, textContent: "C", id: "", children: [] } },
     ],
     edges: [
       ["a", "b"],
       ["b", "c"],
     ],
-    onClick: (node) => clicked.push(node.id),
-  })(upper);
+    onClickBox: (_id, node) => clicked.push(node.id),
+  }).render(upper);
 
   const boxB = findBox(root, "B");
   assert(!!boxB, "B box missing");
@@ -151,16 +151,16 @@ it("routes long edges with intermediate control segments but no extra boxes", ()
   const { upper } = mkUpper();
   const root = drawDag({
     nodes: [
-      { id: "a", label: "A" },
-      { id: "b", label: "B" },
-      { id: "c", label: "C" },
+      { id: "a", dom: { tag: "span", attrs: {}, style: {}, textContent: "A", id: "", children: [] } },
+      { id: "b", dom: { tag: "span", attrs: {}, style: {}, textContent: "B", id: "", children: [] } },
+      { id: "c", dom: { tag: "span", attrs: {}, style: {}, textContent: "C", id: "", children: [] } },
     ],
     edges: [
       ["a", "b"],
       ["b", "c"],
       ["a", "c"],
     ],
-  })(upper);
+  }).render(upper);
 
   const boxes = getBoxes(root);
   const paths = getPaths(root);
@@ -169,4 +169,21 @@ it("routes long edges with intermediate control segments but no extra boxes", ()
 
   const controlCount = paths.map((p) => (p.attrs.d.match(/ C/g) || []).length);
   assert(controlCount.some((n) => n >= 2), "expected a multi-segment path for long edge");
+});
+
+it("emits highlight callback when selection toggles", () => {
+  const highlights: Array<string | null> = [];
+  const { upper } = mkUpper();
+  const root = drawDag({
+    nodes: [
+      { id: "a", dom: { tag: "span", attrs: {}, style: {}, textContent: "A", id: "", children: [] } },
+      { id: "b", dom: { tag: "span", attrs: {}, style: {}, textContent: "B", id: "", children: [] } },
+    ],
+    edges: [["a", "b"]],
+    onHighlightBox: (id) => highlights.push(id),
+  }).render(upper);
+
+  click(findBox(root, "A")!);
+  click(findBox(root, "A")!);
+  assertEq(highlights, ["a", null]);
 });
