@@ -16,7 +16,8 @@ jsonview/
 │   └── src/
 │       ├── notes.ts     # Types: Hash, Note, NoteData, Ref, Jsonable, schemas
 │       ├── hash.ts      # hash128 function
-│       ├── parser.ts    # JS parser + executor (fuel-limited, scope-validated)
+│       ├── parser.ts    # JS parser + AST validators (tokenizer, parse, validateScopes, validateNoPrototype)
+│       ├── codegen.ts   # Security-critical codegen + runtime (renderExpr, runWithFuel, assertSafeIdent)
 │       └── index.ts     # SpacetimeDB module (tables, reducers, procedures)
 │
 ├── lib/                 # @jsonview/lib - Tested utilities + minimal reference client
@@ -107,14 +108,15 @@ expandLinksSync(value, resolve)
 top, script_schema, function_schema, server_function, page_schema, script_result_schema
 ```
 
-### @jsonview/core (core/src/parser.ts)
+### @jsonview/core (core/src/parser.ts) — re-exports codegen.ts
 ```ts
 parse(src)                    // Parse JS to AST
 validateScopes(program, allowedGlobals?)  // Check for undeclared variables
 validateNoPrototype(program)  // Reject .prototype access
-runWithFuel(src, fuel?, env?) // Execute with fuel limit (sync)
-runWithFuelAsync(src, fuel?, env?)  // Execute with fuel limit (async)
-runWithFuelShared(src, fuelRef, env?)  // Shared fuel for nested calls
+assertSafeIdent(name)         // Defense-in-depth: validate identifier for codegen (from codegen.ts)
+runWithFuel(src, fuel?, env?) // Execute with fuel limit (sync, from codegen.ts)
+runWithFuelAsync(src, fuel?, env?)  // Execute with fuel limit (async, from codegen.ts)
+runWithFuelShared(src, fuelRef, env?)  // Shared fuel for nested calls (from codegen.ts)
 ```
 
 ### @jsonview/lib (lib/src/dbconn.ts) — standalone module-level exports
@@ -203,11 +205,26 @@ runCli(argv, io?)              // Execute CLI command, returns exit code
 1. **Local Functions** (`function_schema`) - Executed via `callNoteLocal` using fuel-limited parser; builtins: `getNote`, `addNote`, `call`, `hash`, plus custom extras
 2. **Server Functions** (`server_function`) - `run_note_async` procedure, fuel-limited, isolated storage per call
 
+### Sandbox Security Model (codegen.ts + parser.ts)
+
+User code runs through five defense layers, each independently auditable:
+
+1. **Restricted grammar** (parser.ts tokenizer + parser) — Only a JS subset is parseable. No `class`, `new`, `function`, `var`, `try/catch`, `throw`, `import`, `this`, template literals, or backticks. Unrecognized syntax is a parse error.
+
+2. **Scope validation** (`validateScopes`) — Every identifier in the AST must be declared locally or passed as an explicit global. Prevents access to `window`, `document`, `eval`, `process`, `globalThis`, etc.
+
+3. **Prototype chain lockdown** (`validateNoPrototype`) — Blocks `.prototype`, `.constructor`, `.__proto__`. Computed property access only allows numeric literals (`a[0]` ok, `a["constructor"]` rejected).
+
+4. **Codegen identifier validation** (`assertSafeIdent` in codegen.ts) — Defense-in-depth: every identifier and pattern emitted into generated JS is re-validated against `/^[A-Za-z_$][A-Za-z0-9_$]*$/` and a forbidden-name blocklist. Also validates the `fuelRefName` parameter. Prevents injection even if a crafted AST bypasses the parser.
+
+5. **Fuel-limited execution** (`runWithFuel*`) — Generated code includes `__burn()` calls at every statement and loop iteration. A shared fuel counter across nested `Function()` calls ensures infinite loops and deep recursion are terminated.
+
+Execution uses `new Function()` with only explicitly-passed globals (no ambient scope leakage). `Object` is replaced with a frozen safe facade (only `.keys`, `.values`, `.entries`). `Function` is replaced with a safe wrapper that re-parses + re-validates the body through the full pipeline.
+
 ### Key Details
 - `hash128()` returns 32-char hex (not BigInt)
 - Args default to `"null"` string (not undefined)
 - Server storage isolated: each function gets keyspace `${noteId}:${key}`
-- Parser validates scopes (no undeclared variables) and rejects prototype access
 
 ## Client Routes
 
