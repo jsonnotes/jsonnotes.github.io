@@ -40,7 +40,7 @@ export type NoteData = { schemaHash: Hash, data: Jsonable }
 
 export function hashData({schemaHash, data} : NoteData){
   if (schemaHash === "0" && tojson(data) != "{}") throw new Error("schema hash is 0 but data is not empty :" + tojson(data))
-  return hash128(schemaHash, data) 
+  return hash128(schemaHash, data)
 }
 
 export const hashCall : (fn:Hash, data:Jsonable) => Hash = hash128

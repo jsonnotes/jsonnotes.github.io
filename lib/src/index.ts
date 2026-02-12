@@ -6,7 +6,7 @@ import { splitRefs, type RefToken } from "./refs.ts";
 export { jsonOverview, newestRows, funCache, splitRefs, type RefToken, type SchemaEntry };
 export { openrouterCall, DEFAULT_OPENROUTER_MODEL, type OpenRouterConfig } from "./openrouter.ts";
 export { renderDom, type VDom, type UPPER, HTML } from "./views.ts";
-export { drawDag, type DagNode, type DagConfig } from "./dag.ts";
+export { drawDag, type DagNode, type DagConfig, type DagControls } from "./dag.ts";
 
 
 

@@ -8,6 +8,7 @@ import { Hash, Jsonable, NoteData, tojson, hashData, top } from "@jsonview/core"
 import { renderDom, type VDom } from "@jsonview/lib";
 
 import { drawPipeline } from "./pipeline_view";
+import { drawTraceRun } from "./pipeline_run";
 import { llmcall } from "@jsonview/lib/src/example/pipeline";
 import { callNote, mountView } from "./call_note";
 import { addNote, getNote, sql } from "@jsonview/lib/src/dbconn";
@@ -67,6 +68,7 @@ type Route =
   | { kind: "functionView", hash?: Hash }
   | { kind: "deps", hash?: Hash }
   | { kind: "pipeline", hash?: Hash }
+  | { kind: "trace", hash?: Hash }
   | { kind: "note", hash: Hash };
 
 const parseRoute = (pathname: string, search: string): Route => {
@@ -81,6 +83,7 @@ const parseRoute = (pathname: string, search: string): Route => {
   if (path.startsWith("view/")) return { kind: "functionView", hash: (path.slice(5) || undefined) as Hash | undefined };
   if (path === "deps" || path.startsWith("deps/")) return { kind: "deps", hash: (path.slice(5) || undefined) as Hash | undefined };
   if (path === "pipeline" || path.startsWith("pipeline/")) return { kind: "pipeline", hash: (path.slice(9) || undefined) as Hash | undefined };
+  if (path === "trace" || path.startsWith("trace/")) return { kind: "trace", hash: (path.slice(6) || undefined) as Hash | undefined };
   return { kind: "note", hash: path as Hash };
 };
 
@@ -90,6 +93,7 @@ const routeNoteHash = (route: Route): Hash | null => {
   if (route.kind === "functionView") return route.hash ?? null;
   if (route.kind === "deps") return route.hash ?? null;
   if (route.kind === "pipeline") return route.hash ?? null;
+  if (route.kind === "trace") return route.hash ?? null;
   return null;
 };
 
@@ -99,6 +103,7 @@ const navKey = (route: Route) => {
   if (route.kind === "sql") return "/sql";
   if (route.kind === "deps") return "/deps";
   if (route.kind === "pipeline") return "/pipeline";
+  if (route.kind === "trace") return "/trace";
   if (route.kind === "functionView") return "/view";
   return "/view-note";
 };
@@ -109,6 +114,7 @@ const resolveNavPath = (base: string): string => {
   if (base === "/edit") return `/edit?hash=${currentNoteRef}`;
   if (base === "/deps") return `/deps/${currentNoteRef}`;
   if (base === "/pipeline") return `/pipeline/${currentNoteRef}`;
+  if (base === "/trace") return `/trace/${currentNoteRef}`;
   return base;
 };
 
@@ -170,6 +176,16 @@ handleRoute = () => {
       .then(d => drawPipeline(d))
       .then(maker => render(renderDom(maker)))
       .catch(e => render(div(h2("ERROR"), p(e.message))));
+  } else if (route.kind === "trace") {
+    const hash = route.hash || currentNoteRef || undefined;
+    if (!hash) {
+      render(div(h2("ERROR"), p("missing trace hash")));
+      return;
+    }
+    render(div("loading..."));
+    drawTraceRun(hash)
+      .then(maker => render(renderDom(maker)))
+      .catch(e => render(div(h2("ERROR"), p(e.message))));
   } else {
     showNote(route.hash);
   }
@@ -192,6 +208,7 @@ const navitems = [
   ["SQL", "/sql"],
   ["Deps", "/deps"],
   ["Pipeline", "/pipeline"],
+  ["Trace", "/trace"],
 ].map(([name, base]) => {
   const link = a(style({ textDecoration: "none", color: "inherit", fontWeight: "bold" }), {"href": base, onclick: (e) => {
   const target = resolveNavPath(base);

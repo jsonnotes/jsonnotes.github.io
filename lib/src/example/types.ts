@@ -44,15 +44,12 @@ export const schema_schema: Schema = {
   ]
 }
 
-export type Graph = {
-  $: "input", outputSchema: Schema
-} | {
-  $: "logic", inputs: Record<string, Graph>, code: string, outputSchema: Schema
-} | {
-  $: "llm_call", prompt: Graph, outputSchema: Schema
-} | {
-  $: "loop", input: Graph, condition: Graph, body: Graph, outputSchema: Schema
-}
+export type GraphInput = {$: "input", outputSchema: Schema}
+export type GraphLogic = {$: "logic", inputs: Record<string, Graph>, code: string, outputSchema: Schema}
+export type GraphLlmCall = {$: "llm_call", prompt: Graph, outputSchema: Schema}
+export type GraphLoop = {$: "loop", input: Graph, condition: Graph, body: Graph, outputSchema: Schema}
+
+export type Graph = GraphInput | GraphLogic | GraphLlmCall | GraphLoop;
 
 export const GraphSchema = {
   $id: "graph",
