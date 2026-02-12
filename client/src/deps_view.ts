@@ -118,8 +118,7 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
     svg.innerHTML = "";
     if (!hash) {
       noteSearch((s) => {
-          window.history.pushState({}, "", `/deps/${s.hash}`);
-          render(s.hash as Hash);
+          navigate(`/deps/${s.hash}`);
         }
       );
       return;
@@ -156,11 +155,9 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
         const tag = svgText(svg, { x, y }, labels.get(hash) || `#${hash}`);
         tag.node.onclick = () => {
           if (hash === data.currentHash) {
-            window.history.pushState({}, "", `/${hash}`);
             navigate(`/${hash}`);
           } else {
-            window.history.pushState({}, "", `/deps/${hash}`);
-            render(hash as Hash);
+            navigate(`/deps/${hash}`);
           }
         };
         boxes.set(hash, tag.rect);
@@ -168,8 +165,7 @@ export const createDepsView = ({ query, navigate}: DepsDeps) => {
     });
     const schemaTag = svgText(svg, { x: 0.5, y: 0.1 }, labels.get(schemaHash) || `#${schemaHash}`);
     schemaTag.node.onclick = () => {
-      window.history.pushState({}, "", `/deps/${schemaHash}`);
-      render(schemaHash as Hash);
+      navigate(`/deps/${schemaHash}`);
     };
     const schemaRect = schemaTag.rect;
 

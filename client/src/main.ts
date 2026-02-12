@@ -19,6 +19,7 @@ let editFill: ((d:Draft) => void) | null = null;
 let contentRoot: HTMLElement | null = null;
 let handleRoute = () => {};
 const body = document.body;
+let currentNoteRef: Hash | null = null;
 
 const render = (view: HTMLElement) => contentRoot && (contentRoot.innerHTML = "", contentRoot.appendChild(view));
 const navigate = (path: string) => (history.pushState({}, "", path), handleRoute());
@@ -59,27 +60,73 @@ const showFunctionView = (hash: Hash) => {
   });
 }
 
+type Route =
+  | { kind: "dashboard" }
+  | { kind: "edit", hash?: Hash, isNew: boolean }
+  | { kind: "sql" }
+  | { kind: "functionView", hash?: Hash }
+  | { kind: "deps", hash?: Hash }
+  | { kind: "pipeline", hash?: Hash }
+  | { kind: "note", hash: Hash };
 
-const navKey = (path: string) => {
-  if (!path) return "/";
-  if (path.startsWith("deps/")) return "/deps";
-  return `/${path}`;
+const parseRoute = (pathname: string, search: string): Route => {
+  const path = pathname.replace(/^\/+/, "");
+  const params = new URLSearchParams(search);
+  if (!path) return { kind: "dashboard" };
+  if (path === "edit") {
+    const hash = params.get("hash");
+    return { kind: "edit", hash: hash ? hash as Hash : undefined, isNew: params.get("new") === "1" };
+  }
+  if (path === "sql") return { kind: "sql" };
+  if (path.startsWith("view/")) return { kind: "functionView", hash: (path.slice(5) || undefined) as Hash | undefined };
+  if (path === "deps" || path.startsWith("deps/")) return { kind: "deps", hash: (path.slice(5) || undefined) as Hash | undefined };
+  if (path === "pipeline" || path.startsWith("pipeline/")) return { kind: "pipeline", hash: (path.slice(9) || undefined) as Hash | undefined };
+  return { kind: "note", hash: path as Hash };
+};
+
+const routeNoteHash = (route: Route): Hash | null => {
+  if (route.kind === "note") return route.hash;
+  if (route.kind === "edit") return route.hash ?? null;
+  if (route.kind === "functionView") return route.hash ?? null;
+  if (route.kind === "deps") return route.hash ?? null;
+  if (route.kind === "pipeline") return route.hash ?? null;
+  return null;
+};
+
+const navKey = (route: Route) => {
+  if (route.kind === "dashboard") return "/";
+  if (route.kind === "edit") return "/edit";
+  if (route.kind === "sql") return "/sql";
+  if (route.kind === "deps") return "/deps";
+  if (route.kind === "pipeline") return "/pipeline";
+  if (route.kind === "functionView") return "/view";
+  return "/view-note";
+};
+
+const resolveNavPath = (base: string): string => {
+  if (!currentNoteRef) return base;
+  if (base === "/view-note") return `/${currentNoteRef}`;
+  if (base === "/edit") return `/edit?hash=${currentNoteRef}`;
+  if (base === "/deps") return `/deps/${currentNoteRef}`;
+  if (base === "/pipeline") return `/pipeline/${currentNoteRef}`;
+  return base;
 };
 
 handleRoute = () => {
-  const path = window.location.pathname.replace(/^\/+/, "");
-  console.log(path)
+  const route = parseRoute(window.location.pathname, window.location.search);
+  const routeHash = routeNoteHash(route);
+  if (routeHash) currentNoteRef = routeHash;
 
-  navitems.forEach((it) => {
-    it.style.setProperty("opacity", it.pathname === navKey(path) ? "1" : "0.5");
+  navitems.forEach(({ base, el }) => {
+    const target = resolveNavPath(base);
+    el.setAttribute("href", target);
+    el.style.setProperty("opacity", base === navKey(route) ? "1" : "0.5");
   });
-  if (path === "edit") {
+
+  if (route.kind === "edit") {
     render(editView.root);
-    const params = new URLSearchParams(window.location.search);
-    const searchhash = params.get("hash");
-    const isNew = params.get("new") === "1";
-    if (isNew) localStorage.removeItem("edit_draft");
-    if (searchhash === null){
+    if (route.isNew) localStorage.removeItem("edit_draft");
+    if (!route.hash){
       const raw = localStorage.getItem("edit_draft");
       if (raw) {
         try {
@@ -94,38 +141,37 @@ handleRoute = () => {
         editFill({schemaHash, text: "{}"});
       }
     } else {
-      getNote(searchhash as Hash)
+      getNote(route.hash)
         .then((note) => editFill({schemaHash: note.schemaHash, text: tojson(note.data)}))
         .catch((e) => popup(h2("ERROR"), p(e.message)));
     }
-    if (window.location.search) {
+    if (route.isNew) {
       history.replaceState({}, "", "/edit");
     }
-  } else if (!path) {
+  } else if (route.kind === "dashboard") {
     render(dashboard.root);
     runQuery();
-  } else if (path === "sql") {
+  } else if (route.kind === "sql") {
     render(sqlView.root);
-  } else if (path.startsWith("view/")) {
-    const hash = path.slice(5);
-    if (!hash) render(div(h2("ERROR"), p("missing function hash")));
-    else showFunctionView(hash as Hash);
-  } else if (path.startsWith("deps")) {
+  } else if (route.kind === "functionView") {
+    if (!route.hash) render(div(h2("ERROR"), p("missing function hash")));
+    else showFunctionView(route.hash);
+  } else if (route.kind === "deps") {
+    const hash = route.hash || currentNoteRef || undefined;
     render(depsView.root);
-    depsView.render((path.slice(5) || lastNoteRef) as Hash);
-  } else if (path === "pipeline" || path.startsWith("pipeline/")) {
-    const hash = path.slice(9);
+    depsView.render(hash);
+  } else if (route.kind === "pipeline") {
+    const hash = route.hash || currentNoteRef || undefined;
     render(div("loading..."));
     const data = hash
-      ? getNote(hash as Hash).then(n => n.data)
+      ? getNote(hash).then(n => n.data)
       : Promise.resolve(llmcall.data as Jsonable);
     data
       .then(d => drawPipeline(d))
       .then(maker => render(renderDom(maker)))
       .catch(e => render(div(h2("ERROR"), p(e.message))));
   } else {
-    lastNoteRef = path;
-    showNote(path as Hash);
+    showNote(route.hash);
   }
 };
 
@@ -139,24 +185,30 @@ const bubble = style({
 });
 
 
-let lastNoteRef: string | null = null;
-
-let navitems = [
+const navitems = [
   ["Dashboard", "/"],
+  ["View", "/view-note"],
   ["Edit", "/edit"],
   ["SQL", "/sql"],
   ["Deps", "/deps"],
   ["Pipeline", "/pipeline"],
-].map(([name, path])=>a(style({ textDecoration: "none", color: "inherit", fontWeight: "bold" }), {"href": path, onclick: (e)=>{
-  if (e.metaKey) return
+].map(([name, base]) => {
+  const link = a(style({ textDecoration: "none", color: "inherit", fontWeight: "bold" }), {"href": base, onclick: (e) => {
+  const target = resolveNavPath(base);
+  if (e.metaKey || e.ctrlKey) {
+    link.setAttribute("href", target);
+    return;
+  }
   e.preventDefault()
-  navigate(path)
-}}, name))
+  navigate(target)
+}}, name) as HTMLAnchorElement;
+  return { base, el: link };
+});
 
 body.appendChild(div(
   style({ display: "flex", flexDirection: "column", gap: "0.75em", padding: "1em" }),
   a(style({ textDecoration: "none", color: "inherit" }), h2("Json View"), { href: "/", onclick: (e) => { e.preventDefault(); navigate("/"); } }),
-  div(style({ display: "flex", gap: "1em" }),navitems  )
+  div(style({ display: "flex", gap: "1em" }), navitems.map((n) => n.el) )
 ));
 
 const dashboard = createDashboardView({ query: sql, navigate});
