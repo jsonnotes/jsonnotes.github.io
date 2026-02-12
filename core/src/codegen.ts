@@ -187,6 +187,7 @@ const renderPatternProperty = (p: PatternProperty): string => {
     p.value.type === "Identifier" &&
     p.value.name === p.key.name
   ) {
+    assertSafeIdent(key);
     return key;
   }
   return `${key}: ${renderPattern(p.value)}`;
