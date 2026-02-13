@@ -33,6 +33,7 @@ let accessToken: string | null;
 let baseUrl = url_presets[SERVER.get()];
 
 const req = async (path: string, method: string, body: string | null = null): Promise<Response> => {
+  // console.log(`Making request to ${path} with method ${method} and body ${body}`);
   return fetch(`${baseUrl}${path}`, {
     method,
     headers: {
@@ -90,19 +91,23 @@ export const getNote = (hash: Hash): Promise<NoteData> => Promise.resolve(getNot
 
 
 
+const normalizeAddNoteArgs = (schema: Hash | NoteData, data?: Jsonable): NoteData => {
+  if (data !== undefined) return { schemaHash: schema as Hash, data };
+  return schema as NoteData;
+};
+
 export async function addNote (note: NoteData): Promise<Hash>;
 export async function addNote (schema: Hash, data: Jsonable): Promise<Hash>;
 
 export async function addNote (schema: Hash| NoteData, data: Jsonable | undefined = undefined): Promise<Hash> {
-  let schemaHash: Hash = schema as Hash
-  if (data == undefined) ({schemaHash, data} = schema as NoteData)
-  const hash = hashData({ schemaHash, data });
-  setCacheNote(hash, {schemaHash, data})
+  const note = normalizeAddNoteArgs(schema, data);
+  const hash = hashData(note);
   const res = await req(`/v1/database/${dbname}/call/add_note`, "POST", JSON.stringify({
-    schemaHash,
-    data: tojson(data),
+    schemaHash: note.schemaHash,
+    data: tojson(note.data),
   }));
   if (!res.ok) throw new Error(await res.text());
+  setCacheNote(hash, note);
   return hash;
 };
 

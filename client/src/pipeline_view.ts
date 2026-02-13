@@ -3,7 +3,6 @@ import { type VDom, type UPPER, drawDag, type DagNode, type DagControls, jsonOve
 import { addNote, getNote } from "@jsonview/lib/src/dbconn"
 import { Graph } from "@jsonview/lib/src/example/types"
 import { graph_schema } from "@jsonview/lib/src/example/pipeline"
-import { noteSearch } from "./helpers"
 import { runPipelineTraceByRoot } from "./pipeline_run"
 
 const getSrc = (graph: Graph) => {
@@ -180,8 +179,7 @@ export const drawPipeline = async (pipeline: Jsonable): Promise<(upper: UPPER) =
       children: [],
       onEvent: (e) => {
         if (e.type !== "click") return
-        noteSearch(async (s) => {
-          const runHash = await runPipelineTraceByRoot(rootHash, s.hash as Hash)
+        runPipelineTraceByRoot(rootHash, "0244a38ce53a7777dd5614eb7cdef9ea" as Jsonable).then((runHash) => {
           history.pushState({}, "", `/trace/${runHash}`)
           dispatchEvent(new PopStateEvent("popstate"))
         })
@@ -224,7 +222,8 @@ export const drawPipeline = async (pipeline: Jsonable): Promise<(upper: UPPER) =
             return
           }
           if (e.type === "click") {
-            if (selectedId) dagControls?.setSelected(selectedId, false, true)
+            history.pushState({}, "", `/${selected.noteHash}`)
+            dispatchEvent(new PopStateEvent("popstate"))
             return
           }
           if (e.type === "mouseup") {
