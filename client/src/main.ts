@@ -1,7 +1,7 @@
 import { a, div, h2, p, popup, pre, style } from "./html";
 import { openNoteView } from "./note_view";
 import { createDashboardView } from "./dashboard";
-import { createEditView } from "./edit";
+// edit view is lazy-loaded (Monaco is ~2MB)
 import { createSqlView } from "./sql_view";
 import { createDepsView } from "./deps_view";
 import { Hash, Jsonable, NoteData, tojson, hashData, top } from "@jsonview/core"
@@ -16,7 +16,6 @@ import { addNote, getNote, sql } from "@jsonview/lib/src/dbconn";
 let runQuery = () => {};
 
 export type Draft = {schemaHash: Hash, text: string}
-let editFill: ((d:Draft) => void) | null = null;
 let contentRoot: HTMLElement | null = null;
 let handleRoute = () => {};
 const body = document.body;
@@ -24,6 +23,17 @@ let currentNoteRef: Hash | null = null;
 
 const render = (view: HTMLElement) => contentRoot && (contentRoot.innerHTML = "", contentRoot.appendChild(view));
 const navigate = (path: string) => (history.pushState({}, "", path), handleRoute());
+
+let editViewCache: { root: HTMLElement; fill: (d: Draft) => void } | null = null;
+const getEditView = async () => {
+  if (!editViewCache) {
+    const { createEditView } = await import("./edit");
+    editViewCache = createEditView({ submit: submitNote });
+  }
+  return editViewCache;
+};
+
+import { runPipeline } from "./pipeline_run";
 
 
 const submitNote = async (data: NoteData) => {
@@ -130,30 +140,24 @@ handleRoute = () => {
   });
 
   if (route.kind === "edit") {
-    render(editView.root);
-    if (route.isNew) localStorage.removeItem("edit_draft");
-    if (!route.hash){
-      const raw = localStorage.getItem("edit_draft");
-      if (raw) {
+    if (!editViewCache) render(div("loading editor..."));
+    getEditView().then(ev => {
+      render(ev.root);
+      if (route.isNew) localStorage.removeItem("edit_draft");
+      if (!route.hash) {
+        const raw = localStorage.getItem("edit_draft");
         try {
-          const draft = JSON.parse(raw);
-          editFill(draft)
+          ev.fill(raw ? JSON.parse(raw) : { schemaHash: hashData(top), text: "{}" });
         } catch {
-          const schemaHash = hashData(top);
-          editFill({schemaHash, text: "{}"});
+          ev.fill({ schemaHash: hashData(top), text: "{}" });
         }
       } else {
-        const schemaHash = hashData(top);
-        editFill({schemaHash, text: "{}"});
+        getNote(route.hash)
+          .then((note) => ev.fill({ schemaHash: note.schemaHash, text: tojson(note.data) }))
+          .catch((e) => popup(h2("ERROR"), p(e.message)));
       }
-    } else {
-      getNote(route.hash)
-        .then((note) => editFill({schemaHash: note.schemaHash, text: tojson(note.data)}))
-        .catch((e) => popup(h2("ERROR"), p(e.message)));
-    }
-    if (route.isNew) {
-      history.replaceState({}, "", "/edit");
-    }
+      if (route.isNew) history.replaceState({}, "", "/edit");
+    });
   } else if (route.kind === "dashboard") {
     render(dashboard.root);
     runQuery();
@@ -229,10 +233,6 @@ body.appendChild(div(
 ));
 
 const dashboard = createDashboardView({ query: sql, navigate});
-const editView = createEditView({
-  submit: submitNote
-});
-editFill = editView.fill;
 const sqlView = createSqlView({ query: sql });
 const depsView = createDepsView({ query: sql, navigate});
 
