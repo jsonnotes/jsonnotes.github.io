@@ -1,7 +1,6 @@
 import { Hash, Jsonable, hashData, tojson, top } from "@jsonview/core";
 import { type DagNode, type DagControls, drawDag, jsonOverview, splitRefs, type UPPER, type VDom } from "@jsonview/lib";
 import { addNote, getNote } from "@jsonview/lib/src/dbconn";
-import { object, string } from "@jsonview/lib/src/example/types";
 
 export type GraphTraceStep = ({
   pipelineNode?: string, input: string, value: Jsonable
@@ -12,40 +11,6 @@ export type GraphTraceStep = ({
 } | {
   pipelineNode?: string, loop: string, input: string, steps: string[], value: Jsonable
 });
-
-export const GraphTraceStepSchema = await addNote({
-  schemaHash: hashData(top),
-  data:{
-    title: "GraphTraceStepSchema",
-    $id: "GraphTraceStep",
-    oneOf: [
-      object({
-        pipelineNode: string,
-        input: string,
-        value: {}
-      }),
-      object({
-        pipelineNode: string,
-        logic: string,
-        inputs: {type: "object", additionalProperties: string},
-        value: {}
-      }),
-      object({
-        pipelineNode: string,
-        llm_call: string,
-        prompt: string,
-        value: {}
-      }),
-      object({
-        pipelineNode: string,
-        loop: string,
-        input: string,
-        steps: {type: "array", items: string},
-        value: {}
-      })
-    ]
-  }
-})
 
 const aslink = (hash: string) => hash.startsWith("#") ? hash : `#${hash}`
 const ashash = (link: string): Hash => link.startsWith("#") ? link.slice(1) as Hash : link as Hash

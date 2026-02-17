@@ -1,9 +1,9 @@
-import * as monaco from "monaco-editor";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
-import CssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
-import HtmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
+import "monaco-editor/esm/vs/language/json/monaco.contribution";
+import "monaco-editor/esm/vs/language/typescript/monaco.contribution";
 import { Hash, fromjson, tojson, hashData, script_schema, function_schema } from "@jsonview/core";
 import { div, button, style, input } from "./html";
 import { validateNote, hashSearch } from "@jsonview/lib";
@@ -16,14 +16,6 @@ self.MonacoEnvironment = {
     switch (label) {
       case "json":
         return new JsonWorker();
-      case "css":
-      case "scss":
-      case "less":
-        return new CssWorker();
-      case "html":
-      case "handlebars":
-      case "razor":
-        return new HtmlWorker();
       case "typescript":
       case "javascript":
         return new TsWorker();

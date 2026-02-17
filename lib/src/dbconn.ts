@@ -55,7 +55,7 @@ const getToken = async () =>{
     if (accessToken) ls?.setItem(tokenkey, accessToken);
   }
 }
-if (typeof fetch !== "undefined") await getToken();
+if (typeof fetch !== "undefined")  getToken();
 
 
 export const callProcedure = async (name: string, payload: unknown): Promise<string> => {
